@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Sparkles, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { ThemeToggle, LanguageToggle } from '@/components/ThemeLanguageToggle';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -16,6 +18,7 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
+  const { t } = useLanguage();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,12 +29,18 @@ const Login = () => {
     if (success) {
       navigate('/');
     } else {
-      setError('Invalid email or password');
+      setError(t('login.invalidCredentials'));
     }
   };
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
+      {/* Theme & Language Toggles */}
+      <div className="absolute right-4 top-4 flex items-center gap-1">
+        <ThemeToggle />
+        <LanguageToggle />
+      </div>
+
       {/* Subtle gradient background */}
       <div className="pointer-events-none fixed inset-0 bg-gradient-to-br from-accent/40 via-background to-background" />
 
@@ -43,19 +52,24 @@ const Login = () => {
           </div>
           <h1 className="text-2xl font-bold tracking-tight">Dreem Dev</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            AI-Powered Development Platform
+            {t('login.tagline')}
           </p>
         </div>
 
         {/* Login Card */}
         <div className="rounded-xl border bg-card p-6 shadow-sm">
+          <div className="mb-4 text-center">
+            <h2 className="text-lg font-semibold">{t('login.title')}</h2>
+            <p className="text-sm text-muted-foreground">{t('login.subtitle')}</p>
+          </div>
+
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email">{t('login.email')}</Label>
               <Input
                 id="email"
                 type="email"
-                placeholder="you@example.com"
+                placeholder="admin@dreemdev.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -64,7 +78,7 @@ const Login = () => {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password">{t('login.password')}</Label>
               <div className="relative">
                 <Input
                   id="password"
@@ -94,7 +108,7 @@ const Login = () => {
                 onCheckedChange={(v) => setRemember(v === true)}
               />
               <Label htmlFor="remember" className="text-sm font-normal cursor-pointer">
-                Remember me
+                {t('login.rememberMe')}
               </Label>
             </div>
 
@@ -106,17 +120,20 @@ const Login = () => {
               {loading ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Signing in...
+                  {t('login.signingIn')}
                 </>
               ) : (
-                'Sign in'
+                t('login.signIn')
               )}
             </Button>
           </form>
         </div>
 
         <p className="mt-6 text-center text-xs text-muted-foreground">
-          Dreem Dev — Build anything with AI
+          <span className="flex items-center justify-center gap-1">
+            <Sparkles className="h-3 w-3" />
+            Dreem Dev — {t('login.tagline')}
+          </span>
         </p>
       </div>
     </div>
