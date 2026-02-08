@@ -1,0 +1,17 @@
+{
+  "name": "Dreem Dev",
+  "short_name": "DreemDev",
+  "description": "AI-Powered Development Platform",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FCFCFD",
+  "theme_color": "#6C3AED",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64",
+      "type": "image/x-icon"
+    }
+  ]
+}
