@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Plus,
   Search,
@@ -45,6 +46,7 @@ type ViewMode = 'grid' | 'list';
 
 const Dashboard = () => {
   const { t } = useLanguage();
+  const navigate = useNavigate();
   const { projects, deleteProject, renameProject, toggleFavorite } = useProjects();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -82,8 +84,7 @@ const Dashboard = () => {
   }, [projects, searchQuery, filter]);
 
   const handleOpenProject = (id: string) => {
-    // TODO: Navigate to workspace
-    console.log('Open project:', id);
+    navigate(`/workspace/${id}`);
   };
 
   const handleDeleteClick = (id: string) => {
