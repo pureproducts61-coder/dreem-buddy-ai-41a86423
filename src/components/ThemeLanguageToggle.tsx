@@ -56,3 +56,12 @@ export function LanguageToggle() {
     </Tooltip>
   );
 }
+
+export function ThemeLanguageToggle() {
+  return (
+    <div className="flex items-center gap-1">
+      <ThemeToggle />
+      <LanguageToggle />
+    </div>
+  );
+}
