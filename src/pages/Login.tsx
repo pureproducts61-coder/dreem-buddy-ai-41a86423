@@ -1,141 +1,244 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Sparkles, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { Loader2, Zap, Shield, Terminal, Wifi, WifiOff } from 'lucide-react';
 import { ThemeToggle, LanguageToggle } from '@/components/ThemeLanguageToggle';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const Login = () => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [remember, setRemember] = useState(false);
+  const [backendUrl, setBackendUrl] = useState(() => localStorage.getItem('dreem-hf-url') || '');
+  const [masterSecret, setMasterSecret] = useState(() => localStorage.getItem('dreem-master-secret') || '');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<'idle' | 'connecting' | 'connected' | 'failed'>('idle');
+  const [particles, setParticles] = useState<Array<{ id: number; x: number; y: number; delay: number }>>([]);
   const { login } = useAuth();
   const navigate = useNavigate();
   const { t } = useLanguage();
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  useEffect(() => {
+    // Generate background particles
+    const pts = Array.from({ length: 30 }, (_, i) => ({
+      id: i,
+      x: Math.random() * 100,
+      y: Math.random() * 100,
+      delay: Math.random() * 5,
+    }));
+    setParticles(pts);
+  }, []);
+
+  const handleConnect = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!backendUrl.trim() || !masterSecret.trim()) {
+      setError(t('login.fillAllFields'));
+      return;
+    }
     setError('');
     setLoading(true);
-    const success = await login(email, password, remember);
+    setConnectionStatus('connecting');
+
+    // Store credentials
+    localStorage.setItem('dreem-hf-url', backendUrl.trim());
+    localStorage.setItem('dreem-master-secret', masterSecret.trim());
+
+    // Simulate connection validation
+    const success = await login(backendUrl.trim(), masterSecret.trim(), true);
     setLoading(false);
+
     if (success) {
-      navigate('/');
+      setConnectionStatus('connected');
+      setTimeout(() => navigate('/'), 800);
     } else {
-      setError(t('login.invalidCredentials'));
+      setConnectionStatus('failed');
+      setError(t('login.connectionFailed'));
     }
   };
 
+  const statusColors = {
+    idle: 'text-muted-foreground',
+    connecting: 'text-warning',
+    connected: 'text-neon-green',
+    failed: 'text-destructive',
+  };
+
+  const statusIcons = {
+    idle: <WifiOff className="h-3 w-3" />,
+    connecting: <Loader2 className="h-3 w-3 animate-spin" />,
+    connected: <Wifi className="h-3 w-3" />,
+    failed: <WifiOff className="h-3 w-3" />,
+  };
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
+    <div className="relative flex min-h-screen items-center justify-center bg-background overflow-hidden">
+      {/* Animated Grid Background */}
+      <div className="pointer-events-none fixed inset-0 war-room-grid opacity-60" />
+      
+      {/* Scanline Effect */}
+      <div className="pointer-events-none fixed inset-0 scanline opacity-30" />
+
+      {/* Floating Particles */}
+      <div className="pointer-events-none fixed inset-0 overflow-hidden">
+        {particles.map((p) => (
+          <motion.div
+            key={p.id}
+            className="absolute h-1 w-1 rounded-full bg-primary/30"
+            style={{ left: `${p.x}%`, top: `${p.y}%` }}
+            animate={{
+              y: [0, -30, 0],
+              opacity: [0.2, 0.8, 0.2],
+            }}
+            transition={{
+              duration: 3 + Math.random() * 3,
+              repeat: Infinity,
+              delay: p.delay,
+            }}
+          />
+        ))}
+      </div>
+
       {/* Theme & Language Toggles */}
-      <div className="absolute right-4 top-4 flex items-center gap-1">
+      <div className="absolute right-4 top-4 z-20 flex items-center gap-1">
         <ThemeToggle />
         <LanguageToggle />
       </div>
 
-      {/* Subtle gradient background */}
-      <div className="pointer-events-none fixed inset-0 bg-gradient-to-br from-accent/40 via-background to-background" />
+      {/* Connection Status Indicator */}
+      <motion.div
+        className="absolute left-4 top-4 z-20 flex items-center gap-2 rounded-full border border-border/50 bg-card/80 backdrop-blur-sm px-3 py-1.5"
+        initial={{ opacity: 0, x: -20 }}
+        animate={{ opacity: 1, x: 0 }}
+      >
+        <span className={statusColors[connectionStatus]}>{statusIcons[connectionStatus]}</span>
+        <span className={`text-xs font-mono ${statusColors[connectionStatus]}`}>
+          {t(`login.status.${connectionStatus}`)}
+        </span>
+      </motion.div>
 
-      <div className="relative z-10 w-full max-w-[400px]">
+      <motion.div
+        className="relative z-10 w-full max-w-[440px] px-4"
+        initial={{ opacity: 0, y: 30, scale: 0.95 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.6, ease: 'easeOut' }}
+      >
         {/* Logo & Branding */}
-        <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/25">
-            <Sparkles className="h-7 w-7" />
+        <motion.div
+          className="mb-8 text-center"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+        >
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 border border-primary/30 glow-cyan">
+            <Zap className="h-8 w-8 text-primary" />
           </div>
-          <h1 className="text-2xl font-bold tracking-tight">Dreem Dev</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <h1 className="font-display text-3xl font-bold tracking-wider text-primary glow-text-cyan">
+            DREEM DEV
+          </h1>
+          <p className="mt-2 text-sm font-mono text-muted-foreground tracking-wide">
             {t('login.tagline')}
           </p>
-        </div>
+        </motion.div>
 
-        {/* Login Card */}
-        <div className="rounded-xl border bg-card p-6 shadow-sm">
-          <div className="mb-4 text-center">
-            <h2 className="text-lg font-semibold">{t('login.title')}</h2>
-            <p className="text-sm text-muted-foreground">{t('login.subtitle')}</p>
+        {/* Connection Card */}
+        <motion.div
+          className="rounded-xl border border-border/50 bg-card/80 backdrop-blur-md p-6 shadow-2xl"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+        >
+          <div className="mb-5 flex items-center gap-2">
+            <Terminal className="h-5 w-5 text-primary" />
+            <h2 className="font-display text-sm font-semibold tracking-wider uppercase">
+              {t('login.connectionSetup')}
+            </h2>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleConnect} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email">{t('login.email')}</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="admin@dreemdev.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                autoComplete="email"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="password">{t('login.password')}</Label>
-              <div className="relative">
-                <Input
-                  id="password"
-                  type={showPassword ? 'text' : 'password'}
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  autoComplete="current-password"
-                  className="pr-10"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                  tabIndex={-1}
-                >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="remember"
-                checked={remember}
-                onCheckedChange={(v) => setRemember(v === true)}
-              />
-              <Label htmlFor="remember" className="text-sm font-normal cursor-pointer">
-                {t('login.rememberMe')}
+              <Label htmlFor="backendUrl" className="text-xs font-mono uppercase tracking-wider text-muted-foreground">
+                {t('login.backendUrl')}
               </Label>
+              <Input
+                id="backendUrl"
+                type="url"
+                placeholder="https://your-space.hf.space"
+                value={backendUrl}
+                onChange={(e) => setBackendUrl(e.target.value)}
+                required
+                className="font-mono text-sm bg-secondary/50 border-border/50 focus:border-primary/50 focus:glow-cyan"
+              />
             </div>
 
-            {error && (
-              <p className="text-sm text-destructive font-medium">{error}</p>
-            )}
+            <div className="space-y-2">
+              <Label htmlFor="masterSecret" className="text-xs font-mono uppercase tracking-wider text-muted-foreground">
+                <span className="flex items-center gap-1.5">
+                  <Shield className="h-3 w-3" />
+                  {t('login.masterSecret')}
+                </span>
+              </Label>
+              <Input
+                id="masterSecret"
+                type="password"
+                placeholder="••••••••••••"
+                value={masterSecret}
+                onChange={(e) => setMasterSecret(e.target.value)}
+                required
+                className="font-mono text-sm bg-secondary/50 border-border/50 focus:border-primary/50"
+              />
+            </div>
 
-            <Button type="submit" className="w-full" disabled={loading}>
+            <AnimatePresence>
+              {error && (
+                <motion.p
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="text-sm text-destructive font-mono"
+                >
+                  ⚠ {error}
+                </motion.p>
+              )}
+            </AnimatePresence>
+
+            <Button
+              type="submit"
+              className="w-full font-display text-sm tracking-wider uppercase glow-cyan hover:glow-cyan-strong transition-all"
+              disabled={loading}
+              size="lg"
+            >
               {loading ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  {t('login.signingIn')}
+                  {t('login.connecting')}
+                </>
+              ) : connectionStatus === 'connected' ? (
+                <>
+                  <Wifi className="h-4 w-4" />
+                  {t('login.connected')}
                 </>
               ) : (
-                t('login.signIn')
+                <>
+                  <Zap className="h-4 w-4" />
+                  {t('login.connect')}
+                </>
               )}
             </Button>
           </form>
-        </div>
+        </motion.div>
 
-        <p className="mt-6 text-center text-xs text-muted-foreground">
-          <span className="flex items-center justify-center gap-1">
-            <Sparkles className="h-3 w-3" />
-            Dreem Dev — {t('login.tagline')}
-          </span>
-        </p>
-      </div>
+        {/* Footer */}
+        <motion.p
+          className="mt-6 text-center text-xs font-mono text-muted-foreground/60 tracking-wide"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.5 }}
+        >
+          DREEM DEV — AI WAR ROOM v1.0
+        </motion.p>
+      </motion.div>
     </div>
   );
 };

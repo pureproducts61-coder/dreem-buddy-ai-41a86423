@@ -2,97 +2,84 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Orbitron:wght@500;600;700;800;900&family=Inter:wght@300;400;500;600;700&display=swap');
 
 @layer base {
   :root {
-    --background: 0 0% 99%;
+    --background: 220 20% 97%;
     --foreground: 220 20% 10%;
-
     --card: 0 0% 100%;
     --card-foreground: 220 20% 10%;
-
     --popover: 0 0% 100%;
     --popover-foreground: 220 20% 10%;
-
-    --primary: 250 75% 58%;
-    --primary-foreground: 0 0% 100%;
-
+    --primary: 175 80% 45%;
+    --primary-foreground: 220 30% 6%;
     --secondary: 240 5% 96%;
     --secondary-foreground: 220 20% 10%;
-
     --muted: 240 5% 96%;
     --muted-foreground: 220 10% 46%;
-
-    --accent: 250 75% 96%;
-    --accent-foreground: 250 75% 40%;
-
+    --accent: 175 50% 92%;
+    --accent-foreground: 175 80% 30%;
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
-
     --border: 220 13% 91%;
     --input: 220 13% 91%;
-    --ring: 250 75% 58%;
-
+    --ring: 175 80% 45%;
     --radius: 0.625rem;
-
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 250 75% 58%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 250 75% 96%;
-    --sidebar-accent-foreground: 250 75% 40%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 250 75% 58%;
-
     --success: 142 72% 42%;
     --success-foreground: 0 0% 100%;
     --warning: 38 92% 50%;
     --warning-foreground: 0 0% 100%;
+    --neon-cyan: 175 100% 50%;
+    --neon-green: 142 100% 50%;
+    --neon-purple: 270 100% 65%;
+    --neon-orange: 25 100% 55%;
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 175 80% 45%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 175 50% 92%;
+    --sidebar-accent-foreground: 175 80% 30%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 175 80% 45%;
   }
 
   .dark {
-    --background: 224 20% 6%;
-    --foreground: 210 20% 95%;
-
-    --card: 224 20% 9%;
-    --card-foreground: 210 20% 95%;
-
-    --popover: 224 20% 9%;
-    --popover-foreground: 210 20% 95%;
-
-    --primary: 250 75% 62%;
-    --primary-foreground: 0 0% 100%;
-
-    --secondary: 224 15% 14%;
-    --secondary-foreground: 210 20% 95%;
-
-    --muted: 224 15% 14%;
-    --muted-foreground: 220 10% 55%;
-
-    --accent: 250 40% 18%;
-    --accent-foreground: 250 75% 80%;
-
-    --destructive: 0 62% 30%;
-    --destructive-foreground: 210 20% 95%;
-
-    --border: 224 15% 16%;
-    --input: 224 15% 16%;
-    --ring: 250 75% 62%;
-
-    --sidebar-background: 224 20% 8%;
-    --sidebar-foreground: 210 20% 90%;
-    --sidebar-primary: 250 75% 62%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 250 40% 18%;
-    --sidebar-accent-foreground: 250 75% 80%;
-    --sidebar-border: 224 15% 16%;
-    --sidebar-ring: 250 75% 62%;
-
+    --background: 222 30% 5%;
+    --foreground: 180 10% 92%;
+    --card: 222 25% 8%;
+    --card-foreground: 180 10% 92%;
+    --popover: 222 25% 8%;
+    --popover-foreground: 180 10% 92%;
+    --primary: 175 100% 45%;
+    --primary-foreground: 222 30% 5%;
+    --secondary: 222 20% 12%;
+    --secondary-foreground: 180 10% 92%;
+    --muted: 222 20% 12%;
+    --muted-foreground: 220 10% 50%;
+    --accent: 175 40% 12%;
+    --accent-foreground: 175 100% 65%;
+    --destructive: 0 62% 45%;
+    --destructive-foreground: 180 10% 92%;
+    --border: 222 20% 14%;
+    --input: 222 20% 14%;
+    --ring: 175 100% 45%;
     --success: 142 72% 42%;
     --success-foreground: 0 0% 100%;
     --warning: 38 92% 50%;
     --warning-foreground: 0 0% 100%;
+    --neon-cyan: 175 100% 50%;
+    --neon-green: 142 100% 55%;
+    --neon-purple: 270 100% 70%;
+    --neon-orange: 25 100% 60%;
+    --sidebar-background: 222 30% 6%;
+    --sidebar-foreground: 180 10% 85%;
+    --sidebar-primary: 175 100% 45%;
+    --sidebar-primary-foreground: 222 30% 5%;
+    --sidebar-accent: 175 40% 12%;
+    --sidebar-accent-foreground: 175 100% 65%;
+    --sidebar-border: 222 20% 14%;
+    --sidebar-ring: 175 100% 45%;
   }
 }
 
@@ -107,6 +94,78 @@
   }
 
   h1, h2, h3 {
-    font-family: 'Space Grotesk', 'Inter', sans-serif;
+    font-family: 'Orbitron', 'Inter', sans-serif;
+  }
+
+  code, pre, .font-mono {
+    font-family: 'JetBrains Mono', monospace;
+  }
+}
+
+@layer utilities {
+  .glow-cyan {
+    box-shadow: 0 0 15px hsl(175 100% 50% / 0.3), 0 0 40px hsl(175 100% 50% / 0.1);
+  }
+
+  .glow-cyan-strong {
+    box-shadow: 0 0 20px hsl(175 100% 50% / 0.5), 0 0 60px hsl(175 100% 50% / 0.2);
+  }
+
+  .glow-green {
+    box-shadow: 0 0 15px hsl(142 100% 50% / 0.3), 0 0 40px hsl(142 100% 50% / 0.1);
+  }
+
+  .glow-text-cyan {
+    text-shadow: 0 0 10px hsl(175 100% 50% / 0.5), 0 0 30px hsl(175 100% 50% / 0.2);
+  }
+
+  .glow-text-green {
+    text-shadow: 0 0 10px hsl(142 100% 50% / 0.5), 0 0 30px hsl(142 100% 50% / 0.2);
+  }
+
+  .war-room-grid {
+    background-image:
+      linear-gradient(hsl(175 100% 50% / 0.03) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(175 100% 50% / 0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+
+  .scanline {
+    background: linear-gradient(
+      180deg,
+      transparent 0%,
+      hsl(175 100% 50% / 0.03) 50%,
+      transparent 100%
+    );
+    animation: scanline 4s linear infinite;
+  }
+
+  @keyframes scanline {
+    0% { transform: translateY(-100%); }
+    100% { transform: translateY(100vh); }
+  }
+
+  @keyframes pulse-glow {
+    0%, 100% { opacity: 0.6; }
+    50% { opacity: 1; }
+  }
+
+  .animate-pulse-glow {
+    animation: pulse-glow 2s ease-in-out infinite;
+  }
+
+  @keyframes typing-cursor {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+  }
+
+  .typing-cursor::after {
+    content: '▊';
+    animation: typing-cursor 1s step-end infinite;
+    color: hsl(var(--primary));
+  }
+
+  .hex-border {
+    clip-path: polygon(5% 0%, 95% 0%, 100% 5%, 100% 95%, 95% 100%, 5% 100%, 0% 95%, 0% 5%);
   }
 }
