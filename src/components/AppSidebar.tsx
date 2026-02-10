@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import {
-  Sparkles,
+  Zap,
   FolderKanban,
   Settings,
   User,
   LogOut,
   ChevronLeft,
   ChevronRight,
+  Terminal,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -23,7 +24,6 @@ import {
 const navItems = [
   { key: 'sidebar.projects', icon: FolderKanban, path: '/' },
   { key: 'sidebar.settings', icon: Settings, path: '/settings' },
-  { key: 'sidebar.account', icon: User, path: '/account' },
 ];
 
 export function AppSidebar() {
@@ -35,36 +35,35 @@ export function AppSidebar() {
   return (
     <aside
       className={cn(
-        'flex h-screen flex-col border-r bg-sidebar transition-all duration-300',
-        collapsed ? 'w-16' : 'w-60'
+        'flex h-screen flex-col border-r border-border/50 bg-card/50 backdrop-blur-sm transition-all duration-300',
+        collapsed ? 'w-14' : 'w-56'
       )}
     >
       {/* Logo */}
-      <div className="flex h-14 items-center border-b px-3">
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-          <Sparkles className="h-4 w-4" />
+      <div className="flex h-11 items-center border-b border-border/50 px-3">
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/10 border border-primary/30 text-primary">
+          <Zap className="h-3.5 w-3.5" />
         </div>
         {!collapsed && (
-          <span className="ml-2 text-lg font-semibold tracking-tight">
+          <span className="ml-2 font-display text-xs font-bold tracking-wider uppercase text-primary">
             Dreem Dev
           </span>
         )}
       </div>
 
-      {/* Navigation */}
+      {/* Nav */}
       <nav className="flex-1 space-y-1 p-2">
         {navItems.map((item) => {
           const isActive = location.pathname === item.path;
           const Icon = item.icon;
-
           const linkContent = (
             <NavLink
               to={item.path}
               className={cn(
-                'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                'flex items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-mono transition-colors',
                 isActive
-                  ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-                  : 'text-sidebar-foreground hover:bg-sidebar-accent/50'
+                  ? 'bg-primary/10 text-primary border border-primary/20'
+                  : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
               )}
             >
               <Icon className="h-4 w-4 shrink-0" />
@@ -80,66 +79,43 @@ export function AppSidebar() {
               </Tooltip>
             );
           }
-
           return <div key={item.key}>{linkContent}</div>;
         })}
       </nav>
 
       {/* Footer */}
-      <div className="border-t p-2">
-        {/* Theme & Language Toggles */}
-        <div className="mb-2 flex justify-center gap-1">
+      <div className="border-t border-border/50 p-2 space-y-1">
+        <div className="flex justify-center gap-0.5">
           <ThemeToggle />
           <LanguageToggle />
         </div>
 
-        {/* User info */}
         {!collapsed && user && (
-          <div className="mb-2 px-3 py-2">
-            <p className="truncate text-xs text-muted-foreground">
+          <div className="px-3 py-1">
+            <p className="truncate text-[10px] font-mono text-muted-foreground/60">
               {user.email}
             </p>
           </div>
         )}
 
-        {/* Sign out */}
         {collapsed ? (
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={logout}
-                className="w-full"
-              >
-                <LogOut className="h-4 w-4" />
+              <Button variant="ghost" size="icon" onClick={logout} className="w-full h-8">
+                <LogOut className="h-3.5 w-3.5" />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="right">{t('sidebar.signOut')}</TooltipContent>
           </Tooltip>
         ) : (
-          <Button
-            variant="ghost"
-            onClick={logout}
-            className="w-full justify-start gap-3"
-          >
-            <LogOut className="h-4 w-4" />
+          <Button variant="ghost" onClick={logout} className="w-full justify-start gap-2 text-xs font-mono h-8">
+            <LogOut className="h-3.5 w-3.5" />
             {t('sidebar.signOut')}
           </Button>
         )}
 
-        {/* Collapse Toggle */}
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => setCollapsed(!collapsed)}
-          className="mt-2 w-full"
-        >
-          {collapsed ? (
-            <ChevronRight className="h-4 w-4" />
-          ) : (
-            <ChevronLeft className="h-4 w-4" />
-          )}
+        <Button variant="ghost" size="icon" onClick={() => setCollapsed(!collapsed)} className="w-full h-7">
+          {collapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronLeft className="h-3.5 w-3.5" />}
         </Button>
       </div>
     </aside>
