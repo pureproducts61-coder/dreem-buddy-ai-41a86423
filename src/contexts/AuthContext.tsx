@@ -18,8 +18,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Check localStorage and sessionStorage
-    const stored = localStorage.getItem('dreem_user') || sessionStorage.getItem('dreem_user');
+    const stored = localStorage.getItem('tivo_user') || sessionStorage.getItem('tivo_user');
     if (stored) {
       try { setUser(JSON.parse(stored)); } catch { /* ignore */ }
     }
@@ -27,15 +26,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const login = async (urlOrEmail: string, secretOrPassword: string, remember = false) => {
-    // Simulate connection validation
     await new Promise(r => setTimeout(r, 1200));
-    
-    // Accept any non-empty URL + secret combo (mock validation)
     if (urlOrEmail.trim() && secretOrPassword.trim()) {
       const u = { email: urlOrEmail };
       setUser(u);
-      if (remember) localStorage.setItem('dreem_user', JSON.stringify(u));
-      else sessionStorage.setItem('dreem_user', JSON.stringify(u));
+      if (remember) localStorage.setItem('tivo_user', JSON.stringify(u));
+      else sessionStorage.setItem('tivo_user', JSON.stringify(u));
       return true;
     }
     return false;
@@ -43,10 +39,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const logout = () => {
     setUser(null);
-    localStorage.removeItem('dreem_user');
-    sessionStorage.removeItem('dreem_user');
-    localStorage.removeItem('dreem-hf-url');
-    localStorage.removeItem('dreem-master-secret');
+    localStorage.removeItem('tivo_user');
+    sessionStorage.removeItem('tivo_user');
+    localStorage.removeItem('tivo-hf-url');
+    localStorage.removeItem('tivo-master-secret');
   };
 
   return (

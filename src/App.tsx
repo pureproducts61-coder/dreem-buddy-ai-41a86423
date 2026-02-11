@@ -9,8 +9,7 @@ import { LanguageProvider } from "@/contexts/LanguageContext";
 import { ProjectProvider } from "@/contexts/ProjectContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import Login from "./pages/Login";
-import Dashboard from "./pages/Dashboard";
-import Workspace from "./pages/Workspace";
+import Home from "./pages/Home";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 
@@ -32,15 +31,7 @@ const App = () => (
                     path="/"
                     element={
                       <ProtectedRoute>
-                        <Dashboard />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/workspace/:projectId"
-                    element={
-                      <ProtectedRoute>
-                        <Workspace />
+                        <Home />
                       </ProtectedRoute>
                     }
                   />
