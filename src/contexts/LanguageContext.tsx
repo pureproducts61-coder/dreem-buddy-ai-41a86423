@@ -17,10 +17,14 @@ const translations: Translations = {
   'login.connected': { en: 'Connected', bn: 'সংযুক্ত' },
   'login.connectionFailed': { en: 'Connection failed. Check credentials.', bn: 'সংযোগ ব্যর্থ। তথ্য যাচাই করুন।' },
   'login.fillAllFields': { en: 'Please fill all fields', bn: 'সব ফিল্ড পূরণ করুন' },
-  'login.status.idle': { en: 'Offline', bn: 'অফলাইন' },
-  'login.status.connecting': { en: 'Connecting...', bn: 'সংযোগ হচ্ছে...' },
-  'login.status.connected': { en: 'Online', bn: 'অনলাইন' },
-  'login.status.failed': { en: 'Failed', bn: 'ব্যর্থ' },
+  'login.adminLogin': { en: 'Admin Login', bn: 'অ্যাডমিন লগইন' },
+  'login.email': { en: 'Email', bn: 'ইমেইল' },
+  'login.password': { en: 'Password', bn: 'পাসওয়ার্ড' },
+  'login.rememberMe': { en: 'Remember me', bn: 'মনে রাখুন' },
+  'login.signIn': { en: 'Sign In', bn: 'সাইন ইন' },
+  'login.loggingIn': { en: 'Signing in...', bn: 'সাইন ইন হচ্ছে...' },
+  'login.invalidCredentials': { en: 'Invalid email or password', bn: 'ভুল ইমেইল বা পাসওয়ার্ড' },
+  'settings.masterSecret': { en: 'Master Secret', bn: 'মাস্টার সিক্রেট' },
 
   // Home
   'home.greeting': { en: 'What would you like to create?', bn: 'আপনি কী তৈরি করতে চান?' },

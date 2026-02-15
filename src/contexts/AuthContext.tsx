@@ -7,9 +7,13 @@ interface User {
 interface AuthContextType {
   user: User | null;
   isLoading: boolean;
-  login: (urlOrEmail: string, secretOrPassword: string, remember?: boolean) => Promise<boolean>;
+  login: (email: string, password: string, remember?: boolean) => Promise<boolean>;
   logout: () => void;
 }
+
+// Dummy admin credentials — replace with backend auth when connected
+const ADMIN_EMAIL = 'admin@tivo.ai';
+const ADMIN_PASSWORD = 'tivo2025';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -25,10 +29,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setIsLoading(false);
   }, []);
 
-  const login = async (urlOrEmail: string, secretOrPassword: string, remember = false) => {
-    await new Promise(r => setTimeout(r, 1200));
-    if (urlOrEmail.trim() && secretOrPassword.trim()) {
-      const u = { email: urlOrEmail };
+  const login = async (email: string, password: string, remember = false) => {
+    await new Promise(r => setTimeout(r, 800));
+
+    // Check against backend if configured, otherwise use local dummy credentials
+    const backendUrl = localStorage.getItem('tivo-hf-url');
+    
+    if (backendUrl && backendUrl.trim()) {
+      // TODO: When backend is connected, call API for auth
+      // For now, still use local credentials
+    }
+
+    if (email === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
+      const u = { email };
       setUser(u);
       if (remember) localStorage.setItem('tivo_user', JSON.stringify(u));
       else sessionStorage.setItem('tivo_user', JSON.stringify(u));
@@ -41,8 +54,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setUser(null);
     localStorage.removeItem('tivo_user');
     sessionStorage.removeItem('tivo_user');
-    localStorage.removeItem('tivo-hf-url');
-    localStorage.removeItem('tivo-master-secret');
   };
 
   return (

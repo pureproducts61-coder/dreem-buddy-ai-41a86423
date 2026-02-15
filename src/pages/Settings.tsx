@@ -1,17 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft,
-  Server,
-  Bot,
-  Palette,
-  Key,
-  Eye,
-  EyeOff,
-  Save,
-  RotateCcw,
-  Globe,
-  User,
+  ArrowLeft, Server, Bot, Palette, Key, Eye, EyeOff, Save, RotateCcw, Globe, User, Shield,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -25,10 +15,10 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { ThemeLanguageToggle } from '@/components/ThemeLanguageToggle';
-import { cn } from '@/lib/utils';
 
 interface SettingsData {
   backendUrl: string;
+  masterSecret: string;
   aiModel: string;
   geminiApiKey: string;
   groqApiKey: string;
@@ -41,7 +31,8 @@ interface SettingsData {
 }
 
 const defaultSettings: SettingsData = {
-  backendUrl: 'https://your-hf-space.hf.space',
+  backendUrl: '',
+  masterSecret: '',
   aiModel: 'gemini',
   geminiApiKey: '',
   groqApiKey: '',
@@ -64,14 +55,16 @@ const Settings = () => {
 
   const [settings, setSettings] = useState<SettingsData>(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
+    const backendUrl = localStorage.getItem('tivo-hf-url') || '';
+    const masterSecret = localStorage.getItem('tivo-master-secret') || '';
     if (stored) {
       try {
-        return { ...defaultSettings, ...JSON.parse(stored) };
+        return { ...defaultSettings, ...JSON.parse(stored), backendUrl, masterSecret };
       } catch {
-        return defaultSettings;
+        return { ...defaultSettings, backendUrl, masterSecret };
       }
     }
-    return defaultSettings;
+    return { ...defaultSettings, backendUrl, masterSecret };
   });
 
   const [showKeys, setShowKeys] = useState<Record<string, boolean>>({});
@@ -87,12 +80,14 @@ const Settings = () => {
   };
 
   const handleSave = () => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+    // Save backend config separately
+    localStorage.setItem('tivo-hf-url', settings.backendUrl);
+    localStorage.setItem('tivo-master-secret', settings.masterSecret);
+    // Save rest
+    const { backendUrl, masterSecret, ...rest } = settings;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(rest));
     setHasChanges(false);
-    toast({
-      title: t('settings.saved'),
-      description: t('settings.savedDesc'),
-    });
+    toast({ title: t('settings.saved'), description: t('settings.savedDesc') });
   };
 
   const handleReset = () => {
@@ -106,14 +101,9 @@ const Settings = () => {
     return key.slice(0, 4) + '••••••••' + key.slice(-4);
   };
 
-  const renderApiKeyInput = (
-    id: keyof SettingsData,
-    label: string,
-    placeholder: string
-  ) => {
+  const renderApiKeyInput = (id: keyof SettingsData, label: string, placeholder: string) => {
     const value = settings[id] as string;
     const isVisible = showKeys[id];
-
     return (
       <div className="space-y-2">
         <Label htmlFor={id}>{label}</Label>
@@ -127,9 +117,7 @@ const Settings = () => {
             className="pr-10 font-mono text-sm"
           />
           <Button
-            type="button"
-            variant="ghost"
-            size="icon"
+            type="button" variant="ghost" size="icon"
             className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
             onClick={() => toggleKeyVisibility(id)}
           >
@@ -142,7 +130,6 @@ const Settings = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
       <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="mx-auto flex h-14 max-w-4xl items-center justify-between px-4">
           <div className="flex items-center gap-3">
@@ -170,7 +157,7 @@ const Settings = () => {
       </header>
 
       <main className="mx-auto max-w-4xl p-4 md:p-8 space-y-6">
-        {/* Account Section */}
+        {/* Account */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -182,17 +169,17 @@ const Settings = () => {
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="font-medium">{user?.email || 'admin@dreemdev.com'}</p>
+                <p className="font-medium">{user?.email || 'admin@tivo.ai'}</p>
                 <p className="text-sm text-muted-foreground">{t('settings.loggedInAs')}</p>
               </div>
-              <Button variant="destructive" size="sm" onClick={logout}>
-                {t('sidebar.signOut')}
+              <Button variant="destructive" size="sm" onClick={() => { logout(); navigate('/login'); }}>
+                {t('settings.logout')}
               </Button>
             </div>
           </CardContent>
         </Card>
 
-        {/* Backend Configuration */}
+        {/* Backend Configuration — moved from Login */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -214,10 +201,9 @@ const Settings = () => {
                   className="pl-10 font-mono text-sm"
                 />
               </div>
-              <p className="text-xs text-muted-foreground">
-                {t('settings.backendUrlHint')}
-              </p>
             </div>
+
+            {renderApiKeyInput('masterSecret', t('settings.masterSecret'), '••••••••••••')}
 
             <Separator />
 
@@ -226,26 +212,19 @@ const Settings = () => {
                 <Label>{t('settings.autoSave')}</Label>
                 <p className="text-xs text-muted-foreground">{t('settings.autoSaveDesc')}</p>
               </div>
-              <Switch
-                checked={settings.autoSave}
-                onCheckedChange={(checked) => updateSetting('autoSave', checked)}
-              />
+              <Switch checked={settings.autoSave} onCheckedChange={(c) => updateSetting('autoSave', c)} />
             </div>
-
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
                 <Label>{t('settings.syncEnabled')}</Label>
                 <p className="text-xs text-muted-foreground">{t('settings.syncEnabledDesc')}</p>
               </div>
-              <Switch
-                checked={settings.syncEnabled}
-                onCheckedChange={(checked) => updateSetting('syncEnabled', checked)}
-              />
+              <Switch checked={settings.syncEnabled} onCheckedChange={(c) => updateSetting('syncEnabled', c)} />
             </div>
           </CardContent>
         </Card>
 
-        {/* AI Model Selection */}
+        {/* AI Model */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -254,16 +233,11 @@ const Settings = () => {
             </CardTitle>
             <CardDescription>{t('settings.aiModelDesc')}</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent>
             <div className="space-y-2">
               <Label htmlFor="aiModel">{t('settings.defaultModel')}</Label>
-              <Select
-                value={settings.aiModel}
-                onValueChange={(value) => updateSetting('aiModel', value)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder={t('settings.selectModel')} />
-                </SelectTrigger>
+              <Select value={settings.aiModel} onValueChange={(v) => updateSetting('aiModel', v)}>
+                <SelectTrigger><SelectValue placeholder={t('settings.selectModel')} /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="gemini">Google Gemini</SelectItem>
                   <SelectItem value="groq">Groq (Llama)</SelectItem>
@@ -287,16 +261,14 @@ const Settings = () => {
             {renderApiKeyInput('geminiApiKey', 'Gemini API Key', 'AIza...')}
             {renderApiKeyInput('groqApiKey', 'Groq API Key', 'gsk_...')}
             {renderApiKeyInput('deepseekApiKey', 'DeepSeek API Key', 'sk-...')}
-
             <Separator />
-
             {renderApiKeyInput('githubToken', 'GitHub Token', 'ghp_...')}
             {renderApiKeyInput('tavilyApiKey', 'Tavily API Key', 'tvly-...')}
             {renderApiKeyInput('hfToken', 'Hugging Face Token', 'hf_...')}
           </CardContent>
         </Card>
 
-        {/* Theme Settings */}
+        {/* Theme */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
