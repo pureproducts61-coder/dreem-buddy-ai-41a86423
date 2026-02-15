@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import tivoLogo from '@/assets/tivo-logo.png';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -62,7 +63,7 @@ const Login = () => {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.15 }}
         >
-          <div className="text-5xl mb-3">❤️</div>
+          <img src={tivoLogo} alt="TIVO AI" className="w-16 h-16 mb-3 mx-auto drop-shadow-[0_0_20px_rgba(204,0,0,0.5)]" />
           <h1 className="text-4xl font-display font-bold tracking-tight mb-1.5">
             <span className="gradient-text-brand">TIVO AI</span>
           </h1>
