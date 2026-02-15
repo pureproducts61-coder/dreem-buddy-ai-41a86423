@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
+import tivoLogo from '@/assets/tivo-logo.png';
 import { SmartInputBar, TivoMode } from '@/components/tivo/SmartInputBar';
 import { BuildWorkspace } from '@/components/tivo/BuildWorkspace';
 import { AutomationWorkspace } from '@/components/tivo/AutomationWorkspace';
@@ -100,7 +101,7 @@ export function ChatTab() {
                     transition={{ duration: 0.6 }}
                     className="text-center mb-8"
                   >
-                    <div className="text-5xl mb-4">❤️</div>
+                    <img src={tivoLogo} alt="TIVO AI" className="w-14 h-14 mb-4 mx-auto drop-shadow-[0_0_20px_rgba(204,0,0,0.5)]" />
                     <h1 className="text-3xl sm:text-4xl font-display font-bold mb-2 tracking-tight gradient-text-brand">
                       TIVO AI
                     </h1>

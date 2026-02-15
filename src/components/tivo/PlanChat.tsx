@@ -1,9 +1,11 @@
 import { useRef, useEffect } from 'react';
-import { Loader2, ThumbsUp, ThumbsDown, Copy, Check } from 'lucide-react';
+import { Loader2, ThumbsUp, ThumbsDown, Copy, Check, Brain, Zap, CheckCircle2 } from 'lucide-react';
 import { useState } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
+import { StreamingMessage } from './StreamingMessage';
+import tivoLogo from '@/assets/tivo-logo.png';
 
 interface PlanMessage {
   id: string;
@@ -68,7 +70,7 @@ export function PlanChat({ messages, isLoading }: PlanChatProps) {
   return (
     <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-6 space-y-6">
       <AnimatePresence mode="popLayout">
-        {messages.map((msg) => (
+        {messages.map((msg, idx) => (
           <motion.div
             key={msg.id}
             initial={{ opacity: 0, y: 16 }}
@@ -88,15 +90,16 @@ export function PlanChat({ messages, isLoading }: PlanChatProps) {
               /* AI response — full-width typography, no bubble */
               <div className="space-y-1">
                 <div className="flex items-center gap-2 mb-2">
-                  <span className="text-xs">❤️</span>
+                  <img src={tivoLogo} alt="TIVO" className="w-4 h-4" />
                   <span className="text-[11px] font-medium text-muted-foreground">TIVO AI</span>
                   <span className="text-[10px] text-muted-foreground/50">
                     {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </span>
                 </div>
-                <div className="text-sm leading-relaxed text-foreground whitespace-pre-wrap">
-                  {msg.content}
-                </div>
+                <StreamingMessage
+                  content={msg.content}
+                  isLatest={idx === messages.filter(m => m.role === 'assistant').length - 1 && msg.role === 'assistant'}
+                />
                 <MessageActions content={msg.content} />
               </div>
             )}
@@ -108,11 +111,36 @@ export function PlanChat({ messages, isLoading }: PlanChatProps) {
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="flex items-center gap-2 text-sm text-muted-foreground"
+          className="space-y-2"
         >
-          <span className="text-xs">❤️</span>
-          <Loader2 className="h-4 w-4 animate-spin text-primary" />
-          <span className="text-xs">{t('warroom.thinking')}</span>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <img src={tivoLogo} alt="TIVO" className="w-4 h-4" />
+            <Loader2 className="h-4 w-4 animate-spin text-primary" />
+          </div>
+          {/* Think-Act-Review Steps */}
+          <div className="flex items-center gap-3 ml-6">
+            <motion.div
+              animate={{ opacity: [0.4, 1, 0.4] }}
+              transition={{ duration: 1.5, repeat: Infinity }}
+              className="flex items-center gap-1 text-[10px] text-primary"
+            >
+              <Brain className="h-3 w-3" /> Think
+            </motion.div>
+            <motion.div
+              animate={{ opacity: [0.2, 0.8, 0.2] }}
+              transition={{ duration: 1.5, repeat: Infinity, delay: 0.5 }}
+              className="flex items-center gap-1 text-[10px] text-muted-foreground"
+            >
+              <Zap className="h-3 w-3" /> Act
+            </motion.div>
+            <motion.div
+              animate={{ opacity: [0.2, 0.6, 0.2] }}
+              transition={{ duration: 1.5, repeat: Infinity, delay: 1 }}
+              className="flex items-center gap-1 text-[10px] text-muted-foreground"
+            >
+              <CheckCircle2 className="h-3 w-3" /> Review
+            </motion.div>
+          </div>
         </motion.div>
       )}
     </div>

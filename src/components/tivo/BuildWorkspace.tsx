@@ -1,10 +1,12 @@
 import { useState } from 'react';
-import { Eye, MoreVertical, ExternalLink, Loader2, Code, ThumbsUp, ThumbsDown, Copy, Check } from 'lucide-react';
+import { Eye, MoreVertical, ExternalLink, Loader2, Code, ThumbsUp, ThumbsDown, Copy, Check, Brain, Zap, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { useRef, useEffect } from 'react';
+import { StreamingMessage } from './StreamingMessage';
+import tivoLogo from '@/assets/tivo-logo.png';
 
 interface BuildMessage {
   id: string;
@@ -63,7 +65,7 @@ export function BuildWorkspace({ messages, isLoading, onOpenMenu }: BuildWorkspa
       {/* Messages Area */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-6 space-y-6">
         <AnimatePresence mode="popLayout">
-          {messages.map((msg) => (
+          {messages.map((msg, idx) => (
             <motion.div
               key={msg.id}
               initial={{ opacity: 0, y: 16 }}
@@ -77,12 +79,13 @@ export function BuildWorkspace({ messages, isLoading, onOpenMenu }: BuildWorkspa
               ) : (
                 <div className="space-y-1">
                   <div className="flex items-center gap-2 mb-2">
-                    <span className="text-xs">❤️</span>
+                    <img src={tivoLogo} alt="TIVO" className="w-4 h-4" />
                     <span className="text-[11px] font-medium text-muted-foreground">TIVO AI</span>
                   </div>
-                  <div className="text-sm leading-relaxed text-foreground whitespace-pre-wrap">
-                    {msg.content}
-                  </div>
+                  <StreamingMessage
+                    content={msg.content}
+                    isLatest={idx === messages.length - 1 && msg.role === 'assistant'}
+                  />
                   <BuildMessageActions content={msg.content} />
                 </div>
               )}
@@ -91,11 +94,27 @@ export function BuildWorkspace({ messages, isLoading, onOpenMenu }: BuildWorkspa
         </AnimatePresence>
 
         {isLoading && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center gap-2">
-            <span className="text-xs">❤️</span>
-            <Loader2 className="h-4 w-4 animate-spin text-primary" />
-            <span className="text-xs text-muted-foreground">{t('build.thinking')}</span>
-            <div className="h-1 w-24 rounded-full bg-secondary overflow-hidden ml-2">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-2">
+            <div className="flex items-center gap-2">
+              <img src={tivoLogo} alt="TIVO" className="w-4 h-4" />
+              <Loader2 className="h-4 w-4 animate-spin text-primary" />
+              <span className="text-xs text-muted-foreground">{t('build.thinking')}</span>
+            </div>
+            <div className="flex items-center gap-3 ml-6">
+              <motion.div animate={{ opacity: [0.4, 1, 0.4] }} transition={{ duration: 1.5, repeat: Infinity }}
+                className="flex items-center gap-1 text-[10px] text-primary">
+                <Brain className="h-3 w-3" /> Think
+              </motion.div>
+              <motion.div animate={{ opacity: [0.2, 0.8, 0.2] }} transition={{ duration: 1.5, repeat: Infinity, delay: 0.5 }}
+                className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                <Zap className="h-3 w-3" /> Act
+              </motion.div>
+              <motion.div animate={{ opacity: [0.2, 0.6, 0.2] }} transition={{ duration: 1.5, repeat: Infinity, delay: 1 }}
+                className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                <CheckCircle2 className="h-3 w-3" /> Review
+              </motion.div>
+            </div>
+            <div className="h-1 w-32 rounded-full bg-secondary overflow-hidden ml-6">
               <motion.div className="h-full bg-primary/50 rounded-full" animate={{ x: ['-100%', '100%'] }}
                 transition={{ duration: 1.5, repeat: Infinity, ease: 'linear' }} style={{ width: '50%' }} />
             </div>

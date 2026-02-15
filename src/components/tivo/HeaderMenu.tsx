@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import tivoLogo from '@/assets/tivo-logo.png';
 import { Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -21,7 +22,7 @@ export function HeaderMenu({ onSettingsClick }: HeaderMenuProps) {
     <header className="flex items-center justify-between px-4 py-2 border-b border-border/15">
       {/* Brand */}
       <div className="flex items-center gap-2 shrink-0 mr-3">
-        <span className="text-sm">❤️</span>
+        <img src={tivoLogo} alt="TIVO" className="w-6 h-6 drop-shadow-[0_0_8px_rgba(204,0,0,0.4)]" />
         <span className="text-sm font-display font-bold tracking-tight gradient-text-brand">TIVO</span>
       </div>
 
