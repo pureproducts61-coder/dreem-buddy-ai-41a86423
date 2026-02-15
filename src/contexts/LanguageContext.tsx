@@ -97,6 +97,17 @@ const translations: Translations = {
   'settings.currentTheme': { en: 'Current Theme', bn: 'বর্তমান থিম' },
   'settings.useToggle': { en: 'Use header toggle', bn: 'হেডার টগল ব্যবহার করুন' },
 
+  // Vault
+  'vault.title': { en: 'Project Vault', bn: 'প্রজেক্ট ভল্ট' },
+  'vault.subtitle': { en: 'Manage your built projects', bn: 'আপনার তৈরি প্রজেক্ট পরিচালনা করুন' },
+  'vault.empty': { en: 'No projects yet. Start building!', bn: 'এখনো কোনো প্রজেক্ট নেই। তৈরি শুরু করুন!' },
+  'vault.edit': { en: 'Edit', bn: 'এডিট' },
+  'vault.publish': { en: 'Publish', bn: 'পাবলিশ' },
+  'vault.delete': { en: 'Delete', bn: 'ডিলিট' },
+
+  // Preview
+  'preview.empty': { en: 'Enter a URL to preview your project', bn: 'আপনার প্রজেক্ট দেখতে URL দিন' },
+
   // Common
   'common.close': { en: 'Close', bn: 'বন্ধ' },
   'common.cancel': { en: 'Cancel', bn: 'বাতিল' },
