@@ -1,7 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { Send, Mic, MicOff, Plus, X, Hammer, Zap, MessageSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
@@ -17,9 +16,9 @@ interface SmartInputBarProps {
 }
 
 const modeConfig = {
-  build: { icon: Hammer, color: 'text-neon-purple' },
-  automation: { icon: Zap, color: 'text-neon-orange' },
-  plan: { icon: MessageSquare, color: 'text-neon-green' },
+  build: { icon: Hammer, label: 'Build' },
+  automation: { icon: Zap, label: 'Auto' },
+  plan: { icon: MessageSquare, label: 'Plan' },
 };
 
 export function SmartInputBar({ mode, onModeChange, onSendMessage, isLoading, className }: SmartInputBarProps) {
@@ -31,6 +30,9 @@ export function SmartInputBar({ mode, onModeChange, onSendMessage, isLoading, cl
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const recognitionRef = useRef<any>(null);
+
+  // Auto-shrink font size based on input length
+  const fontSize = input.length > 200 ? '11px' : input.length > 100 ? '12px' : '14px';
 
   const handleSend = useCallback(() => {
     if (!input.trim() || isLoading) return;
@@ -82,11 +84,7 @@ export function SmartInputBar({ mode, onModeChange, onSendMessage, isLoading, cl
 
     recognition.onresult = (event: any) => {
       const results = Array.from(event.results);
-      const transcript = results
-        .map((r: any) => r[0].transcript)
-        .join(' ');
-      
-      // Word-by-word animation
+      const transcript = results.map((r: any) => r[0].transcript).join(' ');
       const words = transcript.split(' ').filter(Boolean);
       setVoiceWords(words);
       setInput(transcript);
@@ -105,7 +103,7 @@ export function SmartInputBar({ mode, onModeChange, onSendMessage, isLoading, cl
 
   return (
     <motion.div
-      className={cn('floating-bar p-3 mx-4 mb-4', className)}
+      className={cn('floating-bar p-3 mx-3 mb-3', className)}
       initial={{ y: 40, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       transition={{ type: 'spring', damping: 25, stiffness: 300 }}
@@ -113,9 +111,9 @@ export function SmartInputBar({ mode, onModeChange, onSendMessage, isLoading, cl
       onDrop={handleDrop}
     >
       {/* Mode Toggle */}
-      <div className="flex items-center gap-1 mb-3">
+      <div className="flex items-center gap-1 mb-2.5">
         {(['build', 'automation', 'plan'] as TivoMode[]).map((m) => {
-          const Icon = modeConfig[m].icon;
+          const { icon: Icon, label } = modeConfig[m];
           const isActive = mode === m;
           return (
             <button
@@ -149,7 +147,7 @@ export function SmartInputBar({ mode, onModeChange, onSendMessage, isLoading, cl
                 key={i}
                 initial={{ scale: 0.8, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
-                className="inline-flex items-center gap-1 rounded-md bg-secondary px-2 py-1 text-[11px] font-mono text-secondary-foreground"
+                className="inline-flex items-center gap-1 rounded-lg bg-secondary px-2 py-1 text-[11px] font-mono text-secondary-foreground"
               >
                 {file.name.length > 20 ? file.name.slice(0, 18) + '...' : file.name}
                 <button onClick={() => removeFile(i)} className="hover:text-destructive">
@@ -164,12 +162,7 @@ export function SmartInputBar({ mode, onModeChange, onSendMessage, isLoading, cl
       {/* Voice Words Animation */}
       <AnimatePresence>
         {isListening && voiceWords.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="flex flex-wrap gap-1 mb-2"
-          >
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex flex-wrap gap-1 mb-2">
             {voiceWords.map((word, i) => (
               <motion.span
                 key={`${word}-${i}`}
@@ -187,7 +180,7 @@ export function SmartInputBar({ mode, onModeChange, onSendMessage, isLoading, cl
 
       {/* Input Row */}
       <div className="flex items-end gap-2">
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-0.5">
           <Button
             variant="ghost"
             size="icon"
@@ -199,30 +192,21 @@ export function SmartInputBar({ mode, onModeChange, onSendMessage, isLoading, cl
           >
             {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
           </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-9 w-9 rounded-xl shrink-0"
-            onClick={() => fileInputRef.current?.click()}
-          >
+          <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl shrink-0" onClick={() => fileInputRef.current?.click()}>
             <Plus className="h-4 w-4" />
           </Button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            className="hidden"
-            onChange={handleFileChange}
-          />
+          <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleFileChange} />
         </div>
 
-        <Textarea
+        <textarea
           ref={textareaRef}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={t('home.inputPlaceholder')}
-          className="min-h-[44px] max-h-[120px] resize-none bg-transparent border-0 focus-visible:ring-0 focus-visible:ring-offset-0 text-sm placeholder:text-muted-foreground/60"
+          rows={1}
+          style={{ fontSize }}
+          className="flex-1 min-h-[44px] max-h-[120px] resize-none bg-transparent border-0 outline-none text-foreground placeholder:text-muted-foreground/50 py-2.5 transition-[font-size] duration-200"
           disabled={isLoading}
         />
 
@@ -248,8 +232,8 @@ export function SmartInputBar({ mode, onModeChange, onSendMessage, isLoading, cl
             exit={{ opacity: 0, height: 0 }}
             className="flex items-center justify-center gap-2 pt-2"
           >
-            <span className="flex h-2 w-2 rounded-full bg-destructive animate-pulse" />
-            <span className="text-xs text-destructive font-medium">{t('home.listening')}</span>
+            <span className="flex h-2 w-2 rounded-full bg-primary animate-pulse" />
+            <span className="text-xs text-primary font-medium">{t('home.listening')}</span>
           </motion.div>
         )}
       </AnimatePresence>

@@ -62,6 +62,14 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+        navy: {
+          DEFAULT: "hsl(var(--navy))",
+          light: "hsl(var(--navy-light))",
+        },
+        brand: {
+          red: "hsl(var(--brand-red))",
+          "red-light": "hsl(var(--brand-red-light))",
+        },
         neon: {
           cyan: "hsl(var(--neon-cyan))",
           green: "hsl(var(--neon-green))",

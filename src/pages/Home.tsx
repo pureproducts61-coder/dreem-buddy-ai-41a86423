@@ -1,133 +1,101 @@
-import { useState, useCallback } from 'react';
-import { SmartInputBar, TivoMode } from '@/components/tivo/SmartInputBar';
-import { BuildWorkspace } from '@/components/tivo/BuildWorkspace';
-import { AutomationWorkspace } from '@/components/tivo/AutomationWorkspace';
-import { PlanChat } from '@/components/tivo/PlanChat';
+import { useState } from 'react';
+import { Archive, MessageCircle, Eye, Settings, MoreHorizontal } from 'lucide-react';
 import { HeaderMenu } from '@/components/tivo/HeaderMenu';
+import { ChatTab } from '@/components/tivo/ChatTab';
+import { ProjectVault } from '@/components/tivo/ProjectVault';
+import { PreviewTab } from '@/components/tivo/PreviewTab';
 import { ControlPanel } from '@/components/tivo/ControlPanel';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { motion, AnimatePresence } from 'framer-motion';
+import { cn } from '@/lib/utils';
 
-interface Message {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  timestamp: Date;
-}
+type BottomTab = 'vault' | 'chat' | 'preview';
 
-const mockResponses: Record<TivoMode, string[]> = {
-  build: [
-    'প্রজেক্ট স্ট্রাকচার তৈরি করছি... React কম্পোনেন্ট জেনারেট হচ্ছে।',
-    'কোড জেনারেশন সম্পন্ন! আপনার প্রজেক্ট প্রস্তুত। Preview-তে দেখুন।',
-    'Landing page তৈরি হয়ে গেছে। Hero section, features, এবং footer যোগ করা হয়েছে।',
-  ],
-  automation: [
-    'অটোমেশন প্রসেস শুরু হচ্ছে... টেস্ট রান করছি।',
-    'CI/CD পাইপলাইন কনফিগার করা হয়েছে।',
-  ],
-  plan: [
-    'আপনার প্রজেক্টের জন্য আমি নিচের প্ল্যান প্রস্তাব করছি:\n\n1. ফ্রন্টএন্ড: React + Tailwind\n2. ব্যাকএন্ড: FastAPI\n3. ডাটাবেজ: PostgreSQL\n\nআপনি কি এই প্ল্যানে সম্মত?',
-    'চলুন বিস্তারিত আলোচনা করি। আপনার টার্গেট অডিয়েন্স কে?',
-    'বুঝেছি। আমি মনে করি Build মোডে গিয়ে সরাসরি শুরু করা যেতে পারে। অনুমতি দিলে মোড পরিবর্তন করে দিই।',
-  ],
+const tabConfig = {
+  vault: { icon: Archive, label: 'Vault' },
+  chat: { icon: MessageCircle, label: 'Chat' },
+  preview: { icon: Eye, label: 'Preview' },
 };
 
 const Home = () => {
   const { t } = useLanguage();
-  const [mode, setMode] = useState<TivoMode>('plan');
-  const [messages, setMessages] = useState<Record<TivoMode, Message[]>>({
-    build: [],
-    automation: [],
-    plan: [],
-  });
-  const [isLoading, setIsLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState<BottomTab>('chat');
   const [menuOpen, setMenuOpen] = useState(false);
-
-  const handleSendMessage = useCallback(async (content: string, files?: File[]) => {
-    const userMsg: Message = {
-      id: crypto.randomUUID(),
-      role: 'user',
-      content: files ? `${content}\n\n📎 ${files.map(f => f.name).join(', ')}` : content,
-      timestamp: new Date(),
-    };
-
-    setMessages(prev => ({
-      ...prev,
-      [mode]: [...prev[mode], userMsg],
-    }));
-    setIsLoading(true);
-
-    await new Promise(r => setTimeout(r, 1200 + Math.random() * 800));
-
-    const responses = mockResponses[mode];
-    const aiMsg: Message = {
-      id: crypto.randomUUID(),
-      role: 'assistant',
-      content: responses[Math.floor(Math.random() * responses.length)],
-      timestamp: new Date(),
-    };
-
-    setMessages(prev => ({
-      ...prev,
-      [mode]: [...prev[mode], aiMsg],
-    }));
-    setIsLoading(false);
-  }, [mode]);
-
-  const currentMessages = messages[mode];
-  const isCleanSlate = mode === 'plan' && currentMessages.length === 0 && !isLoading;
 
   return (
     <div className="flex h-[100dvh] flex-col bg-background">
       {/* Header */}
       <HeaderMenu onSettingsClick={() => setMenuOpen(true)} />
 
-      {/* Dynamic Workspace */}
-      <div className="flex-1 flex flex-col min-h-0 relative">
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col min-h-0">
         <AnimatePresence mode="wait">
-          {mode === 'build' && (
-            <motion.div key="build" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 flex flex-col min-h-0">
-              <BuildWorkspace messages={currentMessages} isLoading={isLoading} onOpenMenu={() => setMenuOpen(true)} />
+          {activeTab === 'vault' && (
+            <motion.div
+              key="vault"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.2 }}
+              className="flex-1 flex flex-col min-h-0"
+            >
+              <ProjectVault />
             </motion.div>
           )}
-          {mode === 'automation' && (
-            <motion.div key="automation" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 flex flex-col min-h-0">
-              <AutomationWorkspace isLoading={isLoading} />
+          {activeTab === 'chat' && (
+            <motion.div
+              key="chat"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.2 }}
+              className="flex-1 flex flex-col min-h-0"
+            >
+              <ChatTab />
             </motion.div>
           )}
-          {mode === 'plan' && (
-            <motion.div key="plan" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 flex flex-col min-h-0">
-              {isCleanSlate ? (
-                <div className="flex-1 flex flex-col items-center justify-center px-8">
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ duration: 0.5 }}
-                    className="text-center mb-8"
-                  >
-                    <h1 className="text-3xl sm:text-4xl font-bold mb-3 tracking-tight">
-                      <span className="text-primary glow-text-primary">TIVO</span>
-                    </h1>
-                    <p className="text-muted-foreground text-sm sm:text-base">
-                      {t('home.greeting')}
-                    </p>
-                  </motion.div>
-                </div>
-              ) : (
-                <PlanChat messages={currentMessages} isLoading={isLoading} />
-              )}
+          {activeTab === 'preview' && (
+            <motion.div
+              key="preview"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.2 }}
+              className="flex-1 flex flex-col min-h-0"
+            >
+              <PreviewTab />
             </motion.div>
           )}
         </AnimatePresence>
       </div>
 
-      {/* Smart Input Bar */}
-      <SmartInputBar
-        mode={mode}
-        onModeChange={setMode}
-        onSendMessage={handleSendMessage}
-        isLoading={isLoading}
-      />
+      {/* Bottom Navigation */}
+      <nav className="flex items-center justify-around border-t border-border/20 bg-card/80 backdrop-blur-xl px-2 pb-[env(safe-area-inset-bottom)]">
+        {(Object.keys(tabConfig) as BottomTab[]).map((tab) => {
+          const { icon: Icon, label } = tabConfig[tab];
+          const isActive = activeTab === tab;
+          return (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={cn(
+                'flex flex-col items-center gap-0.5 py-2.5 px-4 rounded-xl transition-all relative',
+                isActive ? 'text-primary' : 'text-muted-foreground'
+              )}
+            >
+              {isActive && (
+                <motion.div
+                  layoutId="tab-indicator"
+                  className="absolute -top-px left-2 right-2 h-0.5 rounded-full bg-primary tab-active-indicator"
+                  transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                />
+              )}
+              <Icon className={cn('h-5 w-5 transition-transform', isActive && 'scale-110')} />
+              <span className="text-[10px] font-medium">{label}</span>
+            </button>
+          );
+        })}
+      </nav>
 
       {/* Control Panel */}
       <ControlPanel open={menuOpen} onClose={() => setMenuOpen(false)} />
