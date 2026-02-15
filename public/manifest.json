@@ -1,11 +1,11 @@
 {
-  "name": "Dreem Dev",
-  "short_name": "DreemDev",
-  "description": "AI-Powered Development Platform",
+  "name": "TIVO AI OS",
+  "short_name": "TIVO AI",
+  "description": "Autonomous AI Agent Builder Platform",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#FCFCFD",
-  "theme_color": "#6C3AED",
+  "background_color": "#000033",
+  "theme_color": "#000033",
   "orientation": "any",
   "icons": [
     {

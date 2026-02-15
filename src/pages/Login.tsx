@@ -5,48 +5,42 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, Shield, Wifi, WifiOff, ArrowRight } from 'lucide-react';
+import { Loader2, Shield, ArrowRight, Lock, Mail } from 'lucide-react';
 import { ThemeToggle, LanguageToggle } from '@/components/ThemeLanguageToggle';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Checkbox } from '@/components/ui/checkbox';
 
 const Login = () => {
-  const [backendUrl, setBackendUrl] = useState(() => localStorage.getItem('tivo-hf-url') || '');
-  const [masterSecret, setMasterSecret] = useState(() => localStorage.getItem('tivo-master-secret') || '');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [remember, setRemember] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [connectionStatus, setConnectionStatus] = useState<'idle' | 'connecting' | 'connected' | 'failed'>('idle');
   const { login } = useAuth();
   const navigate = useNavigate();
   const { t } = useLanguage();
 
-  const handleConnect = async (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!backendUrl.trim() || !masterSecret.trim()) {
+    if (!email.trim() || !password.trim()) {
       setError(t('login.fillAllFields'));
       return;
     }
     setError('');
     setLoading(true);
-    setConnectionStatus('connecting');
 
-    localStorage.setItem('tivo-hf-url', backendUrl.trim());
-    localStorage.setItem('tivo-master-secret', masterSecret.trim());
-
-    const success = await login(backendUrl.trim(), masterSecret.trim(), true);
+    const success = await login(email.trim(), password.trim(), remember);
     setLoading(false);
 
     if (success) {
-      setConnectionStatus('connected');
-      setTimeout(() => navigate('/'), 600);
+      navigate('/');
     } else {
-      setConnectionStatus('failed');
-      setError(t('login.connectionFailed'));
+      setError(t('login.invalidCredentials'));
     }
   };
 
   return (
     <div className="relative flex min-h-[100dvh] items-center justify-center overflow-hidden gradient-navy-red">
-      {/* Subtle background */}
       <div className="pointer-events-none fixed inset-0 subtle-grid opacity-30" />
 
       {/* Top bar */}
@@ -54,24 +48,6 @@ const Login = () => {
         <ThemeToggle />
         <LanguageToggle />
       </div>
-
-      {/* Status */}
-      <motion.div
-        className="absolute left-4 top-4 z-20 flex items-center gap-2 rounded-full border border-border/20 bg-card/30 backdrop-blur-xl px-3 py-1.5"
-        initial={{ opacity: 0, x: -20 }}
-        animate={{ opacity: 1, x: 0 }}
-      >
-        {connectionStatus === 'connecting' ? (
-          <Loader2 className="h-3 w-3 animate-spin text-warning" />
-        ) : connectionStatus === 'connected' ? (
-          <Wifi className="h-3 w-3 text-success" />
-        ) : (
-          <WifiOff className="h-3 w-3 text-muted-foreground" />
-        )}
-        <span className="text-xs font-mono text-foreground/70">
-          {t(`login.status.${connectionStatus}`)}
-        </span>
-      </motion.div>
 
       <motion.div
         className="relative z-10 w-full max-w-[400px] px-5"
@@ -95,7 +71,7 @@ const Login = () => {
           </p>
         </motion.div>
 
-        {/* Form Card */}
+        {/* Login Form */}
         <motion.div
           className="glass-card p-6"
           initial={{ opacity: 0, y: 16 }}
@@ -104,38 +80,55 @@ const Login = () => {
         >
           <h2 className="text-sm font-semibold mb-5 flex items-center gap-2 text-foreground">
             <Shield className="h-4 w-4 text-primary" />
-            {t('login.connectionSetup')}
+            {t('login.adminLogin')}
           </h2>
 
-          <form onSubmit={handleConnect} className="space-y-4">
+          <form onSubmit={handleLogin} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="backendUrl" className="text-xs text-foreground/60">
-                {t('login.backendUrl')}
+              <Label htmlFor="email" className="text-xs text-foreground/60">
+                {t('login.email')}
               </Label>
-              <Input
-                id="backendUrl"
-                type="url"
-                placeholder="https://your-space.hf.space"
-                value={backendUrl}
-                onChange={(e) => setBackendUrl(e.target.value)}
-                required
-                className="bg-secondary/30 border-border/30 font-mono text-sm backdrop-blur-sm"
-              />
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="admin@tivo.ai"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  className="pl-10 bg-secondary/30 border-border/30 text-sm backdrop-blur-sm"
+                />
+              </div>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="masterSecret" className="text-xs text-foreground/60">
-                {t('login.masterSecret')}
+              <Label htmlFor="password" className="text-xs text-foreground/60">
+                {t('login.password')}
               </Label>
-              <Input
-                id="masterSecret"
-                type="password"
-                placeholder="••••••••••••"
-                value={masterSecret}
-                onChange={(e) => setMasterSecret(e.target.value)}
-                required
-                className="bg-secondary/30 border-border/30 font-mono text-sm backdrop-blur-sm"
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="password"
+                  type="password"
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  className="pl-10 bg-secondary/30 border-border/30 text-sm backdrop-blur-sm"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="remember"
+                checked={remember}
+                onCheckedChange={(checked) => setRemember(checked === true)}
               />
+              <Label htmlFor="remember" className="text-xs text-foreground/60 cursor-pointer">
+                {t('login.rememberMe')}
+              </Label>
             </div>
 
             <AnimatePresence>
@@ -160,16 +153,11 @@ const Login = () => {
               {loading ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  {t('login.connecting')}
-                </>
-              ) : connectionStatus === 'connected' ? (
-                <>
-                  <Wifi className="h-4 w-4" />
-                  {t('login.connected')}
+                  {t('login.loggingIn')}
                 </>
               ) : (
                 <>
-                  {t('login.connect')}
+                  {t('login.signIn')}
                   <ArrowRight className="h-4 w-4" />
                 </>
               )}
