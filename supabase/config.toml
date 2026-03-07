@@ -1,1 +1,7 @@
 project_id = "iurpztuixojhjbkwqkrw"
+
+[functions.chat]
+verify_jwt = false
+
+[functions.github]
+verify_jwt = false
