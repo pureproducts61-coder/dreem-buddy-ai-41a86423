@@ -7,6 +7,8 @@ import { PlanChat } from '@/components/tivo/PlanChat';
 import { ControlPanel } from '@/components/tivo/ControlPanel';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { motion, AnimatePresence } from 'framer-motion';
+import { streamChat, hasAnyAIConfig } from '@/services/aiChatService';
+import { useToast } from '@/hooks/use-toast';
 
 export interface Message {
   id: string;
@@ -15,24 +17,9 @@ export interface Message {
   timestamp: Date;
 }
 
-const mockResponses: Record<TivoMode, string[]> = {
-  build: [
-    'প্রজেক্ট স্ট্রাকচার তৈরি করছি... React কম্পোনেন্ট জেনারেট হচ্ছে।\n\nআপনার Landing Page প্রস্তুত। Hero section, navigation, এবং footer যোগ করা হয়েছে।',
-    'কোড জেনারেশন সম্পন্ন! ফাইল স্ট্রাকচার:\n\n```\nsrc/\n├── components/\n│   ├── Hero.tsx\n│   └── Footer.tsx\n└── pages/\n    └── index.tsx\n```\n\nPreview-তে দেখুন।',
-  ],
-  automation: [
-    'অটোমেশন প্রসেস শুরু হচ্ছে... টেস্ট রান করছি।',
-    'CI/CD পাইপলাইন কনফিগার করা হয়েছে। ✅',
-  ],
-  plan: [
-    'আপনার প্রজেক্টের জন্য আমি নিচের প্ল্যান প্রস্তাব করছি:\n\n**Phase 1:** ফ্রন্টএন্ড — React + Tailwind\n**Phase 2:** ব্যাকএন্ড — FastAPI\n**Phase 3:** ডাটাবেজ — PostgreSQL\n\nআপনি কি এই প্ল্যানে সম্মত?',
-    'চলুন বিস্তারিত আলোচনা করি। আপনার টার্গেট অডিয়েন্স কে? কোন ধরনের ফিচার প্রয়োজন সেটা বলুন।',
-    'বুঝেছি। আমি মনে করি Build মোডে গিয়ে সরাসরি শুরু করা যেতে পারে। অনুমতি দিলে মোড পরিবর্তন করে দিই।',
-  ],
-};
-
 export function ChatTab() {
   const { t } = useLanguage();
+  const { toast } = useToast();
   const [mode, setMode] = useState<TivoMode>('plan');
   const [messages, setMessages] = useState<Record<TivoMode, Message[]>>({
     build: [],
@@ -56,29 +43,67 @@ export function ChatTab() {
     }));
     setIsLoading(true);
 
-    await new Promise(r => setTimeout(r, 1200 + Math.random() * 800));
+    // Build message history for AI context
+    const currentMsgs = [...messages[mode], userMsg];
+    const aiMessages = currentMsgs.map(m => ({ role: m.role, content: m.content }));
 
-    const responses = mockResponses[mode];
-    const aiMsg: Message = {
-      id: crypto.randomUUID(),
-      role: 'assistant',
-      content: responses[Math.floor(Math.random() * responses.length)],
-      timestamp: new Date(),
-    };
+    // Add system context based on mode
+    const modeContext = mode === 'build'
+      ? 'You are in BUILD mode. Generate code, components, and project files. Always provide working code.'
+      : mode === 'automation'
+      ? 'You are in AUTOMATION mode. Help with CI/CD, testing, deployment automation.'
+      : 'You are in PLAN mode. Help plan projects, discuss architecture, and create roadmaps.';
 
-    setMessages(prev => ({
-      ...prev,
-      [mode]: [...prev[mode], aiMsg],
-    }));
-    setIsLoading(false);
-  }, [mode]);
+    const messagesForAI = [
+      { role: 'user' as const, content: `[System: ${modeContext}]` },
+      ...aiMessages,
+    ];
+
+    let assistantContent = '';
+    const assistantId = crypto.randomUUID();
+
+    await streamChat({
+      messages: messagesForAI,
+      onDelta: (chunk) => {
+        assistantContent += chunk;
+        setMessages(prev => {
+          const modeMessages = prev[mode];
+          const lastMsg = modeMessages[modeMessages.length - 1];
+          if (lastMsg?.id === assistantId) {
+            return {
+              ...prev,
+              [mode]: modeMessages.map(m =>
+                m.id === assistantId ? { ...m, content: assistantContent } : m
+              ),
+            };
+          }
+          return {
+            ...prev,
+            [mode]: [
+              ...modeMessages,
+              { id: assistantId, role: 'assistant', content: assistantContent, timestamp: new Date() },
+            ],
+          };
+        });
+      },
+      onDone: () => {
+        setIsLoading(false);
+      },
+      onError: (error) => {
+        toast({
+          title: 'AI Error',
+          description: error,
+          variant: 'destructive',
+        });
+      },
+    });
+  }, [mode, messages, toast]);
 
   const currentMessages = messages[mode];
   const isCleanSlate = mode === 'plan' && currentMessages.length === 0 && !isLoading;
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      {/* Dynamic Workspace */}
       <div className="flex-1 flex flex-col min-h-0 relative">
         <AnimatePresence mode="wait">
           {mode === 'build' && (
@@ -108,6 +133,11 @@ export function ChatTab() {
                     <p className="text-muted-foreground text-sm">
                       {t('home.greeting')}
                     </p>
+                    {!hasAnyAIConfig() && (
+                      <p className="text-xs text-muted-foreground/60 mt-2">
+                        ⚙️ Settings → API Keys-এ key যোগ করুন অথবা মক মোডে ব্যবহার করুন
+                      </p>
+                    )}
                   </motion.div>
                 </div>
               ) : (
@@ -118,7 +148,6 @@ export function ChatTab() {
         </AnimatePresence>
       </div>
 
-      {/* Smart Input Bar */}
       <SmartInputBar
         mode={mode}
         onModeChange={setMode}
@@ -126,7 +155,6 @@ export function ChatTab() {
         isLoading={isLoading}
       />
 
-      {/* Control Panel */}
       <ControlPanel open={menuOpen} onClose={() => setMenuOpen(false)} />
     </div>
   );
