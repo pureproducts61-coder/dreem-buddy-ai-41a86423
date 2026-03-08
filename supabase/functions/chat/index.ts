@@ -6,177 +6,474 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+const GITHUB_API = "https://api.github.com";
+
+// ── GitHub helpers ──────────────────────────────────────────
+async function githubFetch(path: string, token: string, options: RequestInit = {}) {
+  const res = await fetch(`${GITHUB_API}${path}`, {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/vnd.github.v3+json",
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
+    },
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(`GitHub [${res.status}]: ${JSON.stringify(data)}`);
+  return data;
+}
+
+// ── Tool definitions for function calling ───────────────────
+const TOOLS = [
+  {
+    type: "function",
+    function: {
+      name: "create_github_repo",
+      description: "Create a new GitHub repository for the user. Returns the repo URL.",
+      parameters: {
+        type: "object",
+        properties: {
+          name: { type: "string", description: "Repository name (e.g. my-app)" },
+          description: { type: "string", description: "Short description" },
+          is_private: { type: "boolean", description: "Whether the repo is private" },
+        },
+        required: ["name"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "write_file_to_github",
+      description: "Create or update a single file in a GitHub repository.",
+      parameters: {
+        type: "object",
+        properties: {
+          owner: { type: "string", description: "GitHub username / org" },
+          repo: { type: "string", description: "Repository name" },
+          path: { type: "string", description: "File path (e.g. src/App.tsx)" },
+          content: { type: "string", description: "Full file content" },
+          message: { type: "string", description: "Commit message" },
+        },
+        required: ["owner", "repo", "path", "content"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "push_multiple_files",
+      description: "Push multiple files to a GitHub repository in sequence. Use this to scaffold entire projects.",
+      parameters: {
+        type: "object",
+        properties: {
+          owner: { type: "string", description: "GitHub username / org" },
+          repo: { type: "string", description: "Repository name" },
+          files: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                path: { type: "string" },
+                content: { type: "string" },
+              },
+              required: ["path", "content"],
+            },
+            description: "Array of files to push",
+          },
+        },
+        required: ["owner", "repo", "files"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "list_repo_files",
+      description: "List files and directories in a GitHub repository path.",
+      parameters: {
+        type: "object",
+        properties: {
+          owner: { type: "string", description: "GitHub username / org" },
+          repo: { type: "string", description: "Repository name" },
+          path: { type: "string", description: "Directory path (empty string for root)" },
+        },
+        required: ["owner", "repo"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "read_file_from_github",
+      description: "Read the content of a file from a GitHub repository.",
+      parameters: {
+        type: "object",
+        properties: {
+          owner: { type: "string", description: "GitHub username / org" },
+          repo: { type: "string", description: "Repository name" },
+          path: { type: "string", description: "File path" },
+        },
+        required: ["owner", "repo", "path"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "delete_github_repo",
+      description: "Delete a GitHub repository. This is destructive and irreversible.",
+      parameters: {
+        type: "object",
+        properties: {
+          owner: { type: "string", description: "GitHub username / org" },
+          repo: { type: "string", description: "Repository name" },
+        },
+        required: ["owner", "repo"],
+        additionalProperties: false,
+      },
+    },
+  },
+];
+
+// ── Execute a tool call ─────────────────────────────────────
+async function executeTool(
+  name: string,
+  args: Record<string, unknown>,
+  githubToken: string
+): Promise<string> {
+  if (!githubToken) {
+    return JSON.stringify({ error: "GitHub token not configured. Tell the user to add it in Settings → API Keys." });
+  }
+
+  try {
+    switch (name) {
+      case "create_github_repo": {
+        const result = await githubFetch("/user/repos", githubToken, {
+          method: "POST",
+          body: JSON.stringify({
+            name: args.name,
+            description: (args.description as string) || "Created by TIVO AI",
+            private: args.is_private ?? true,
+            auto_init: true,
+          }),
+        });
+        return JSON.stringify({ success: true, url: result.html_url, full_name: result.full_name, clone_url: result.clone_url });
+      }
+
+      case "write_file_to_github": {
+        const { owner, repo, path, content, message } = args as Record<string, string>;
+        // Check if file exists for sha
+        let sha: string | undefined;
+        try {
+          const existing = await githubFetch(`/repos/${owner}/${repo}/contents/${path}`, githubToken);
+          sha = existing.sha;
+        } catch { /* new file */ }
+
+        const encoded = btoa(unescape(encodeURIComponent(content)));
+        const result = await githubFetch(`/repos/${owner}/${repo}/contents/${path}`, githubToken, {
+          method: "PUT",
+          body: JSON.stringify({
+            message: message || `Update ${path} via TIVO AI`,
+            content: encoded,
+            ...(sha ? { sha } : {}),
+          }),
+        });
+        return JSON.stringify({ success: true, path, sha: result.content?.sha });
+      }
+
+      case "push_multiple_files": {
+        const { owner, repo, files } = args as { owner: string; repo: string; files: Array<{ path: string; content: string }> };
+        const results = [];
+        for (const file of files) {
+          let sha: string | undefined;
+          try {
+            const existing = await githubFetch(`/repos/${owner}/${repo}/contents/${file.path}`, githubToken);
+            sha = existing.sha;
+          } catch { /* new file */ }
+
+          const encoded = btoa(unescape(encodeURIComponent(file.content)));
+          const res = await githubFetch(`/repos/${owner}/${repo}/contents/${file.path}`, githubToken, {
+            method: "PUT",
+            body: JSON.stringify({
+              message: `Update ${file.path} via TIVO AI`,
+              content: encoded,
+              ...(sha ? { sha } : {}),
+            }),
+          });
+          results.push({ path: file.path, sha: res.content?.sha });
+        }
+        return JSON.stringify({ success: true, files_pushed: results.length, files: results });
+      }
+
+      case "list_repo_files": {
+        const { owner, repo, path } = args as Record<string, string>;
+        const result = await githubFetch(`/repos/${owner}/${repo}/contents/${path || ""}`, githubToken);
+        const items = Array.isArray(result) ? result.map((f: { name: string; type: string; path: string; size: number }) => ({
+          name: f.name, type: f.type, path: f.path, size: f.size
+        })) : [{ name: result.name, type: result.type, path: result.path }];
+        return JSON.stringify({ files: items });
+      }
+
+      case "read_file_from_github": {
+        const { owner, repo, path } = args as Record<string, string>;
+        const result = await githubFetch(`/repos/${owner}/${repo}/contents/${path}`, githubToken);
+        const decoded = atob(result.content);
+        return JSON.stringify({ path, content: decoded });
+      }
+
+      case "delete_github_repo": {
+        const { owner, repo } = args as Record<string, string>;
+        await githubFetch(`/repos/${owner}/${repo}`, githubToken, { method: "DELETE" });
+        return JSON.stringify({ success: true, deleted: `${owner}/${repo}` });
+      }
+
+      default:
+        return JSON.stringify({ error: `Unknown tool: ${name}` });
+    }
+  } catch (e) {
+    return JSON.stringify({ error: e instanceof Error ? e.message : "Tool execution failed" });
+  }
+}
+
+// ── SSE helpers ─────────────────────────────────────────────
+function sseEvent(type: string, data: unknown): string {
+  return `event: ${type}\ndata: ${JSON.stringify(data)}\n\n`;
+}
+
+function sseDelta(content: string): string {
+  return `data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\n`;
+}
+
+// ── Main handler ────────────────────────────────────────────
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
     const { messages, model, apiKey, provider, githubToken } = await req.json();
-
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
 
-    // Build enhanced system prompt with tool awareness
-    let systemPrompt = `You are TIVO AI, a powerful AI coding assistant. You help users plan, design, and build software projects. You can:
-- Create project plans with file structures
-- Generate code for components, pages, and features
-- Debug and fix code issues
-- Explain technical concepts clearly
-- Write in both Bangla and English based on user preference
-Always be helpful, precise, and provide working code examples.`;
+    const systemPrompt = `You are TIVO AI, an autonomous AI development agent. You can directly create GitHub repositories, write files, push code, and manage projects.
 
-    if (githubToken) {
-      systemPrompt += `\n\nIMPORTANT: The user has configured a GitHub token. You have access to GitHub operations. When the user asks to create a repository, push code, or manage GitHub projects, confirm that you can do it and provide the necessary instructions. The GitHub token is available and functional.`;
-    }
+CAPABILITIES:
+- Create GitHub repositories
+- Write/update files directly in GitHub repos
+- Push entire project scaffolds (multiple files at once)
+- List and read files from repos
+- Delete repositories
 
-    let apiUrl: string;
-    let authToken: string;
+INSTRUCTIONS:
+- When the user asks to create a project, USE the tools to actually create it. Don't just describe what to do.
+- When writing code, push it directly to GitHub using the tools.
+- Always confirm what you did after executing tools.
+- If the user hasn't provided a GitHub username, call list_repo_files or create a repo to discover it.
+- Write production-quality code with proper project structure.
+- You can write in both Bangla and English based on user preference.
+${githubToken ? "\nGitHub token is configured and active. You can execute all GitHub operations." : "\n⚠️ GitHub token is NOT configured. Tell the user to add it in Settings → API Keys."}`;
+
+    // Determine which AI gateway to use
+    let gatewayUrl: string;
+    let authHeader: string;
     let modelName: string;
-    let requestBody: Record<string, unknown>;
+    let useToolCalling = true;
 
     if (provider === "gemini" && apiKey) {
-      apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model || "gemini-2.5-flash"}:streamGenerateContent?alt=sse&key=${apiKey}`;
-      authToken = "";
-      modelName = model || "gemini-2.5-flash";
-
-      const geminiMessages = messages.map((m: { role: string; content: string }) => ({
-        role: m.role === "assistant" ? "model" : "user",
-        parts: [{ text: m.content }],
-      }));
-
-      requestBody = {
-        contents: geminiMessages,
-        systemInstruction: {
-          parts: [{ text: systemPrompt }],
-        },
-        generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens: 8192,
-        },
-      };
-
-      const response = await fetch(apiUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(requestBody),
-      });
-
-      if (!response.ok) {
-        const errText = await response.text();
-        console.error("Gemini API error:", response.status, errText);
-        return new Response(JSON.stringify({ error: `Gemini API error: ${response.status}` }), {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+      // Gemini native doesn't support OpenAI tool calling format well, use Lovable gateway
+      if (LOVABLE_API_KEY) {
+        gatewayUrl = "https://ai.gateway.lovable.dev/v1/chat/completions";
+        authHeader = `Bearer ${LOVABLE_API_KEY}`;
+        modelName = "google/gemini-3-flash-preview";
+      } else {
+        // Fallback to Gemini direct (no tool calling)
+        gatewayUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model || "gemini-2.5-flash"}:streamGenerateContent?alt=sse&key=${apiKey}`;
+        authHeader = "";
+        modelName = model || "gemini-2.5-flash";
+        useToolCalling = false;
       }
+    } else if (provider === "groq" && apiKey) {
+      gatewayUrl = "https://api.groq.com/openai/v1/chat/completions";
+      authHeader = `Bearer ${apiKey}`;
+      modelName = model || "llama-3.3-70b-versatile";
+      // Groq supports tool calling for some models
+    } else if (LOVABLE_API_KEY) {
+      gatewayUrl = "https://ai.gateway.lovable.dev/v1/chat/completions";
+      authHeader = `Bearer ${LOVABLE_API_KEY}`;
+      modelName = "google/gemini-3-flash-preview";
+    } else {
+      return new Response(
+        JSON.stringify({ error: "No AI provider configured. Add an API key in Settings." }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
-      const reader = response.body!.getReader();
-      const encoder = new TextEncoder();
-      const decoder = new TextDecoder();
+    // ── Agentic loop: call AI → execute tools → feed results → repeat ──
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      async start(controller) {
+        const conversationMessages = [
+          { role: "system", content: systemPrompt },
+          ...messages,
+        ];
 
-      const stream = new ReadableStream({
-        async start(controller) {
+        const MAX_ITERATIONS = 8;
+
+        for (let iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
+          // Call AI with tool definitions
+          const body: Record<string, unknown> = {
+            model: modelName,
+            messages: conversationMessages,
+            stream: true,
+          };
+
+          if (useToolCalling && githubToken) {
+            body.tools = TOOLS;
+            body.tool_choice = "auto";
+          }
+
+          const aiResp = await fetch(gatewayUrl, {
+            method: "POST",
+            headers: {
+              Authorization: authHeader,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(body),
+          });
+
+          if (!aiResp.ok) {
+            const status = aiResp.status;
+            const errText = await aiResp.text();
+            console.error("AI error:", status, errText);
+            if (status === 429) {
+              controller.enqueue(encoder.encode(sseEvent("error", { error: "Rate limit exceeded. Please try again later." })));
+            } else if (status === 402) {
+              controller.enqueue(encoder.encode(sseEvent("error", { error: "Payment required. Please add credits." })));
+            } else {
+              controller.enqueue(encoder.encode(sseEvent("error", { error: `AI error ${status}` })));
+            }
+            controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+            controller.close();
+            return;
+          }
+
+          // Parse the streaming response, collecting tool calls
+          const reader = aiResp.body!.getReader();
+          const decoder = new TextDecoder();
           let buffer = "";
+          let assistantText = "";
+          const toolCalls: Map<number, { id: string; name: string; arguments: string }> = new Map();
+
           while (true) {
             const { done, value } = await reader.read();
-            if (done) {
-              controller.enqueue(encoder.encode("data: [DONE]\n\n"));
-              controller.close();
-              break;
-            }
+            if (done) break;
             buffer += decoder.decode(value, { stream: true });
+
             const lines = buffer.split("\n");
             buffer = lines.pop() || "";
 
             for (const line of lines) {
               if (!line.startsWith("data: ")) continue;
               const jsonStr = line.slice(6).trim();
-              if (!jsonStr) continue;
+              if (!jsonStr || jsonStr === "[DONE]") continue;
+
               try {
                 const parsed = JSON.parse(jsonStr);
-                const text = parsed.candidates?.[0]?.content?.parts?.[0]?.text;
-                if (text) {
-                  const openAIChunk = { choices: [{ delta: { content: text } }] };
-                  controller.enqueue(encoder.encode(`data: ${JSON.stringify(openAIChunk)}\n\n`));
+                const choice = parsed.choices?.[0];
+                if (!choice) continue;
+
+                const delta = choice.delta;
+
+                // Stream text content to client
+                if (delta?.content) {
+                  assistantText += delta.content;
+                  controller.enqueue(encoder.encode(sseDelta(delta.content)));
                 }
-              } catch { /* skip */ }
+
+                // Collect tool calls
+                if (delta?.tool_calls) {
+                  for (const tc of delta.tool_calls) {
+                    const idx = tc.index ?? 0;
+                    if (!toolCalls.has(idx)) {
+                      toolCalls.set(idx, { id: tc.id || "", name: tc.function?.name || "", arguments: "" });
+                    }
+                    const existing = toolCalls.get(idx)!;
+                    if (tc.id) existing.id = tc.id;
+                    if (tc.function?.name) existing.name = tc.function.name;
+                    if (tc.function?.arguments) existing.arguments += tc.function.arguments;
+                  }
+                }
+              } catch { /* partial JSON, skip */ }
             }
           }
-        },
-      });
 
-      return new Response(stream, {
-        headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
-      });
-    } else if (provider === "groq" && apiKey) {
-      apiUrl = "https://api.groq.com/openai/v1/chat/completions";
-      authToken = apiKey;
-      modelName = model || "llama-3.3-70b-versatile";
+          // If no tool calls, we're done
+          if (toolCalls.size === 0) {
+            controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+            controller.close();
+            return;
+          }
 
-      const response = await fetch(apiUrl, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${authToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: modelName,
-          messages: [{ role: "system", content: systemPrompt }, ...messages],
-          stream: true,
-        }),
-      });
+          // Add assistant message with tool calls to conversation
+          const assistantMsg: Record<string, unknown> = { role: "assistant" };
+          if (assistantText) assistantMsg.content = assistantText;
+          assistantMsg.tool_calls = Array.from(toolCalls.values()).map((tc) => ({
+            id: tc.id,
+            type: "function",
+            function: { name: tc.name, arguments: tc.arguments },
+          }));
+          conversationMessages.push(assistantMsg);
 
-      if (!response.ok) {
-        const t = await response.text();
-        console.error("Groq API error:", response.status, t);
-        return new Response(JSON.stringify({ error: `Groq API error: ${response.status}` }), {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
+          // Execute each tool call and send status to client
+          for (const [, tc] of toolCalls) {
+            let args: Record<string, unknown> = {};
+            try {
+              args = JSON.parse(tc.arguments);
+            } catch {
+              args = {};
+            }
 
-      return new Response(response.body, {
-        headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
-      });
-    } else if (LOVABLE_API_KEY) {
-      const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "google/gemini-3-flash-preview",
-          messages: [{ role: "system", content: systemPrompt }, ...messages],
-          stream: true,
-        }),
-      });
+            // Notify client: tool execution starting
+            controller.enqueue(encoder.encode(sseEvent("tool_start", {
+              tool: tc.name,
+              args: sanitizeArgs(args),
+            })));
 
-      if (!response.ok) {
-        if (response.status === 429) {
-          return new Response(JSON.stringify({ error: "Rate limit exceeded. Please try again later." }), {
-            status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
+            const result = await executeTool(tc.name, args, githubToken || "");
+
+            // Notify client: tool execution done
+            const parsedResult = JSON.parse(result);
+            controller.enqueue(encoder.encode(sseEvent("tool_result", {
+              tool: tc.name,
+              result: parsedResult,
+            })));
+
+            // Add tool result to conversation for next iteration
+            conversationMessages.push({
+              role: "tool",
+              tool_call_id: tc.id,
+              content: result,
+            });
+          }
+
+          // Stream a newline separator before next AI iteration
+          controller.enqueue(encoder.encode(sseDelta("\n\n")));
         }
-        if (response.status === 402) {
-          return new Response(JSON.stringify({ error: "Payment required. Please add credits." }), {
-            status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
-        }
-        const t = await response.text();
-        console.error("Lovable AI error:", response.status, t);
-        return new Response(JSON.stringify({ error: "AI gateway error" }), {
-          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
 
-      return new Response(response.body, {
-        headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
-      });
-    } else {
-      return new Response(
-        JSON.stringify({ error: "No AI provider configured. Please add an API key in Settings." }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+        // Max iterations reached
+        controller.enqueue(encoder.encode(sseDelta("\n\n⚠️ Maximum tool execution rounds reached.")));
+        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+        controller.close();
+      },
+    });
+
+    return new Response(stream, {
+      headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
+    });
   } catch (e) {
     console.error("chat error:", e);
     return new Response(
@@ -185,3 +482,15 @@ Always be helpful, precise, and provide working code examples.`;
     );
   }
 });
+
+// Strip file contents from args for client display (too large)
+function sanitizeArgs(args: Record<string, unknown>): Record<string, unknown> {
+  const clean = { ...args };
+  if (typeof clean.content === "string" && (clean.content as string).length > 200) {
+    clean.content = (clean.content as string).slice(0, 200) + "...";
+  }
+  if (Array.isArray(clean.files)) {
+    clean.files = (clean.files as Array<{ path: string }>).map(f => ({ path: f.path, content: "[truncated]" }));
+  }
+  return clean;
+}

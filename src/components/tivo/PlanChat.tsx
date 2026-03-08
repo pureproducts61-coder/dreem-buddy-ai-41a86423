@@ -5,13 +5,16 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { StreamingMessage } from './StreamingMessage';
+import { ToolCallStatus } from './ToolCallStatus';
 import tivoLogo from '@/assets/tivo-logo.png';
+import type { ToolEvent } from '@/services/aiChatService';
 
 interface PlanMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
+  toolEvents?: ToolEvent[];
 }
 
 interface PlanChatProps {
@@ -96,6 +99,9 @@ export function PlanChat({ messages, isLoading }: PlanChatProps) {
                     {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </span>
                 </div>
+                {msg.toolEvents && msg.toolEvents.length > 0 && (
+                  <ToolCallStatus events={msg.toolEvents} />
+                )}
                 <StreamingMessage
                   content={msg.content}
                   isLatest={idx === messages.filter(m => m.role === 'assistant').length - 1 && msg.role === 'assistant'}

@@ -7,15 +7,17 @@ import { PlanChat } from '@/components/tivo/PlanChat';
 import { ControlPanel } from '@/components/tivo/ControlPanel';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { motion, AnimatePresence } from 'framer-motion';
-import { streamChat, hasAnyAIConfig } from '@/services/aiChatService';
+import { streamChat, hasAnyAIConfig, type ToolEvent } from '@/services/aiChatService';
 import { chatPersistence } from '@/services/chatPersistenceService';
 import { useToast } from '@/hooks/use-toast';
+import { ToolCallStatus } from '@/components/tivo/ToolCallStatus';
 
 export interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
+  toolEvents?: ToolEvent[];
 }
 
 export function ChatTab() {
@@ -117,37 +119,34 @@ export function ChatTab() {
 
     let assistantContent = '';
     const assistantId = crypto.randomUUID();
+    const toolEvents: ToolEvent[] = [];
+
+    const updateAssistantMsg = () => {
+      setMessages(prev => {
+        const modeMessages = prev[mode];
+        const lastMsg = modeMessages[modeMessages.length - 1];
+        const msgData = { id: assistantId, role: 'assistant' as const, content: assistantContent, timestamp: new Date(), toolEvents: [...toolEvents] };
+        if (lastMsg?.id === assistantId) {
+          return { ...prev, [mode]: modeMessages.map(m => m.id === assistantId ? msgData : m) };
+        }
+        return { ...prev, [mode]: [...modeMessages, msgData] };
+      });
+    };
 
     await streamChat({
       messages: messagesForAI,
       onDelta: (chunk) => {
         assistantContent += chunk;
-        setMessages(prev => {
-          const modeMessages = prev[mode];
-          const lastMsg = modeMessages[modeMessages.length - 1];
-          if (lastMsg?.id === assistantId) {
-            return {
-              ...prev,
-              [mode]: modeMessages.map(m =>
-                m.id === assistantId ? { ...m, content: assistantContent } : m
-              ),
-            };
-          }
-          return {
-            ...prev,
-            [mode]: [
-              ...modeMessages,
-              { id: assistantId, role: 'assistant', content: assistantContent, timestamp: new Date() },
-            ],
-          };
-        });
+        updateAssistantMsg();
+      },
+      onToolEvent: (event) => {
+        toolEvents.push(event);
+        updateAssistantMsg();
       },
       onDone: async () => {
-        // Save assistant message to DB
         if (currentSessionId && assistantContent) {
           const saved = await chatPersistence.saveMessage(currentSessionId, 'assistant', assistantContent);
           if (saved) {
-            // Update the temp ID with the real DB ID
             setMessages(prev => ({
               ...prev,
               [mode]: prev[mode].map(m =>
