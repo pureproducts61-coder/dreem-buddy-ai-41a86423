@@ -10,10 +10,22 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { messages, model, apiKey, provider } = await req.json();
+    const { messages, model, apiKey, provider, githubToken } = await req.json();
 
-    // Try user-provided API key first, then Lovable AI Gateway
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+
+    // Build enhanced system prompt with tool awareness
+    let systemPrompt = `You are TIVO AI, a powerful AI coding assistant. You help users plan, design, and build software projects. You can:
+- Create project plans with file structures
+- Generate code for components, pages, and features
+- Debug and fix code issues
+- Explain technical concepts clearly
+- Write in both Bangla and English based on user preference
+Always be helpful, precise, and provide working code examples.`;
+
+    if (githubToken) {
+      systemPrompt += `\n\nIMPORTANT: The user has configured a GitHub token. You have access to GitHub operations. When the user asks to create a repository, push code, or manage GitHub projects, confirm that you can do it and provide the necessary instructions. The GitHub token is available and functional.`;
+    }
 
     let apiUrl: string;
     let authToken: string;
@@ -21,7 +33,6 @@ serve(async (req) => {
     let requestBody: Record<string, unknown>;
 
     if (provider === "gemini" && apiKey) {
-      // Direct Gemini API call
       apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model || "gemini-2.5-flash"}:streamGenerateContent?alt=sse&key=${apiKey}`;
       authToken = "";
       modelName = model || "gemini-2.5-flash";
@@ -34,17 +45,7 @@ serve(async (req) => {
       requestBody = {
         contents: geminiMessages,
         systemInstruction: {
-          parts: [
-            {
-              text: `You are TIVO AI, a powerful AI coding assistant. You help users plan, design, and build software projects. You can:
-- Create project plans with file structures
-- Generate code for components, pages, and features
-- Debug and fix code issues
-- Explain technical concepts clearly
-- Write in both Bangla and English based on user preference
-Always be helpful, precise, and provide working code examples.`,
-            },
-          ],
+          parts: [{ text: systemPrompt }],
         },
         generationConfig: {
           temperature: 0.7,
@@ -67,7 +68,6 @@ Always be helpful, precise, and provide working code examples.`,
         });
       }
 
-      // Transform Gemini SSE to OpenAI-compatible SSE
       const reader = response.body!.getReader();
       const encoder = new TextEncoder();
       const decoder = new TextDecoder();
@@ -94,14 +94,10 @@ Always be helpful, precise, and provide working code examples.`,
                 const parsed = JSON.parse(jsonStr);
                 const text = parsed.candidates?.[0]?.content?.parts?.[0]?.text;
                 if (text) {
-                  const openAIChunk = {
-                    choices: [{ delta: { content: text } }],
-                  };
+                  const openAIChunk = { choices: [{ delta: { content: text } }] };
                   controller.enqueue(encoder.encode(`data: ${JSON.stringify(openAIChunk)}\n\n`));
                 }
-              } catch {
-                // skip
-              }
+              } catch { /* skip */ }
             }
           }
         },
@@ -111,7 +107,6 @@ Always be helpful, precise, and provide working code examples.`,
         headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
       });
     } else if (provider === "groq" && apiKey) {
-      // Groq API
       apiUrl = "https://api.groq.com/openai/v1/chat/completions";
       authToken = apiKey;
       modelName = model || "llama-3.3-70b-versatile";
@@ -124,14 +119,7 @@ Always be helpful, precise, and provide working code examples.`,
         },
         body: JSON.stringify({
           model: modelName,
-          messages: [
-            {
-              role: "system",
-              content:
-                "You are TIVO AI, a powerful AI coding assistant. Help users plan, design, and build software projects. Write in both Bangla and English based on user preference.",
-            },
-            ...messages,
-          ],
+          messages: [{ role: "system", content: systemPrompt }, ...messages],
           stream: true,
         }),
       });
@@ -149,7 +137,6 @@ Always be helpful, precise, and provide working code examples.`,
         headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
       });
     } else if (LOVABLE_API_KEY) {
-      // Lovable AI Gateway fallback
       const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -158,14 +145,7 @@ Always be helpful, precise, and provide working code examples.`,
         },
         body: JSON.stringify({
           model: "google/gemini-3-flash-preview",
-          messages: [
-            {
-              role: "system",
-              content:
-                "You are TIVO AI, a powerful AI coding assistant. Help users plan, design, and build software projects. You can create project plans, generate code, debug issues, and explain concepts. Write in both Bangla and English based on user preference.",
-            },
-            ...messages,
-          ],
+          messages: [{ role: "system", content: systemPrompt }, ...messages],
           stream: true,
         }),
       });
@@ -173,21 +153,18 @@ Always be helpful, precise, and provide working code examples.`,
       if (!response.ok) {
         if (response.status === 429) {
           return new Response(JSON.stringify({ error: "Rate limit exceeded. Please try again later." }), {
-            status: 429,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
         if (response.status === 402) {
           return new Response(JSON.stringify({ error: "Payment required. Please add credits." }), {
-            status: 402,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
         const t = await response.text();
         console.error("Lovable AI error:", response.status, t);
         return new Response(JSON.stringify({ error: "AI gateway error" }), {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
