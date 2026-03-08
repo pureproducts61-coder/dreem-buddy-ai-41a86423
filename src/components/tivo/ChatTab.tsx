@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import tivoLogo from '@/assets/tivo-logo.png';
 import { SmartInputBar, TivoMode } from '@/components/tivo/SmartInputBar';
 import { BuildWorkspace } from '@/components/tivo/BuildWorkspace';
@@ -8,6 +8,7 @@ import { ControlPanel } from '@/components/tivo/ControlPanel';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { streamChat, hasAnyAIConfig } from '@/services/aiChatService';
+import { chatPersistence } from '@/services/chatPersistenceService';
 import { useToast } from '@/hooks/use-toast';
 
 export interface Message {
@@ -26,15 +27,71 @@ export function ChatTab() {
     automation: [],
     plan: [],
   });
+  const [sessionIds, setSessionIds] = useState<Record<TivoMode, string | null>>({
+    build: null,
+    automation: null,
+    plan: null,
+  });
   const [isLoading, setIsLoading] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [sessionsLoaded, setSessionsLoaded] = useState(false);
+
+  // Load sessions and messages on mount
+  useEffect(() => {
+    async function loadSessions() {
+      try {
+        const modes: TivoMode[] = ['build', 'automation', 'plan'];
+        const newMessages: Record<TivoMode, Message[]> = { build: [], automation: [], plan: [] };
+        const newSessionIds: Record<TivoMode, string | null> = { build: null, automation: null, plan: null };
+
+        for (const m of modes) {
+          const session = await chatPersistence.getOrCreateSession(m);
+          if (session) {
+            newSessionIds[m] = session.id;
+            const dbMessages = await chatPersistence.getMessages(session.id);
+            newMessages[m] = dbMessages.map(msg => ({
+              id: msg.id,
+              role: msg.role as 'user' | 'assistant',
+              content: msg.content,
+              timestamp: new Date(msg.created_at),
+            }));
+          }
+        }
+
+        setSessionIds(newSessionIds);
+        setMessages(newMessages);
+      } catch (e) {
+        console.error('Failed to load chat sessions:', e);
+      } finally {
+        setSessionsLoaded(true);
+      }
+    }
+    loadSessions();
+  }, []);
 
   const handleSendMessage = useCallback(async (content: string, files?: File[]) => {
+    const messageContent = files ? `${content}\n\n📎 ${files.map(f => f.name).join(', ')}` : content;
+
+    // Ensure session exists
+    let currentSessionId = sessionIds[mode];
+    if (!currentSessionId) {
+      const session = await chatPersistence.getOrCreateSession(mode);
+      if (session) {
+        currentSessionId = session.id;
+        setSessionIds(prev => ({ ...prev, [mode]: session.id }));
+      }
+    }
+
+    // Save user message to DB
+    const savedUserMsg = currentSessionId
+      ? await chatPersistence.saveMessage(currentSessionId, 'user', messageContent)
+      : null;
+
     const userMsg: Message = {
-      id: crypto.randomUUID(),
+      id: savedUserMsg?.id || crypto.randomUUID(),
       role: 'user',
-      content: files ? `${content}\n\n📎 ${files.map(f => f.name).join(', ')}` : content,
-      timestamp: new Date(),
+      content: messageContent,
+      timestamp: savedUserMsg ? new Date(savedUserMsg.created_at) : new Date(),
     };
 
     setMessages(prev => ({
@@ -47,7 +104,6 @@ export function ChatTab() {
     const currentMsgs = [...messages[mode], userMsg];
     const aiMessages = currentMsgs.map(m => ({ role: m.role, content: m.content }));
 
-    // Add system context based on mode
     const modeContext = mode === 'build'
       ? 'You are in BUILD mode. Generate code, components, and project files. Always provide working code.'
       : mode === 'automation'
@@ -86,7 +142,20 @@ export function ChatTab() {
           };
         });
       },
-      onDone: () => {
+      onDone: async () => {
+        // Save assistant message to DB
+        if (currentSessionId && assistantContent) {
+          const saved = await chatPersistence.saveMessage(currentSessionId, 'assistant', assistantContent);
+          if (saved) {
+            // Update the temp ID with the real DB ID
+            setMessages(prev => ({
+              ...prev,
+              [mode]: prev[mode].map(m =>
+                m.id === assistantId ? { ...m, id: saved.id } : m
+              ),
+            }));
+          }
+        }
         setIsLoading(false);
       },
       onError: (error) => {
@@ -97,7 +166,7 @@ export function ChatTab() {
         });
       },
     });
-  }, [mode, messages, toast]);
+  }, [mode, messages, sessionIds, toast]);
 
   const currentMessages = messages[mode];
   const isCleanSlate = mode === 'plan' && currentMessages.length === 0 && !isLoading;

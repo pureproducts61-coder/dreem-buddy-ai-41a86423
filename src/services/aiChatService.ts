@@ -51,6 +51,8 @@ export async function streamChat({
 }) {
   const provider = getActiveProvider();
   const apiKey = getApiKeyForProvider(provider);
+  const settings = getSettings();
+  const githubToken = settings.githubToken || '';
 
   // If no Supabase URL (shouldn't happen with Cloud), fall back to mock
   if (!CHAT_URL || CHAT_URL.includes('undefined')) {
@@ -70,6 +72,7 @@ export async function streamChat({
         provider,
         apiKey: apiKey || undefined,
         model: undefined,
+        githubToken: githubToken || undefined,
       }),
     });
 
