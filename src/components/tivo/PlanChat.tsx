@@ -5,13 +5,16 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { StreamingMessage } from './StreamingMessage';
+import { ToolCallStatus } from './ToolCallStatus';
 import tivoLogo from '@/assets/tivo-logo.png';
+import type { ToolEvent } from '@/services/aiChatService';
 
 interface PlanMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
+  toolEvents?: ToolEvent[];
 }
 
 interface PlanChatProps {
