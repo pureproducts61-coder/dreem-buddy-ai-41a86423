@@ -7,15 +7,17 @@ import { PlanChat } from '@/components/tivo/PlanChat';
 import { ControlPanel } from '@/components/tivo/ControlPanel';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { motion, AnimatePresence } from 'framer-motion';
-import { streamChat, hasAnyAIConfig } from '@/services/aiChatService';
+import { streamChat, hasAnyAIConfig, type ToolEvent } from '@/services/aiChatService';
 import { chatPersistence } from '@/services/chatPersistenceService';
 import { useToast } from '@/hooks/use-toast';
+import { ToolCallStatus } from '@/components/tivo/ToolCallStatus';
 
 export interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
+  toolEvents?: ToolEvent[];
 }
 
 export function ChatTab() {
