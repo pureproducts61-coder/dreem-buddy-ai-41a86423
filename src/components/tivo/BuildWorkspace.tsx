@@ -85,6 +85,9 @@ export function BuildWorkspace({ messages, isLoading, onOpenMenu }: BuildWorkspa
                     <img src={tivoLogo} alt="TIVO" className="w-4 h-4" />
                     <span className="text-[11px] font-medium text-muted-foreground">TIVO AI</span>
                   </div>
+                  {msg.toolEvents && msg.toolEvents.length > 0 && (
+                    <ToolCallStatus events={msg.toolEvents} />
+                  )}
                   <StreamingMessage
                     content={msg.content}
                     isLatest={idx === messages.length - 1 && msg.role === 'assistant'}
