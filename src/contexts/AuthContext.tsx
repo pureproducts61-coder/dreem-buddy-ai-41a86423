@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 
 interface User {
   email: string;
@@ -22,23 +23,32 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const stored = localStorage.getItem('tivo_user') || sessionStorage.getItem('tivo_user');
-    if (stored) {
-      try { setUser(JSON.parse(stored)); } catch { /* ignore */ }
-    }
-    setIsLoading(false);
+    // Listen for Supabase auth changes (Google OAuth)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user?.email) {
+        setUser({ email: session.user.email });
+      }
+    });
+
+    // Check for existing Supabase session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user?.email) {
+        setUser({ email: session.user.email });
+      } else {
+        // Fallback to local storage for admin login
+        const stored = localStorage.getItem('tivo_user') || sessionStorage.getItem('tivo_user');
+        if (stored) {
+          try { setUser(JSON.parse(stored)); } catch { /* ignore */ }
+        }
+      }
+      setIsLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   const login = async (email: string, password: string, remember = false) => {
     await new Promise(r => setTimeout(r, 800));
-
-    // Check against backend if configured, otherwise use local dummy credentials
-    const backendUrl = localStorage.getItem('tivo-hf-url');
-    
-    if (backendUrl && backendUrl.trim()) {
-      // TODO: When backend is connected, call API for auth
-      // For now, still use local credentials
-    }
 
     if (email === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
       const u = { email };
@@ -50,7 +60,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return false;
   };
 
-  const logout = () => {
+  const logout = async () => {
+    await supabase.auth.signOut();
     setUser(null);
     localStorage.removeItem('tivo_user');
     sessionStorage.removeItem('tivo_user');
