@@ -1,9 +1,16 @@
-// AI Chat Service - streams from edge function or falls back to mock
+// AI Chat Service - streams from edge function with tool calling support
 const STORAGE_KEY = 'dreem-settings';
 
 interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
+}
+
+export interface ToolEvent {
+  type: 'tool_start' | 'tool_result';
+  tool: string;
+  args?: Record<string, unknown>;
+  result?: Record<string, unknown>;
 }
 
 function getSettings() {
@@ -32,7 +39,6 @@ export function getActiveProvider(): string {
 
 export function hasAnyAIConfig(): boolean {
   const settings = getSettings();
-  // Check if any API key is configured
   return !!(settings.geminiApiKey || settings.groqApiKey || settings.deepseekApiKey);
 }
 
@@ -43,18 +49,19 @@ export async function streamChat({
   onDelta,
   onDone,
   onError,
+  onToolEvent,
 }: {
   messages: ChatMessage[];
   onDelta: (text: string) => void;
   onDone: () => void;
   onError?: (error: string) => void;
+  onToolEvent?: (event: ToolEvent) => void;
 }) {
   const provider = getActiveProvider();
   const apiKey = getApiKeyForProvider(provider);
   const settings = getSettings();
   const githubToken = settings.githubToken || '';
 
-  // If no Supabase URL (shouldn't happen with Cloud), fall back to mock
   if (!CHAT_URL || CHAT_URL.includes('undefined')) {
     await mockStreamResponse(messages, onDelta, onDone);
     return;
@@ -80,7 +87,6 @@ export async function streamChat({
       const errData = await resp.json().catch(() => ({ error: 'Unknown error' }));
       const errMsg = errData.error || `Error ${resp.status}`;
       if (onError) onError(errMsg);
-      // Fall back to mock on error
       await mockStreamResponse(messages, onDelta, onDone);
       return;
     }
@@ -106,7 +112,38 @@ export async function streamChat({
         textBuffer = textBuffer.slice(newlineIndex + 1);
 
         if (line.endsWith('\r')) line = line.slice(0, -1);
-        if (line.startsWith(':') || line.trim() === '') continue;
+        if (line.trim() === '') continue;
+
+        // Handle custom SSE events
+        if (line.startsWith('event: ')) {
+          const eventType = line.slice(7).trim();
+          // Next line should be the data
+          const nextNewline = textBuffer.indexOf('\n');
+          if (nextNewline === -1) {
+            // Put it back and wait
+            textBuffer = line + '\n' + textBuffer;
+            break;
+          }
+          let dataLine = textBuffer.slice(0, nextNewline);
+          textBuffer = textBuffer.slice(nextNewline + 1);
+          if (dataLine.endsWith('\r')) dataLine = dataLine.slice(0, -1);
+
+          if (dataLine.startsWith('data: ') && onToolEvent) {
+            try {
+              const payload = JSON.parse(dataLine.slice(6).trim());
+              if (eventType === 'tool_start') {
+                onToolEvent({ type: 'tool_start', tool: payload.tool, args: payload.args });
+              } else if (eventType === 'tool_result') {
+                onToolEvent({ type: 'tool_result', tool: payload.tool, result: payload.result });
+              } else if (eventType === 'error' && onError) {
+                onError(payload.error);
+              }
+            } catch { /* skip */ }
+          }
+          continue;
+        }
+
+        if (line.startsWith(':')) continue;
         if (!line.startsWith('data: ')) continue;
 
         const jsonStr = line.slice(6).trim();
@@ -147,7 +184,6 @@ export async function streamChat({
   } catch (e) {
     console.error('Stream chat error:', e);
     if (onError) onError(e instanceof Error ? e.message : 'Connection failed');
-    // Fall back to mock
     await mockStreamResponse(messages, onDelta, onDone);
   }
 }
@@ -159,17 +195,16 @@ async function mockStreamResponse(
   onDone: () => void,
 ) {
   const lastMsg = messages[messages.length - 1]?.content?.toLowerCase() || '';
-  
+
   let response = '';
   if (lastMsg.includes('plan') || lastMsg.includes('প্ল্যান')) {
     response = `## প্রজেক্ট প্ল্যান\n\nআপনার প্রজেক্টের জন্য আমি নিচের প্ল্যান প্রস্তাব করছি:\n\n**Phase 1:** ফ্রন্টএন্ড — React + Tailwind\n**Phase 2:** ব্যাকএন্ড — API Integration\n**Phase 3:** ডাটাবেজ — PostgreSQL\n\n> ⚠️ এটি একটি মক রেসপন্স। সম্পূর্ণ AI ফিচার পেতে **Settings → API Keys**-এ আপনার Gemini/Groq API Key যোগ করুন।`;
   } else if (lastMsg.includes('build') || lastMsg.includes('বানা') || lastMsg.includes('তৈরি')) {
     response = `## কোড জেনারেশন\n\n\`\`\`tsx\nexport function Component() {\n  return (\n    <div className="p-4">\n      <h1>Hello TIVO!</h1>\n    </div>\n  );\n}\n\`\`\`\n\n> ⚠️ মক রেসপন্স। Real AI-এর জন্য Settings-এ API Key সেট করুন।`;
   } else {
-    response = `আমি আপনার রিকোয়েস্ট বুঝতে পেরেছি! 🚀\n\nবর্তমানে আমি **মক মোডে** কাজ করছি। সম্পূর্ণ AI ক্ষমতা পেতে:\n\n1. **Settings** (⚙️) এ যান\n2. **API Keys** সেকশনে আপনার key যোগ করুন\n3. Gemini, Groq, বা DeepSeek — যেকোনো একটি দিলেই হবে\n\nতারপর আমি আপনার জন্য:\n- 📋 প্রজেক্ট প্ল্যান করবো\n- 💻 কোড জেনারেট করবো\n- 🔗 GitHub-এ পুশ করবো`;
+    response = `আমি আপনার রিকোয়েস্ট বুঝতে পেরেছি! 🚀\n\nবর্তমানে আমি **মক মোডে** কাজ করছি। সম্পূর্ণ AI ক্ষমতা পেতে:\n\n1. **Settings** (⚙️) এ যান\n2. **API Keys** সেকশনে আপনার key যোগ করুন\n3. Gemini, Groq, বা DeepSeek — যেকোনো একটি দিলেই হবে`;
   }
 
-  // Simulate streaming word by word
   const words = response.split(' ');
   for (const word of words) {
     onDelta(word + ' ');
