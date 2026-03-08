@@ -10,6 +10,8 @@ import { Loader2, Shield, ArrowRight, Lock, Mail } from 'lucide-react';
 import { ThemeToggle, LanguageToggle } from '@/components/ThemeLanguageToggle';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Checkbox } from '@/components/ui/checkbox';
+import { lovable } from '@/integrations/lovable/index';
+import { supabase } from '@/integrations/supabase/client';
 
 const Login = () => {
   const [email, setEmail] = useState('');
