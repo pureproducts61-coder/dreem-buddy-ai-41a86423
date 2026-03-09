@@ -143,8 +143,23 @@ export function ChatTab() {
         updateAssistantMsg();
       },
       onToolEvent: (event) => {
-        toolEvents.push(event);
-        updateAssistantMsg();
+        if (event.type === 'thinking') {
+          // Add thinking step
+          const step: ThinkingStep = {
+            id: `thinking-${Date.now()}`,
+            icon: event.thinking?.status === 'retrying' ? 'retry' : event.thinking?.status === 'complete' ? 'done' : 'analyze',
+            label: event.thinking?.message || (event.thinking?.status === 'analyzing' ? '🔍 Analyzing and planning...' : event.thinking?.status === 'complete' ? '✅ Task complete' : `Step ${event.thinking?.step || '?'}/${event.thinking?.maxSteps || '?'}`),
+            status: event.thinking?.status === 'complete' ? 'done' : event.thinking?.status === 'retrying' ? 'error' : 'active',
+            timestamp: new Date(),
+          };
+          setThinkingSteps(prev => [...prev, step]);
+        } else {
+          toolEvents.push(event);
+          // Convert tool events to thinking steps
+          const newSteps = toolEventsToThinkingSteps([event]);
+          setThinkingSteps(prev => [...prev, ...newSteps]);
+          updateAssistantMsg();
+        }
       },
       onDone: async () => {
         if (currentSessionId && assistantContent) {
