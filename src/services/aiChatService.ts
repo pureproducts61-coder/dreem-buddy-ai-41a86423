@@ -136,6 +136,8 @@ export async function streamChat({
                 onToolEvent({ type: 'tool_start', tool: payload.tool, args: payload.args });
               } else if (eventType === 'tool_result') {
                 onToolEvent({ type: 'tool_result', tool: payload.tool, result: payload.result });
+              } else if (eventType === 'thinking') {
+                onToolEvent({ type: 'thinking', tool: '', thinking: payload });
               } else if (eventType === 'error' && onError) {
                 onError(payload.error);
               }
