@@ -220,6 +220,17 @@ export function ChatTab() {
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
+      {/* History toggle button */}
+      <div className="flex items-center px-3 pt-2 pb-1">
+        <button
+          onClick={() => setHistoryOpen(true)}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-all"
+        >
+          <History className="h-3.5 w-3.5" />
+          <span>History</span>
+        </button>
+      </div>
+
       <div className="flex-1 flex flex-col min-h-0 relative">
         <AnimatePresence mode="wait">
           {mode === 'build' && (
@@ -263,7 +274,6 @@ export function ChatTab() {
           )}
         </AnimatePresence>
 
-        {/* Thinking Tracker - shows real-time AI work progress */}
         <ThinkingTracker steps={thinkingSteps} isActive={isLoading} />
       </div>
 
@@ -275,6 +285,15 @@ export function ChatTab() {
       />
 
       <ControlPanel open={menuOpen} onClose={() => setMenuOpen(false)} />
+
+      <ChatHistorySidebar
+        open={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        currentMode={mode}
+        currentSessionId={sessionIds[mode]}
+        onSelectSession={handleSelectSession}
+        onNewSession={handleNewSession}
+      />
     </div>
   );
 }
