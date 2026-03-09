@@ -39,8 +39,36 @@ export function ChatTab() {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [sessionsLoaded, setSessionsLoaded] = useState(false);
   const [thinkingSteps, setThinkingSteps] = useState<ThinkingStep[]>([]);
+
+  // Switch to a different session
+  const handleSelectSession = useCallback(async (session: ChatSession) => {
+    const sessionMode = session.mode as TivoMode;
+    setMode(sessionMode);
+    setSessionIds(prev => ({ ...prev, [sessionMode]: session.id }));
+
+    const dbMessages = await chatPersistence.getMessages(session.id);
+    setMessages(prev => ({
+      ...prev,
+      [sessionMode]: dbMessages.map(msg => ({
+        id: msg.id,
+        role: msg.role as 'user' | 'assistant',
+        content: msg.content,
+        timestamp: new Date(msg.created_at),
+      })),
+    }));
+  }, []);
+
+  // Create a brand new session for current mode
+  const handleNewSession = useCallback(async () => {
+    const session = await chatPersistence.createNewSession(mode);
+    if (session) {
+      setSessionIds(prev => ({ ...prev, [mode]: session.id }));
+      setMessages(prev => ({ ...prev, [mode]: [] }));
+    }
+  }, [mode]);
 
   // Load sessions and messages on mount
   useEffect(() => {
