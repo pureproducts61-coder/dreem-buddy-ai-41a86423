@@ -103,6 +103,7 @@ export function ChatTab() {
       [mode]: [...prev[mode], userMsg],
     }));
     setIsLoading(true);
+    setThinkingSteps([]);
 
     // Build message history for AI context
     const currentMsgs = [...messages[mode], userMsg];
