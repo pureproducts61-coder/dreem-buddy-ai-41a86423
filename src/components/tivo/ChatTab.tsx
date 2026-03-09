@@ -38,6 +38,7 @@ export function ChatTab() {
   const [isLoading, setIsLoading] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [sessionsLoaded, setSessionsLoaded] = useState(false);
+  const [thinkingSteps, setThinkingSteps] = useState<ThinkingStep[]>([]);
 
   // Load sessions and messages on mount
   useEffect(() => {
