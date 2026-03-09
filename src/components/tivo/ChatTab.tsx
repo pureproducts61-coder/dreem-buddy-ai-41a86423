@@ -11,6 +11,7 @@ import { streamChat, hasAnyAIConfig, type ToolEvent } from '@/services/aiChatSer
 import { chatPersistence } from '@/services/chatPersistenceService';
 import { useToast } from '@/hooks/use-toast';
 import { ToolCallStatus } from '@/components/tivo/ToolCallStatus';
+import { ThinkingTracker, toolEventsToThinkingSteps, type ThinkingStep } from '@/components/tivo/ThinkingTracker';
 
 export interface Message {
   id: string;
