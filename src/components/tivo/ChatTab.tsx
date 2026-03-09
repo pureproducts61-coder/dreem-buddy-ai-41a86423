@@ -11,6 +11,7 @@ import { streamChat, hasAnyAIConfig, type ToolEvent } from '@/services/aiChatSer
 import { chatPersistence } from '@/services/chatPersistenceService';
 import { useToast } from '@/hooks/use-toast';
 import { ToolCallStatus } from '@/components/tivo/ToolCallStatus';
+import { ThinkingTracker, toolEventsToThinkingSteps, type ThinkingStep } from '@/components/tivo/ThinkingTracker';
 
 export interface Message {
   id: string;
@@ -37,6 +38,7 @@ export function ChatTab() {
   const [isLoading, setIsLoading] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [sessionsLoaded, setSessionsLoaded] = useState(false);
+  const [thinkingSteps, setThinkingSteps] = useState<ThinkingStep[]>([]);
 
   // Load sessions and messages on mount
   useEffect(() => {
@@ -101,6 +103,7 @@ export function ChatTab() {
       [mode]: [...prev[mode], userMsg],
     }));
     setIsLoading(true);
+    setThinkingSteps([]);
 
     // Build message history for AI context
     const currentMsgs = [...messages[mode], userMsg];
@@ -140,8 +143,23 @@ export function ChatTab() {
         updateAssistantMsg();
       },
       onToolEvent: (event) => {
-        toolEvents.push(event);
-        updateAssistantMsg();
+        if (event.type === 'thinking') {
+          // Add thinking step
+          const step: ThinkingStep = {
+            id: `thinking-${Date.now()}`,
+            icon: event.thinking?.status === 'retrying' ? 'retry' : event.thinking?.status === 'complete' ? 'done' : 'analyze',
+            label: event.thinking?.message || (event.thinking?.status === 'analyzing' ? '🔍 Analyzing and planning...' : event.thinking?.status === 'complete' ? '✅ Task complete' : `Step ${event.thinking?.step || '?'}/${event.thinking?.maxSteps || '?'}`),
+            status: event.thinking?.status === 'complete' ? 'done' : event.thinking?.status === 'retrying' ? 'error' : 'active',
+            timestamp: new Date(),
+          };
+          setThinkingSteps(prev => [...prev, step]);
+        } else {
+          toolEvents.push(event);
+          // Convert tool events to thinking steps
+          const newSteps = toolEventsToThinkingSteps([event]);
+          setThinkingSteps(prev => [...prev, ...newSteps]);
+          updateAssistantMsg();
+        }
       },
       onDone: async () => {
         if (currentSessionId && assistantContent) {
@@ -214,6 +232,9 @@ export function ChatTab() {
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* Thinking Tracker - shows real-time AI work progress */}
+        <ThinkingTracker steps={thinkingSteps} isActive={isLoading} />
       </div>
 
       <SmartInputBar

@@ -66,7 +66,7 @@ const TOOLS = [
     type: "function",
     function: {
       name: "push_multiple_files",
-      description: "Push multiple files to a GitHub repository in sequence. Use this to scaffold entire projects.",
+      description: "Push multiple files to a GitHub repository in sequence. Use this to scaffold entire projects or push a batch of related changes.",
       parameters: {
         type: "object",
         properties: {
@@ -84,6 +84,7 @@ const TOOLS = [
             },
             description: "Array of files to push",
           },
+          message: { type: "string", description: "Commit message for all files" },
         },
         required: ["owner", "repo", "files"],
         additionalProperties: false,
@@ -94,7 +95,7 @@ const TOOLS = [
     type: "function",
     function: {
       name: "list_repo_files",
-      description: "List files and directories in a GitHub repository path.",
+      description: "List files and directories in a GitHub repository path. ALWAYS call this first before writing code to understand the current project structure.",
       parameters: {
         type: "object",
         properties: {
@@ -111,7 +112,7 @@ const TOOLS = [
     type: "function",
     function: {
       name: "read_file_from_github",
-      description: "Read the content of a file from a GitHub repository.",
+      description: "Read the content of a file from a GitHub repository. Use this to understand existing code before making changes.",
       parameters: {
         type: "object",
         properties: {
@@ -136,6 +137,44 @@ const TOOLS = [
           repo: { type: "string", description: "Repository name" },
         },
         required: ["owner", "repo"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "create_branch",
+      description: "Create a new branch in a GitHub repository from the default branch.",
+      parameters: {
+        type: "object",
+        properties: {
+          owner: { type: "string", description: "GitHub username / org" },
+          repo: { type: "string", description: "Repository name" },
+          branch: { type: "string", description: "New branch name" },
+          from_branch: { type: "string", description: "Source branch (default: main)" },
+        },
+        required: ["owner", "repo", "branch"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "create_pull_request",
+      description: "Create a pull request in a GitHub repository.",
+      parameters: {
+        type: "object",
+        properties: {
+          owner: { type: "string", description: "GitHub username / org" },
+          repo: { type: "string", description: "Repository name" },
+          title: { type: "string", description: "PR title" },
+          body: { type: "string", description: "PR description" },
+          head: { type: "string", description: "Source branch" },
+          base: { type: "string", description: "Target branch (default: main)" },
+        },
+        required: ["owner", "repo", "title", "head"],
         additionalProperties: false,
       },
     },
@@ -169,7 +208,6 @@ async function executeTool(
 
       case "write_file_to_github": {
         const { owner, repo, path, content, message } = args as Record<string, string>;
-        // Check if file exists for sha
         let sha: string | undefined;
         try {
           const existing = await githubFetch(`/repos/${owner}/${repo}/contents/${path}`, githubToken);
@@ -189,7 +227,7 @@ async function executeTool(
       }
 
       case "push_multiple_files": {
-        const { owner, repo, files } = args as { owner: string; repo: string; files: Array<{ path: string; content: string }> };
+        const { owner, repo, files, message: commitMsg } = args as { owner: string; repo: string; files: Array<{ path: string; content: string }>; message?: string };
         const results = [];
         for (const file of files) {
           let sha: string | undefined;
@@ -202,7 +240,7 @@ async function executeTool(
           const res = await githubFetch(`/repos/${owner}/${repo}/contents/${file.path}`, githubToken, {
             method: "PUT",
             body: JSON.stringify({
-              message: `Update ${file.path} via TIVO AI`,
+              message: commitMsg || `Update ${file.path} via TIVO AI`,
               content: encoded,
               ...(sha ? { sha } : {}),
             }),
@@ -234,6 +272,34 @@ async function executeTool(
         return JSON.stringify({ success: true, deleted: `${owner}/${repo}` });
       }
 
+      case "create_branch": {
+        const { owner, repo, branch, from_branch } = args as Record<string, string>;
+        const baseBranch = from_branch || "main";
+        // Get the SHA of the base branch
+        const ref = await githubFetch(`/repos/${owner}/${repo}/git/ref/heads/${baseBranch}`, githubToken);
+        const sha = ref.object.sha;
+        // Create new branch
+        const result = await githubFetch(`/repos/${owner}/${repo}/git/refs`, githubToken, {
+          method: "POST",
+          body: JSON.stringify({ ref: `refs/heads/${branch}`, sha }),
+        });
+        return JSON.stringify({ success: true, branch, sha: result.object.sha });
+      }
+
+      case "create_pull_request": {
+        const { owner, repo, title, body, head, base } = args as Record<string, string>;
+        const result = await githubFetch(`/repos/${owner}/${repo}/pulls`, githubToken, {
+          method: "POST",
+          body: JSON.stringify({
+            title,
+            body: body || "",
+            head,
+            base: base || "main",
+          }),
+        });
+        return JSON.stringify({ success: true, url: result.html_url, number: result.number });
+      }
+
       default:
         return JSON.stringify({ error: `Unknown tool: ${name}` });
     }
@@ -259,23 +325,67 @@ serve(async (req) => {
     const { messages, model, apiKey, provider, githubToken } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
 
-    const systemPrompt = `You are TIVO AI, an autonomous AI development agent. You can directly create GitHub repositories, write files, push code, and manage projects.
+    const systemPrompt = `You are TIVO AI, an autonomous AI development agent — an expert-level software engineer. You build, modify, and deploy real applications directly via GitHub.
 
-CAPABILITIES:
-- Create GitHub repositories
-- Write/update files directly in GitHub repos
-- Push entire project scaffolds (multiple files at once)
-- List and read files from repos
-- Delete repositories
+## CORE IDENTITY
+- You are a professional full-stack developer who writes production-quality code.
+- You NEVER just describe what to do — you EXECUTE actions using your tools.
+- You work incrementally: analyze → plan → implement → verify.
 
-INSTRUCTIONS:
-- When the user asks to create a project, USE the tools to actually create it. Don't just describe what to do.
-- When writing code, push it directly to GitHub using the tools.
-- Always confirm what you did after executing tools.
-- If the user hasn't provided a GitHub username, call list_repo_files or create a repo to discover it.
-- Write production-quality code with proper project structure.
-- You can write in both Bangla and English based on user preference.
-${githubToken ? "\nGitHub token is configured and active. You can execute all GitHub operations." : "\n⚠️ GitHub token is NOT configured. Tell the user to add it in Settings → API Keys."}`;
+## MANDATORY WORKFLOW (Follow this EVERY time for coding tasks)
+1. **ANALYZE FIRST**: ALWAYS call \`list_repo_files\` to understand the current project structure BEFORE writing any code. If working on an existing repo, also \`read_file_from_github\` for key files you'll modify.
+2. **PLAN**: Briefly tell the user your plan — which files you'll create/modify and why. Use clear step labels like "📋 Plan: I will create 3 files..."
+3. **IMPLEMENT INCREMENTALLY**: Push changes in small logical batches. Don't try to push 20 files at once. Group related files (e.g., push config files first, then components, then pages).
+4. **VERIFY**: After pushing, call \`list_repo_files\` again to confirm the files are there.
+5. **REPORT**: Summarize what was done and what's next.
+
+## THINKING OUT LOUD
+- Always narrate your thinking process to the user so they can follow along.
+- Before each tool call, briefly explain WHY you're calling it:
+  - "🔍 Let me first check what's already in the repo..."
+  - "📝 Now I'll create the package.json and tsconfig..."
+  - "🚀 Pushing the React components..."
+  - "✅ Let me verify everything was pushed correctly..."
+
+## ERROR HANDLING & RETRY
+- If a tool call fails, DO NOT STOP. Read the error message carefully.
+- Common fixes:
+  - "sha" conflict → call \`read_file_from_github\` to get current SHA, then retry
+  - 404 on repo → the repo may not exist yet, create it first
+  - Rate limit → tell the user to wait, then suggest retrying
+- Always attempt at least ONE retry before giving up.
+- If retrying fails, explain the error clearly and suggest what the user can do.
+
+## INCREMENTAL DEVELOPMENT
+- Break large tasks into phases. After each phase, confirm with the user before proceeding.
+- Example phases for a React app:
+  1. Project setup (package.json, tsconfig, vite config)
+  2. Core structure (src/main.tsx, src/App.tsx, index.html)
+  3. Components (individual feature components)
+  4. Styling (CSS/Tailwind setup)
+  5. Final verification
+
+## GITHUB FULL ACCESS
+${githubToken ? `GitHub token is configured with FULL ACCESS. You can:
+- Create/delete repositories
+- Create branches and pull requests
+- Read/write/update any file
+- Manage repository settings
+- Push code directly to any branch
+
+The user trusts you with full repository management.` : "⚠️ GitHub token is NOT configured. Tell the user to add it in Settings → API Keys."}
+
+## COMMUNICATION STYLE
+- Be professional but friendly
+- Support both Bangla (বাংলা) and English based on user preference
+- Use emojis sparingly for status indicators (🔍 📝 🚀 ✅ ⚠️ ✗)
+- Keep explanations concise but informative
+- When showing code in chat, keep it brief — the real code goes to GitHub via tools
+
+## CONTEXT AWARENESS
+- You have access to the full conversation history. Use it to understand ongoing projects.
+- Remember the user's GitHub username, repo names, and preferences from earlier messages.
+- If the user references a previous conversation, look for context in the message history.`;
 
     // Determine which AI gateway to use
     let gatewayUrl: string;
@@ -284,13 +394,11 @@ ${githubToken ? "\nGitHub token is configured and active. You can execute all Gi
     let useToolCalling = true;
 
     if (provider === "gemini" && apiKey) {
-      // Gemini native doesn't support OpenAI tool calling format well, use Lovable gateway
       if (LOVABLE_API_KEY) {
         gatewayUrl = "https://ai.gateway.lovable.dev/v1/chat/completions";
         authHeader = `Bearer ${LOVABLE_API_KEY}`;
         modelName = "google/gemini-3-flash-preview";
       } else {
-        // Fallback to Gemini direct (no tool calling)
         gatewayUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model || "gemini-2.5-flash"}:streamGenerateContent?alt=sse&key=${apiKey}`;
         authHeader = "";
         modelName = model || "gemini-2.5-flash";
@@ -300,7 +408,6 @@ ${githubToken ? "\nGitHub token is configured and active. You can execute all Gi
       gatewayUrl = "https://api.groq.com/openai/v1/chat/completions";
       authHeader = `Bearer ${apiKey}`;
       modelName = model || "llama-3.3-70b-versatile";
-      // Groq supports tool calling for some models
     } else if (LOVABLE_API_KEY) {
       gatewayUrl = "https://ai.gateway.lovable.dev/v1/chat/completions";
       authHeader = `Bearer ${LOVABLE_API_KEY}`;
@@ -312,7 +419,7 @@ ${githubToken ? "\nGitHub token is configured and active. You can execute all Gi
       );
     }
 
-    // ── Agentic loop: call AI → execute tools → feed results → repeat ──
+    // ── Agentic loop with thinking events ──
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       async start(controller) {
@@ -321,10 +428,16 @@ ${githubToken ? "\nGitHub token is configured and active. You can execute all Gi
           ...messages,
         ];
 
-        const MAX_ITERATIONS = 8;
+        const MAX_ITERATIONS = 15; // Increased for incremental work
 
         for (let iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
-          // Call AI with tool definitions
+          // Send thinking status
+          controller.enqueue(encoder.encode(sseEvent("thinking", {
+            step: iteration + 1,
+            maxSteps: MAX_ITERATIONS,
+            status: iteration === 0 ? "analyzing" : "continuing",
+          })));
+
           const body: Record<string, unknown> = {
             model: modelName,
             messages: conversationMessages,
@@ -349,6 +462,18 @@ ${githubToken ? "\nGitHub token is configured and active. You can execute all Gi
             const status = aiResp.status;
             const errText = await aiResp.text();
             console.error("AI error:", status, errText);
+
+            // Retry once on transient errors
+            if ((status === 429 || status >= 500) && iteration < MAX_ITERATIONS - 1) {
+              controller.enqueue(encoder.encode(sseEvent("thinking", {
+                step: iteration + 1,
+                status: "retrying",
+                message: `⚠️ Got error ${status}, retrying in 2s...`,
+              })));
+              await new Promise(r => setTimeout(r, 2000));
+              continue;
+            }
+
             if (status === 429) {
               controller.enqueue(encoder.encode(sseEvent("error", { error: "Rate limit exceeded. Please try again later." })));
             } else if (status === 402) {
@@ -361,7 +486,7 @@ ${githubToken ? "\nGitHub token is configured and active. You can execute all Gi
             return;
           }
 
-          // Parse the streaming response, collecting tool calls
+          // Parse the streaming response
           const reader = aiResp.body!.getReader();
           const decoder = new TextDecoder();
           let buffer = "";
@@ -388,13 +513,11 @@ ${githubToken ? "\nGitHub token is configured and active. You can execute all Gi
 
                 const delta = choice.delta;
 
-                // Stream text content to client
                 if (delta?.content) {
                   assistantText += delta.content;
                   controller.enqueue(encoder.encode(sseDelta(delta.content)));
                 }
 
-                // Collect tool calls
                 if (delta?.tool_calls) {
                   for (const tc of delta.tool_calls) {
                     const idx = tc.index ?? 0;
@@ -407,18 +530,19 @@ ${githubToken ? "\nGitHub token is configured and active. You can execute all Gi
                     if (tc.function?.arguments) existing.arguments += tc.function.arguments;
                   }
                 }
-              } catch { /* partial JSON, skip */ }
+              } catch { /* partial JSON */ }
             }
           }
 
           // If no tool calls, we're done
           if (toolCalls.size === 0) {
+            controller.enqueue(encoder.encode(sseEvent("thinking", { step: iteration + 1, status: "complete" })));
             controller.enqueue(encoder.encode("data: [DONE]\n\n"));
             controller.close();
             return;
           }
 
-          // Add assistant message with tool calls to conversation
+          // Add assistant message with tool calls
           const assistantMsg: Record<string, unknown> = { role: "assistant" };
           if (assistantText) assistantMsg.content = assistantText;
           assistantMsg.tool_calls = Array.from(toolCalls.values()).map((tc) => ({
@@ -428,7 +552,7 @@ ${githubToken ? "\nGitHub token is configured and active. You can execute all Gi
           }));
           conversationMessages.push(assistantMsg);
 
-          // Execute each tool call and send status to client
+          // Execute each tool call
           for (const [, tc] of toolCalls) {
             let args: Record<string, unknown> = {};
             try {
@@ -437,22 +561,32 @@ ${githubToken ? "\nGitHub token is configured and active. You can execute all Gi
               args = {};
             }
 
-            // Notify client: tool execution starting
             controller.enqueue(encoder.encode(sseEvent("tool_start", {
               tool: tc.name,
               args: sanitizeArgs(args),
             })));
 
-            const result = await executeTool(tc.name, args, githubToken || "");
-
-            // Notify client: tool execution done
+            let result = await executeTool(tc.name, args, githubToken || "");
             const parsedResult = JSON.parse(result);
+
+            // Auto-retry on SHA conflict
+            if (parsedResult.error && parsedResult.error.includes("422") && (tc.name === "write_file_to_github" || tc.name === "push_multiple_files")) {
+              controller.enqueue(encoder.encode(sseEvent("thinking", {
+                step: iteration + 1,
+                status: "retrying",
+                message: "SHA conflict detected, retrying with fresh SHA...",
+              })));
+              // Retry the same tool call (executeTool already fetches SHA)
+              await new Promise(r => setTimeout(r, 1000));
+              result = await executeTool(tc.name, args, githubToken || "");
+            }
+
+            const finalResult = JSON.parse(result);
             controller.enqueue(encoder.encode(sseEvent("tool_result", {
               tool: tc.name,
-              result: parsedResult,
+              result: finalResult,
             })));
 
-            // Add tool result to conversation for next iteration
             conversationMessages.push({
               role: "tool",
               tool_call_id: tc.id,
@@ -460,12 +594,11 @@ ${githubToken ? "\nGitHub token is configured and active. You can execute all Gi
             });
           }
 
-          // Stream a newline separator before next AI iteration
           controller.enqueue(encoder.encode(sseDelta("\n\n")));
         }
 
         // Max iterations reached
-        controller.enqueue(encoder.encode(sseDelta("\n\n⚠️ Maximum tool execution rounds reached.")));
+        controller.enqueue(encoder.encode(sseDelta("\n\n⚠️ Maximum iterations reached. You can continue by sending another message.")));
         controller.enqueue(encoder.encode("data: [DONE]\n\n"));
         controller.close();
       },
@@ -483,7 +616,6 @@ ${githubToken ? "\nGitHub token is configured and active. You can execute all Gi
   }
 });
 
-// Strip file contents from args for client display (too large)
 function sanitizeArgs(args: Record<string, unknown>): Record<string, unknown> {
   const clean = { ...args };
   if (typeof clean.content === "string" && (clean.content as string).length > 200) {

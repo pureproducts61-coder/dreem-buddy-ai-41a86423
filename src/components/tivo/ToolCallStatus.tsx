@@ -9,6 +9,8 @@ const toolMeta: Record<string, { icon: typeof GitBranch; label: string; color: s
   list_repo_files: { icon: Eye, label: 'Listing files', color: 'text-yellow-400' },
   read_file_from_github: { icon: Eye, label: 'Reading file', color: 'text-cyan-400' },
   delete_github_repo: { icon: Trash2, label: 'Deleting repo', color: 'text-red-400' },
+  create_branch: { icon: GitBranch, label: 'Creating branch', color: 'text-orange-400' },
+  create_pull_request: { icon: GitBranch, label: 'Creating PR', color: 'text-pink-400' },
 };
 
 interface ToolCallStatusProps {
