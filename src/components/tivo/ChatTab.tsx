@@ -232,6 +232,9 @@ export function ChatTab() {
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* Thinking Tracker - shows real-time AI work progress */}
+        <ThinkingTracker steps={thinkingSteps} isActive={isLoading} />
       </div>
 
       <SmartInputBar
