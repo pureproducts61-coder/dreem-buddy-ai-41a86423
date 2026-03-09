@@ -7,10 +7,11 @@ interface ChatMessage {
 }
 
 export interface ToolEvent {
-  type: 'tool_start' | 'tool_result';
+  type: 'tool_start' | 'tool_result' | 'thinking';
   tool: string;
   args?: Record<string, unknown>;
   result?: Record<string, unknown>;
+  thinking?: { step: number; maxSteps: number; status: string; message?: string };
 }
 
 function getSettings() {
