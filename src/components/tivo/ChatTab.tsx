@@ -5,15 +5,13 @@ import { BuildWorkspace } from '@/components/tivo/BuildWorkspace';
 import { AutomationWorkspace } from '@/components/tivo/AutomationWorkspace';
 import { PlanChat } from '@/components/tivo/PlanChat';
 import { ControlPanel } from '@/components/tivo/ControlPanel';
-import { ChatHistorySidebar } from '@/components/tivo/ChatHistorySidebar';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { streamChat, hasAnyAIConfig, type ToolEvent } from '@/services/aiChatService';
-import { chatPersistence, type ChatSession } from '@/services/chatPersistenceService';
+import { chatPersistence } from '@/services/chatPersistenceService';
 import { useToast } from '@/hooks/use-toast';
 import { ToolCallStatus } from '@/components/tivo/ToolCallStatus';
 import { ThinkingTracker, toolEventsToThinkingSteps, type ThinkingStep } from '@/components/tivo/ThinkingTracker';
-import { History } from 'lucide-react';
 
 export interface Message {
   id: string;
@@ -39,36 +37,8 @@ export function ChatTab() {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [historyOpen, setHistoryOpen] = useState(false);
   const [sessionsLoaded, setSessionsLoaded] = useState(false);
   const [thinkingSteps, setThinkingSteps] = useState<ThinkingStep[]>([]);
-
-  // Switch to a different session
-  const handleSelectSession = useCallback(async (session: ChatSession) => {
-    const sessionMode = session.mode as TivoMode;
-    setMode(sessionMode);
-    setSessionIds(prev => ({ ...prev, [sessionMode]: session.id }));
-
-    const dbMessages = await chatPersistence.getMessages(session.id);
-    setMessages(prev => ({
-      ...prev,
-      [sessionMode]: dbMessages.map(msg => ({
-        id: msg.id,
-        role: msg.role as 'user' | 'assistant',
-        content: msg.content,
-        timestamp: new Date(msg.created_at),
-      })),
-    }));
-  }, []);
-
-  // Create a brand new session for current mode
-  const handleNewSession = useCallback(async () => {
-    const session = await chatPersistence.createNewSession(mode);
-    if (session) {
-      setSessionIds(prev => ({ ...prev, [mode]: session.id }));
-      setMessages(prev => ({ ...prev, [mode]: [] }));
-    }
-  }, [mode]);
 
   // Load sessions and messages on mount
   useEffect(() => {
@@ -220,17 +190,6 @@ export function ChatTab() {
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      {/* History toggle button */}
-      <div className="flex items-center px-3 pt-2 pb-1">
-        <button
-          onClick={() => setHistoryOpen(true)}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-all"
-        >
-          <History className="h-3.5 w-3.5" />
-          <span>History</span>
-        </button>
-      </div>
-
       <div className="flex-1 flex flex-col min-h-0 relative">
         <AnimatePresence mode="wait">
           {mode === 'build' && (
@@ -274,6 +233,7 @@ export function ChatTab() {
           )}
         </AnimatePresence>
 
+        {/* Thinking Tracker - shows real-time AI work progress */}
         <ThinkingTracker steps={thinkingSteps} isActive={isLoading} />
       </div>
 
@@ -285,15 +245,6 @@ export function ChatTab() {
       />
 
       <ControlPanel open={menuOpen} onClose={() => setMenuOpen(false)} />
-
-      <ChatHistorySidebar
-        open={historyOpen}
-        onClose={() => setHistoryOpen(false)}
-        currentMode={mode}
-        currentSessionId={sessionIds[mode]}
-        onSelectSession={handleSelectSession}
-        onNewSession={handleNewSession}
-      />
     </div>
   );
 }
