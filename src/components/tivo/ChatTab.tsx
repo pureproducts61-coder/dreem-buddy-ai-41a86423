@@ -5,13 +5,15 @@ import { BuildWorkspace } from '@/components/tivo/BuildWorkspace';
 import { AutomationWorkspace } from '@/components/tivo/AutomationWorkspace';
 import { PlanChat } from '@/components/tivo/PlanChat';
 import { ControlPanel } from '@/components/tivo/ControlPanel';
+import { ChatHistorySidebar } from '@/components/tivo/ChatHistorySidebar';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { streamChat, hasAnyAIConfig, type ToolEvent } from '@/services/aiChatService';
-import { chatPersistence } from '@/services/chatPersistenceService';
+import { chatPersistence, type ChatSession } from '@/services/chatPersistenceService';
 import { useToast } from '@/hooks/use-toast';
 import { ToolCallStatus } from '@/components/tivo/ToolCallStatus';
 import { ThinkingTracker, toolEventsToThinkingSteps, type ThinkingStep } from '@/components/tivo/ThinkingTracker';
+import { History } from 'lucide-react';
 
 export interface Message {
   id: string;
