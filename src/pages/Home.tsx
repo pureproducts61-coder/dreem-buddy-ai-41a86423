@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Archive, MessageCircle, Eye, Settings, MoreHorizontal } from 'lucide-react';
+import { Archive, MessageCircle, Eye } from 'lucide-react';
 import { HeaderMenu } from '@/components/tivo/HeaderMenu';
 import { ChatTab } from '@/components/tivo/ChatTab';
 import { ProjectVault } from '@/components/tivo/ProjectVault';
@@ -21,55 +21,37 @@ const Home = () => {
   const { t } = useLanguage();
   const [activeTab, setActiveTab] = useState<BottomTab>('chat');
   const [menuOpen, setMenuOpen] = useState(false);
+  const [openSessionId, setOpenSessionId] = useState<string | null>(null);
+
+  const handleOpenSession = (sessionId: string) => {
+    setOpenSessionId(sessionId);
+    setActiveTab('chat');
+  };
 
   return (
     <div className="flex h-[100dvh] flex-col bg-background">
-      {/* Header */}
       <HeaderMenu onSettingsClick={() => setMenuOpen(true)} />
 
-      {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-h-0">
         <AnimatePresence mode="wait">
           {activeTab === 'vault' && (
-            <motion.div
-              key="vault"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.2 }}
-              className="flex-1 flex flex-col min-h-0"
-            >
-              <ProjectVault />
+            <motion.div key="vault" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }} className="flex-1 flex flex-col min-h-0">
+              <ProjectVault onOpenSession={handleOpenSession} />
             </motion.div>
           )}
           {activeTab === 'chat' && (
-            <motion.div
-              key="chat"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.2 }}
-              className="flex-1 flex flex-col min-h-0"
-            >
-              <ChatTab />
+            <motion.div key={`chat-${openSessionId || 'default'}`} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }} className="flex-1 flex flex-col min-h-0">
+              <ChatTab initialSessionId={openSessionId} />
             </motion.div>
           )}
           {activeTab === 'preview' && (
-            <motion.div
-              key="preview"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.2 }}
-              className="flex-1 flex flex-col min-h-0"
-            >
+            <motion.div key="preview" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }} className="flex-1 flex flex-col min-h-0">
               <PreviewTab />
             </motion.div>
           )}
         </AnimatePresence>
       </div>
 
-      {/* Bottom Navigation */}
       <nav className="flex items-center justify-around border-t border-border/20 bg-card/80 backdrop-blur-xl px-2 pb-[env(safe-area-inset-bottom)]">
         {(Object.keys(tabConfig) as BottomTab[]).map((tab) => {
           const { icon: Icon, label } = tabConfig[tab];
@@ -97,7 +79,6 @@ const Home = () => {
         })}
       </nav>
 
-      {/* Control Panel */}
       <ControlPanel open={menuOpen} onClose={() => setMenuOpen(false)} />
     </div>
   );
