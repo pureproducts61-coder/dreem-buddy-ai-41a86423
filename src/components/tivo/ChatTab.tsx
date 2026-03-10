@@ -10,8 +10,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { streamChat, hasAnyAIConfig, type ToolEvent } from '@/services/aiChatService';
 import { chatPersistence } from '@/services/chatPersistenceService';
 import { useToast } from '@/hooks/use-toast';
-import { ToolCallStatus } from '@/components/tivo/ToolCallStatus';
-import { ThinkingTracker, toolEventsToThinkingSteps, type ThinkingStep } from '@/components/tivo/ThinkingTracker';
 
 export interface Message {
   id: string;
@@ -21,24 +19,28 @@ export interface Message {
   toolEvents?: ToolEvent[];
 }
 
-export function ChatTab() {
+interface ChatTabProps {
+  initialSessionId?: string | null;
+}
+
+export function ChatTab({ initialSessionId }: ChatTabProps) {
   const { t } = useLanguage();
   const { toast } = useToast();
-  const [mode, setMode] = useState<TivoMode>('plan');
+  const [mode, setMode] = useState<TivoMode>(initialSessionId ? 'build' : 'plan');
   const [messages, setMessages] = useState<Record<TivoMode, Message[]>>({
     build: [],
     automation: [],
     plan: [],
   });
   const [sessionIds, setSessionIds] = useState<Record<TivoMode, string | null>>({
-    build: null,
+    build: initialSessionId || null,
     automation: null,
     plan: null,
   });
   const [isLoading, setIsLoading] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [sessionsLoaded, setSessionsLoaded] = useState(false);
-  const [thinkingSteps, setThinkingSteps] = useState<ThinkingStep[]>([]);
+  const [activeFiles, setActiveFiles] = useState<string[]>([]);
 
   // Load sessions and messages on mount
   useEffect(() => {
@@ -46,10 +48,22 @@ export function ChatTab() {
       try {
         const modes: TivoMode[] = ['build', 'automation', 'plan'];
         const newMessages: Record<TivoMode, Message[]> = { build: [], automation: [], plan: [] };
-        const newSessionIds: Record<TivoMode, string | null> = { build: null, automation: null, plan: null };
+        const newSessionIds: Record<TivoMode, string | null> = {
+          build: initialSessionId || null,
+          automation: null,
+          plan: null,
+        };
 
         for (const m of modes) {
-          const session = await chatPersistence.getOrCreateSession(m);
+          // If we have an initial session ID for build, use it
+          const sessionId = m === 'build' && initialSessionId
+            ? initialSessionId
+            : undefined;
+
+          const session = sessionId
+            ? { id: sessionId } // Use provided session
+            : await chatPersistence.getOrCreateSession(m);
+
           if (session) {
             newSessionIds[m] = session.id;
             const dbMessages = await chatPersistence.getMessages(session.id);
@@ -71,12 +85,11 @@ export function ChatTab() {
       }
     }
     loadSessions();
-  }, []);
+  }, [initialSessionId]);
 
   const handleSendMessage = useCallback(async (content: string, files?: File[]) => {
     const messageContent = files ? `${content}\n\n📎 ${files.map(f => f.name).join(', ')}` : content;
 
-    // Ensure session exists
     let currentSessionId = sessionIds[mode];
     if (!currentSessionId) {
       const session = await chatPersistence.getOrCreateSession(mode);
@@ -86,7 +99,6 @@ export function ChatTab() {
       }
     }
 
-    // Save user message to DB
     const savedUserMsg = currentSessionId
       ? await chatPersistence.saveMessage(currentSessionId, 'user', messageContent)
       : null;
@@ -103,9 +115,8 @@ export function ChatTab() {
       [mode]: [...prev[mode], userMsg],
     }));
     setIsLoading(true);
-    setThinkingSteps([]);
+    setActiveFiles([]);
 
-    // Build message history for AI context
     const currentMsgs = [...messages[mode], userMsg];
     const aiMessages = currentMsgs.map(m => ({ role: m.role, content: m.content }));
 
@@ -143,23 +154,15 @@ export function ChatTab() {
         updateAssistantMsg();
       },
       onToolEvent: (event) => {
-        if (event.type === 'thinking') {
-          // Add thinking step
-          const step: ThinkingStep = {
-            id: `thinking-${Date.now()}`,
-            icon: event.thinking?.status === 'retrying' ? 'retry' : event.thinking?.status === 'complete' ? 'done' : 'analyze',
-            label: event.thinking?.message || (event.thinking?.status === 'analyzing' ? '🔍 Analyzing and planning...' : event.thinking?.status === 'complete' ? '✅ Task complete' : `Step ${event.thinking?.step || '?'}/${event.thinking?.maxSteps || '?'}`),
-            status: event.thinking?.status === 'complete' ? 'done' : event.thinking?.status === 'retrying' ? 'error' : 'active',
-            timestamp: new Date(),
-          };
-          setThinkingSteps(prev => [...prev, step]);
-        } else {
-          toolEvents.push(event);
-          // Convert tool events to thinking steps
-          const newSteps = toolEventsToThinkingSteps([event]);
-          setThinkingSteps(prev => [...prev, ...newSteps]);
-          updateAssistantMsg();
+        toolEvents.push(event);
+        // Track active files for the loading indicator
+        if (event.args?.path && typeof event.args.path === 'string') {
+          setActiveFiles(prev => [...prev, event.args!.path as string]);
         }
+        if (event.args?.name && typeof event.args.name === 'string') {
+          setActiveFiles(prev => [...prev, event.args!.name as string]);
+        }
+        updateAssistantMsg();
       },
       onDone: async () => {
         if (currentSessionId && assistantContent) {
@@ -174,6 +177,7 @@ export function ChatTab() {
           }
         }
         setIsLoading(false);
+        setActiveFiles([]);
       },
       onError: (error) => {
         toast({
@@ -181,6 +185,7 @@ export function ChatTab() {
           description: error,
           variant: 'destructive',
         });
+        setIsLoading(false);
       },
     });
   }, [mode, messages, sessionIds, toast]);
@@ -194,7 +199,7 @@ export function ChatTab() {
         <AnimatePresence mode="wait">
           {mode === 'build' && (
             <motion.div key="build" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.2 }} className="flex-1 flex flex-col min-h-0">
-              <BuildWorkspace messages={currentMessages} isLoading={isLoading} onOpenMenu={() => setMenuOpen(true)} />
+              <BuildWorkspace messages={currentMessages} isLoading={isLoading} onOpenMenu={() => setMenuOpen(true)} activeFiles={activeFiles} />
             </motion.div>
           )}
           {mode === 'automation' && (
@@ -232,9 +237,6 @@ export function ChatTab() {
             </motion.div>
           )}
         </AnimatePresence>
-
-        {/* Thinking Tracker - shows real-time AI work progress */}
-        <ThinkingTracker steps={thinkingSteps} isActive={isLoading} />
       </div>
 
       <SmartInputBar
