@@ -62,6 +62,8 @@ export async function streamChat({
   const apiKey = getApiKeyForProvider(provider);
   const settings = getSettings();
   const githubToken = settings.githubToken || '';
+  const vercelToken = settings.vercelToken || '';
+  const tavilyApiKey = settings.tavilyApiKey || '';
 
   if (!CHAT_URL || CHAT_URL.includes('undefined')) {
     await mockStreamResponse(messages, onDelta, onDone);
@@ -81,6 +83,8 @@ export async function streamChat({
         apiKey: apiKey || undefined,
         model: undefined,
         githubToken: githubToken || undefined,
+        vercelToken: vercelToken || undefined,
+        tavilyApiKey: tavilyApiKey || undefined,
       }),
     });
 
@@ -118,10 +122,8 @@ export async function streamChat({
         // Handle custom SSE events
         if (line.startsWith('event: ')) {
           const eventType = line.slice(7).trim();
-          // Next line should be the data
           const nextNewline = textBuffer.indexOf('\n');
           if (nextNewline === -1) {
-            // Put it back and wait
             textBuffer = line + '\n' + textBuffer;
             break;
           }

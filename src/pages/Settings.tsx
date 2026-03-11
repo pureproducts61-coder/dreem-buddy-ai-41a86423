@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, Server, Bot, Palette, Key, Eye, EyeOff, Save, RotateCcw, Globe, User, Shield,
+  ArrowLeft, Server, Bot, Palette, Key, Eye, EyeOff, Save, RotateCcw, Globe, User,
+  CheckCircle2, XCircle, Rocket, Search, Brain, Github,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,6 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
+import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -26,6 +28,7 @@ interface SettingsData {
   githubToken: string;
   tavilyApiKey: string;
   hfToken: string;
+  vercelToken: string;
   autoSave: boolean;
   syncEnabled: boolean;
 }
@@ -40,6 +43,7 @@ const defaultSettings: SettingsData = {
   githubToken: '',
   tavilyApiKey: '',
   hfToken: '',
+  vercelToken: '',
   autoSave: true,
   syncEnabled: false,
 };
@@ -80,10 +84,8 @@ const Settings = () => {
   };
 
   const handleSave = () => {
-    // Save backend config separately
     localStorage.setItem('tivo-hf-url', settings.backendUrl);
     localStorage.setItem('tivo-master-secret', settings.masterSecret);
-    // Save rest
     const { backendUrl, masterSecret, ...rest } = settings;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(rest));
     setHasChanges(false);
@@ -101,12 +103,39 @@ const Settings = () => {
     return key.slice(0, 4) + '••••••••' + key.slice(-4);
   };
 
-  const renderApiKeyInput = (id: keyof SettingsData, label: string, placeholder: string) => {
+  const isConfigured = (key: string) => !!key && key.length > 3;
+
+  const renderApiKeyInput = (
+    id: keyof SettingsData,
+    label: string,
+    placeholder: string,
+    icon?: React.ReactNode,
+    description?: string,
+  ) => {
     const value = settings[id] as string;
     const isVisible = showKeys[id];
+    const configured = isConfigured(value);
+
     return (
-      <div className="space-y-2">
-        <Label htmlFor={id}>{label}</Label>
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between">
+          <Label htmlFor={id} className="flex items-center gap-2">
+            {icon}
+            {label}
+          </Label>
+          {configured ? (
+            <Badge variant="outline" className="text-[10px] gap-1 border-primary/30 text-primary">
+              <CheckCircle2 className="h-2.5 w-2.5" /> Active
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="text-[10px] gap-1 border-muted-foreground/30 text-muted-foreground">
+              <XCircle className="h-2.5 w-2.5" /> Not set
+            </Badge>
+          )}
+        </div>
+        {description && (
+          <p className="text-[11px] text-muted-foreground">{description}</p>
+        )}
         <div className="relative">
           <Input
             id={id}
@@ -179,7 +208,7 @@ const Settings = () => {
           </CardContent>
         </Card>
 
-        {/* Backend Configuration — moved from Login */}
+        {/* Backend Configuration */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -189,21 +218,32 @@ const Settings = () => {
             <CardDescription>{t('settings.backendDesc')}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="backendUrl">{t('settings.backendUrl')}</Label>
+            <div className="space-y-1.5">
+              <Label htmlFor="backendUrl" className="flex items-center gap-2">
+                <Globe className="h-3.5 w-3.5" />
+                {t('settings.backendUrl')}
+              </Label>
+              <p className="text-[11px] text-muted-foreground">
+                HuggingFace Spaces or custom backend endpoint for enhanced AI capabilities
+              </p>
               <div className="relative">
-                <Globe className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                   id="backendUrl"
                   value={settings.backendUrl}
                   onChange={(e) => updateSetting('backendUrl', e.target.value)}
                   placeholder="https://your-space.hf.space"
-                  className="pl-10 font-mono text-sm"
+                  className="font-mono text-sm"
                 />
               </div>
+              {isConfigured(settings.backendUrl) && (
+                <Badge variant="outline" className="text-[10px] gap-1 border-primary/30 text-primary">
+                  <CheckCircle2 className="h-2.5 w-2.5" /> Connected
+                </Badge>
+              )}
             </div>
 
-            {renderApiKeyInput('masterSecret', t('settings.masterSecret'), '••••••••••••')}
+            {renderApiKeyInput('masterSecret', t('settings.masterSecret'), '••••••••••••', undefined,
+              'Master secret for authenticating with backend API')}
 
             <Separator />
 
@@ -248,23 +288,47 @@ const Settings = () => {
           </CardContent>
         </Card>
 
-        {/* API Keys */}
+        {/* API Keys — AI Providers */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Brain className="h-5 w-5" />
+              AI Provider Keys
+            </CardTitle>
+            <CardDescription>API keys for AI model providers</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            {renderApiKeyInput('geminiApiKey', 'Gemini API Key', 'AIza...',
+              <Bot className="h-3.5 w-3.5" />, 'Google AI Studio → Get API Key')}
+            {renderApiKeyInput('groqApiKey', 'Groq API Key', 'gsk_...',
+              <Bot className="h-3.5 w-3.5" />, 'console.groq.com → API Keys')}
+            {renderApiKeyInput('deepseekApiKey', 'DeepSeek API Key', 'sk-...',
+              <Bot className="h-3.5 w-3.5" />, 'platform.deepseek.com → API Keys')}
+          </CardContent>
+        </Card>
+
+        {/* API Keys — Tools & Integrations */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Key className="h-5 w-5" />
-              {t('settings.apiKeys')}
+              Tools & Integrations
             </CardTitle>
-            <CardDescription>{t('settings.apiKeysDesc')}</CardDescription>
+            <CardDescription>Tokens for GitHub, Vercel, search, and other services</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            {renderApiKeyInput('geminiApiKey', 'Gemini API Key', 'AIza...')}
-            {renderApiKeyInput('groqApiKey', 'Groq API Key', 'gsk_...')}
-            {renderApiKeyInput('deepseekApiKey', 'DeepSeek API Key', 'sk-...')}
-            <Separator />
-            {renderApiKeyInput('githubToken', 'GitHub Token', 'ghp_...')}
-            {renderApiKeyInput('tavilyApiKey', 'Tavily API Key', 'tvly-...')}
-            {renderApiKeyInput('hfToken', 'Hugging Face Token', 'hf_...')}
+          <CardContent className="space-y-5">
+            {renderApiKeyInput('githubToken', 'GitHub Token', 'ghp_...',
+              <Github className="h-3.5 w-3.5" />,
+              'Full access token — repo, workflow, admin permissions. github.com → Settings → Developer Settings → Personal Access Tokens')}
+            {renderApiKeyInput('vercelToken', 'Vercel Token', 'vercel_...',
+              <Rocket className="h-3.5 w-3.5" />,
+              'AI will verify deployments & auto-fix bugs. vercel.com → Settings → Tokens')}
+            {renderApiKeyInput('tavilyApiKey', 'Tavily API Key', 'tvly-...',
+              <Search className="h-3.5 w-3.5" />,
+              'Web search for latest docs & APIs. tavily.com → Dashboard → API Keys')}
+            {renderApiKeyInput('hfToken', 'Hugging Face Token', 'hf_...',
+              <Globe className="h-3.5 w-3.5" />,
+              'Access HF models & Spaces. huggingface.co → Settings → Access Tokens')}
           </CardContent>
         </Card>
 
