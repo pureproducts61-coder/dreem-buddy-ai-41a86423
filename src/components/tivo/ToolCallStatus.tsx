@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { GitBranch, FileCode, FolderGit2, Trash2, Eye, Loader2, CheckCircle2, XCircle } from 'lucide-react';
+import { GitBranch, FileCode, FolderGit2, Trash2, Eye, Loader2, CheckCircle2, XCircle, Rocket, Search } from 'lucide-react';
 import type { ToolEvent } from '@/services/aiChatService';
 
 const toolMeta: Record<string, { icon: typeof GitBranch; label: string; color: string }> = {
@@ -11,6 +11,8 @@ const toolMeta: Record<string, { icon: typeof GitBranch; label: string; color: s
   delete_github_repo: { icon: Trash2, label: 'Deleting repo', color: 'text-red-400' },
   create_branch: { icon: GitBranch, label: 'Creating branch', color: 'text-orange-400' },
   create_pull_request: { icon: GitBranch, label: 'Creating PR', color: 'text-pink-400' },
+  check_vercel_deployment: { icon: Rocket, label: 'Checking deployment', color: 'text-emerald-400' },
+  search_web: { icon: Search, label: 'Searching web', color: 'text-sky-400' },
 };
 
 interface ToolCallStatusProps {
