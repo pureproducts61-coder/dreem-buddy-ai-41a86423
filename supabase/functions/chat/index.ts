@@ -179,22 +179,51 @@ const TOOLS = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "check_vercel_deployment",
+      description: "Check Vercel deployment status for a project. Use after pushing code to verify the deployment succeeded and report any build errors.",
+      parameters: {
+        type: "object",
+        properties: {
+          project_name: { type: "string", description: "Vercel project name or repo name" },
+          team_id: { type: "string", description: "Vercel team ID (optional)" },
+        },
+        required: ["project_name"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "search_web",
+      description: "Search the web for latest documentation, APIs, and solutions using Tavily. Use when you need current info about frameworks, libraries, or error solutions.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "Search query" },
+          max_results: { type: "number", description: "Max results (default: 5)" },
+        },
+        required: ["query"],
+        additionalProperties: false,
+      },
+    },
+  },
 ];
 
 // ── Execute a tool call ─────────────────────────────────────
 async function executeTool(
   name: string,
   args: Record<string, unknown>,
-  githubToken: string
+  tokens: { github: string; vercel: string; tavily: string }
 ): Promise<string> {
-  if (!githubToken) {
-    return JSON.stringify({ error: "GitHub token not configured. Tell the user to add it in Settings → API Keys." });
-  }
-
   try {
     switch (name) {
       case "create_github_repo": {
-        const result = await githubFetch("/user/repos", githubToken, {
+        if (!tokens.github) return JSON.stringify({ error: "GitHub token not configured. Add it in Settings → Tools & Integrations." });
+        const result = await githubFetch("/user/repos", tokens.github, {
           method: "POST",
           body: JSON.stringify({
             name: args.name,
@@ -207,15 +236,16 @@ async function executeTool(
       }
 
       case "write_file_to_github": {
+        if (!tokens.github) return JSON.stringify({ error: "GitHub token not configured." });
         const { owner, repo, path, content, message } = args as Record<string, string>;
         let sha: string | undefined;
         try {
-          const existing = await githubFetch(`/repos/${owner}/${repo}/contents/${path}`, githubToken);
+          const existing = await githubFetch(`/repos/${owner}/${repo}/contents/${path}`, tokens.github);
           sha = existing.sha;
         } catch { /* new file */ }
 
         const encoded = btoa(unescape(encodeURIComponent(content)));
-        const result = await githubFetch(`/repos/${owner}/${repo}/contents/${path}`, githubToken, {
+        const result = await githubFetch(`/repos/${owner}/${repo}/contents/${path}`, tokens.github, {
           method: "PUT",
           body: JSON.stringify({
             message: message || `Update ${path} via TIVO AI`,
@@ -227,17 +257,18 @@ async function executeTool(
       }
 
       case "push_multiple_files": {
+        if (!tokens.github) return JSON.stringify({ error: "GitHub token not configured." });
         const { owner, repo, files, message: commitMsg } = args as { owner: string; repo: string; files: Array<{ path: string; content: string }>; message?: string };
         const results = [];
         for (const file of files) {
           let sha: string | undefined;
           try {
-            const existing = await githubFetch(`/repos/${owner}/${repo}/contents/${file.path}`, githubToken);
+            const existing = await githubFetch(`/repos/${owner}/${repo}/contents/${file.path}`, tokens.github);
             sha = existing.sha;
           } catch { /* new file */ }
 
           const encoded = btoa(unescape(encodeURIComponent(file.content)));
-          const res = await githubFetch(`/repos/${owner}/${repo}/contents/${file.path}`, githubToken, {
+          const res = await githubFetch(`/repos/${owner}/${repo}/contents/${file.path}`, tokens.github, {
             method: "PUT",
             body: JSON.stringify({
               message: commitMsg || `Update ${file.path} via TIVO AI`,
@@ -251,8 +282,9 @@ async function executeTool(
       }
 
       case "list_repo_files": {
+        if (!tokens.github) return JSON.stringify({ error: "GitHub token not configured." });
         const { owner, repo, path } = args as Record<string, string>;
-        const result = await githubFetch(`/repos/${owner}/${repo}/contents/${path || ""}`, githubToken);
+        const result = await githubFetch(`/repos/${owner}/${repo}/contents/${path || ""}`, tokens.github);
         const items = Array.isArray(result) ? result.map((f: { name: string; type: string; path: string; size: number }) => ({
           name: f.name, type: f.type, path: f.path, size: f.size
         })) : [{ name: result.name, type: result.type, path: result.path }];
@@ -260,26 +292,27 @@ async function executeTool(
       }
 
       case "read_file_from_github": {
+        if (!tokens.github) return JSON.stringify({ error: "GitHub token not configured." });
         const { owner, repo, path } = args as Record<string, string>;
-        const result = await githubFetch(`/repos/${owner}/${repo}/contents/${path}`, githubToken);
+        const result = await githubFetch(`/repos/${owner}/${repo}/contents/${path}`, tokens.github);
         const decoded = atob(result.content);
         return JSON.stringify({ path, content: decoded });
       }
 
       case "delete_github_repo": {
+        if (!tokens.github) return JSON.stringify({ error: "GitHub token not configured." });
         const { owner, repo } = args as Record<string, string>;
-        await githubFetch(`/repos/${owner}/${repo}`, githubToken, { method: "DELETE" });
+        await githubFetch(`/repos/${owner}/${repo}`, tokens.github, { method: "DELETE" });
         return JSON.stringify({ success: true, deleted: `${owner}/${repo}` });
       }
 
       case "create_branch": {
+        if (!tokens.github) return JSON.stringify({ error: "GitHub token not configured." });
         const { owner, repo, branch, from_branch } = args as Record<string, string>;
         const baseBranch = from_branch || "main";
-        // Get the SHA of the base branch
-        const ref = await githubFetch(`/repos/${owner}/${repo}/git/ref/heads/${baseBranch}`, githubToken);
+        const ref = await githubFetch(`/repos/${owner}/${repo}/git/ref/heads/${baseBranch}`, tokens.github);
         const sha = ref.object.sha;
-        // Create new branch
-        const result = await githubFetch(`/repos/${owner}/${repo}/git/refs`, githubToken, {
+        const result = await githubFetch(`/repos/${owner}/${repo}/git/refs`, tokens.github, {
           method: "POST",
           body: JSON.stringify({ ref: `refs/heads/${branch}`, sha }),
         });
@@ -287,8 +320,9 @@ async function executeTool(
       }
 
       case "create_pull_request": {
+        if (!tokens.github) return JSON.stringify({ error: "GitHub token not configured." });
         const { owner, repo, title, body, head, base } = args as Record<string, string>;
-        const result = await githubFetch(`/repos/${owner}/${repo}/pulls`, githubToken, {
+        const result = await githubFetch(`/repos/${owner}/${repo}/pulls`, tokens.github, {
           method: "POST",
           body: JSON.stringify({
             title,
@@ -298,6 +332,81 @@ async function executeTool(
           }),
         });
         return JSON.stringify({ success: true, url: result.html_url, number: result.number });
+      }
+
+      case "check_vercel_deployment": {
+        if (!tokens.vercel) return JSON.stringify({ error: "Vercel token not configured. Add it in Settings → Tools & Integrations." });
+        const { project_name, team_id } = args as Record<string, string>;
+        const params = new URLSearchParams({ limit: "3" });
+        if (team_id) params.set("teamId", team_id);
+
+        const vercelRes = await fetch(
+          `https://api.vercel.com/v6/deployments?projectId=${encodeURIComponent(project_name)}&${params}`,
+          { headers: { Authorization: `Bearer ${tokens.vercel}` } }
+        );
+
+        if (!vercelRes.ok) {
+          // Try by project name
+          const byNameRes = await fetch(
+            `https://api.vercel.com/v9/projects/${encodeURIComponent(project_name)}`,
+            { headers: { Authorization: `Bearer ${tokens.vercel}` } }
+          );
+          if (!byNameRes.ok) {
+            return JSON.stringify({ error: `Vercel project not found: ${project_name}` });
+          }
+          const project = await byNameRes.json();
+          const deploymentsRes = await fetch(
+            `https://api.vercel.com/v6/deployments?projectId=${project.id}&limit=3`,
+            { headers: { Authorization: `Bearer ${tokens.vercel}` } }
+          );
+          if (!deploymentsRes.ok) {
+            return JSON.stringify({ error: "Failed to fetch Vercel deployments" });
+          }
+          const depData = await deploymentsRes.json();
+          const deployments = (depData.deployments || []).map((d: Record<string, unknown>) => ({
+            id: d.uid,
+            url: d.url,
+            state: d.state || d.readyState,
+            created: d.created,
+            error: d.errorMessage || null,
+          }));
+          return JSON.stringify({ project: project_name, deployments });
+        }
+
+        const data = await vercelRes.json();
+        const deployments = (data.deployments || []).map((d: Record<string, unknown>) => ({
+          id: d.uid,
+          url: d.url,
+          state: d.state || d.readyState,
+          created: d.created,
+          error: d.errorMessage || null,
+        }));
+        return JSON.stringify({ project: project_name, deployments });
+      }
+
+      case "search_web": {
+        if (!tokens.tavily) return JSON.stringify({ error: "Tavily API key not configured. Add it in Settings → Tools & Integrations." });
+        const { query, max_results } = args as { query: string; max_results?: number };
+        const tavilyRes = await fetch("https://api.tavily.com/search", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            api_key: tokens.tavily,
+            query,
+            max_results: max_results || 5,
+            search_depth: "basic",
+          }),
+        });
+        if (!tavilyRes.ok) {
+          return JSON.stringify({ error: `Tavily search failed: ${tavilyRes.status}` });
+        }
+        const searchData = await tavilyRes.json();
+        const results = (searchData.results || []).map((r: Record<string, unknown>) => ({
+          title: r.title,
+          url: r.url,
+          snippet: typeof r.content === 'string' ? (r.content as string).slice(0, 300) : '',
+        }));
+        return JSON.stringify({ query, results });
       }
 
       default:
@@ -322,72 +431,100 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { messages, model, apiKey, provider, githubToken } = await req.json();
+    const { messages, model, apiKey, provider, githubToken, vercelToken, tavilyApiKey } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+
+    const tokens = {
+      github: githubToken || "",
+      vercel: vercelToken || "",
+      tavily: tavilyApiKey || "",
+    };
+
+    // Build available tools info for system prompt
+    const availableTools: string[] = [];
+    if (tokens.github) availableTools.push("GitHub (full access: repos, branches, PRs, files)");
+    if (tokens.vercel) availableTools.push("Vercel (deployment verification, build error detection)");
+    if (tokens.tavily) availableTools.push("Tavily (web search for latest docs & solutions)");
 
     const systemPrompt = `You are TIVO AI, an autonomous AI development agent — an expert-level software engineer. You build, modify, and deploy real applications directly via GitHub.
 
 ## CORE IDENTITY
-- You are a professional full-stack developer who writes production-quality code.
+- You are a professional full-stack developer who writes production-quality, modern code.
 - You NEVER just describe what to do — you EXECUTE actions using your tools.
-- You work incrementally: analyze → plan → implement → verify.
+- You work like Lovable AI / Cursor / Bolt.new — autonomous, fast, professional.
+- You use the LATEST technologies and best practices (React 19, Next.js 15, Tailwind v4, TypeScript 5, etc.)
+
+## AVAILABLE TOOLS
+${availableTools.length > 0 ? availableTools.map(t => `✅ ${t}`).join("\n") : "⚠️ No tools configured. Tell the user to add tokens in Settings."}
 
 ## MANDATORY WORKFLOW (Follow this EVERY time for coding tasks)
 1. **ANALYZE FIRST**: ALWAYS call \`list_repo_files\` to understand the current project structure BEFORE writing any code. If working on an existing repo, also \`read_file_from_github\` for key files you'll modify.
-2. **PLAN**: Briefly tell the user your plan — which files you'll create/modify and why. Use clear step labels like "📋 Plan: I will create 3 files..."
-3. **IMPLEMENT INCREMENTALLY**: Push changes in small logical batches. Don't try to push 20 files at once. Group related files (e.g., push config files first, then components, then pages).
-4. **VERIFY**: After pushing, call \`list_repo_files\` again to confirm the files are there.
-5. **REPORT**: Summarize what was done and what's next.
+2. **PLAN**: Briefly tell the user your plan — which files you'll create/modify and why.
+3. **IMPLEMENT INCREMENTALLY**: Push changes in small logical batches (3-5 files max per batch). Don't try to push everything at once.
+   - Batch 1: Config files (package.json, tsconfig, vite.config, etc.)
+   - Batch 2: Core files (main entry, app component, layout)
+   - Batch 3: Feature components
+   - Batch 4: Styles, assets, utilities
+4. **VERIFY**: After each batch, call \`list_repo_files\` to confirm files are there.
+5. ${tokens.vercel ? '**DEPLOY CHECK**: After all code is pushed, call `check_vercel_deployment` to verify the build succeeded. If there are build errors, read the error, fix the code, and push again.' : '**REPORT**: Summarize what was done.'}
 
-## THINKING OUT LOUD
-- Always narrate your thinking process to the user so they can follow along.
-- Before each tool call, briefly explain WHY you're calling it:
-  - "🔍 Let me first check what's already in the repo..."
-  - "📝 Now I'll create the package.json and tsconfig..."
-  - "🚀 Pushing the React components..."
-  - "✅ Let me verify everything was pushed correctly..."
+## THINKING NARRATION
+Always narrate your process so the user sees real-time progress:
+- "🔍 Analyzing the current repo structure..."
+- "📋 Plan: I will create/modify X files — [list them]"
+- "📦 Pushing batch 1: config files..."
+- "✅ Batch 1 complete. Now pushing components..."
+- "🚀 All code pushed. Checking deployment..."
+- "✅ Deployment successful! Here's your project: [url]"
 
-## ERROR HANDLING & RETRY
-- If a tool call fails, DO NOT STOP. Read the error message carefully.
-- Common fixes:
-  - "sha" conflict → call \`read_file_from_github\` to get current SHA, then retry
-  - 404 on repo → the repo may not exist yet, create it first
-  - Rate limit → tell the user to wait, then suggest retrying
-- Always attempt at least ONE retry before giving up.
-- If retrying fails, explain the error clearly and suggest what the user can do.
+## ERROR HANDLING & AUTO-RECOVERY
+- If a tool call fails, DO NOT STOP. Read the error carefully.
+- SHA conflict → Re-read the file to get fresh SHA, then retry.
+- 404 → Repo doesn't exist? Create it first.
+- 422 → Check if file path is valid.
+- Rate limit → Wait 3 seconds and retry once.
+- Build errors (Vercel) → Read the error log, identify the issue, fix the code, push again.
+- ALWAYS attempt at least 2 retries before giving up.
 
 ## INCREMENTAL DEVELOPMENT
-- Break large tasks into phases. After each phase, confirm with the user before proceeding.
-- Example phases for a React app:
-  1. Project setup (package.json, tsconfig, vite config)
-  2. Core structure (src/main.tsx, src/App.tsx, index.html)
-  3. Components (individual feature components)
-  4. Styling (CSS/Tailwind setup)
-  5. Final verification
+- Break large tasks into phases. Complete each phase fully before moving on.
+- Each phase should be independently functional when possible.
+- After completing all phases, provide a clear summary report.
+
+## CODE QUALITY STANDARDS  
+- Always use TypeScript with strict types
+- Use modern ES2024+ syntax
+- Follow framework conventions (React hooks, Next.js app router, etc.)
+- Include proper error handling in all code
+- Write clean, readable, well-structured code
+- Use Tailwind CSS for styling (latest version conventions)
 
 ## GITHUB FULL ACCESS
-${githubToken ? `GitHub token is configured with FULL ACCESS. You can:
+${tokens.github ? `GitHub token is configured with FULL ACCESS. You can:
 - Create/delete repositories
 - Create branches and pull requests
-- Read/write/update any file
+- Read/write/update any file in any branch
 - Manage repository settings
-- Push code directly to any branch
+The user trusts you with full repository management.` : "⚠️ GitHub token NOT configured. Tell the user to add it in Settings → Tools & Integrations."}
 
-The user trusts you with full repository management.` : "⚠️ GitHub token is NOT configured. Tell the user to add it in Settings → API Keys."}
+## COMMUNICATION
+- Professional but friendly
+- Support both Bangla (বাংলা) and English based on user language
+- Use emojis for status: 🔍 📋 📦 🚀 ✅ ⚠️ ❌
+- Keep chat concise — real code goes to GitHub, not chat
+- At the end, always give a structured summary:
+  
+  **✅ Summary:**
+  - Files created/modified: [count]
+  - Repository: [url]
+  ${tokens.vercel ? '- Deployment: [status + url]' : ''}
+  - Next steps: [suggestions]
 
-## COMMUNICATION STYLE
-- Be professional but friendly
-- Support both Bangla (বাংলা) and English based on user preference
-- Use emojis sparingly for status indicators (🔍 📝 🚀 ✅ ⚠️ ✗)
-- Keep explanations concise but informative
-- When showing code in chat, keep it brief — the real code goes to GitHub via tools
+## CONTEXT
+- Use full conversation history to understand ongoing projects.
+- Remember repo names, usernames, and preferences.`;
 
-## CONTEXT AWARENESS
-- You have access to the full conversation history. Use it to understand ongoing projects.
-- Remember the user's GitHub username, repo names, and preferences from earlier messages.
-- If the user references a previous conversation, look for context in the message history.`;
-
-    // Determine which AI gateway to use
+    // Determine AI gateway
     let gatewayUrl: string;
     let authHeader: string;
     let modelName: string;
@@ -408,6 +545,10 @@ The user trusts you with full repository management.` : "⚠️ GitHub token is 
       gatewayUrl = "https://api.groq.com/openai/v1/chat/completions";
       authHeader = `Bearer ${apiKey}`;
       modelName = model || "llama-3.3-70b-versatile";
+    } else if (provider === "deepseek" && apiKey) {
+      gatewayUrl = "https://api.deepseek.com/v1/chat/completions";
+      authHeader = `Bearer ${apiKey}`;
+      modelName = model || "deepseek-chat";
     } else if (LOVABLE_API_KEY) {
       gatewayUrl = "https://ai.gateway.lovable.dev/v1/chat/completions";
       authHeader = `Bearer ${LOVABLE_API_KEY}`;
@@ -419,7 +560,7 @@ The user trusts you with full repository management.` : "⚠️ GitHub token is 
       );
     }
 
-    // ── Agentic loop with thinking events ──
+    // ── Agentic loop ──
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       async start(controller) {
@@ -428,10 +569,9 @@ The user trusts you with full repository management.` : "⚠️ GitHub token is 
           ...messages,
         ];
 
-        const MAX_ITERATIONS = 15; // Increased for incremental work
+        const MAX_ITERATIONS = 25;
 
         for (let iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
-          // Send thinking status
           controller.enqueue(encoder.encode(sseEvent("thinking", {
             step: iteration + 1,
             maxSteps: MAX_ITERATIONS,
@@ -444,9 +584,19 @@ The user trusts you with full repository management.` : "⚠️ GitHub token is 
             stream: true,
           };
 
-          if (useToolCalling && githubToken) {
-            body.tools = TOOLS;
-            body.tool_choice = "auto";
+          // Only include tools if we have at least one token configured
+          if (useToolCalling && (tokens.github || tokens.vercel || tokens.tavily)) {
+            // Filter tools based on available tokens
+            const availableToolDefs = TOOLS.filter(t => {
+              const fn = t.function.name;
+              if (fn === "check_vercel_deployment") return !!tokens.vercel;
+              if (fn === "search_web") return !!tokens.tavily;
+              return !!tokens.github; // All other tools need GitHub
+            });
+            if (availableToolDefs.length > 0) {
+              body.tools = availableToolDefs;
+              body.tool_choice = "auto";
+            }
           }
 
           const aiResp = await fetch(gatewayUrl, {
@@ -463,19 +613,18 @@ The user trusts you with full repository management.` : "⚠️ GitHub token is 
             const errText = await aiResp.text();
             console.error("AI error:", status, errText);
 
-            // Retry once on transient errors
             if ((status === 429 || status >= 500) && iteration < MAX_ITERATIONS - 1) {
               controller.enqueue(encoder.encode(sseEvent("thinking", {
                 step: iteration + 1,
                 status: "retrying",
-                message: `⚠️ Got error ${status}, retrying in 2s...`,
+                message: `⚠️ Error ${status}, retrying in 3s...`,
               })));
-              await new Promise(r => setTimeout(r, 2000));
+              await new Promise(r => setTimeout(r, 3000));
               continue;
             }
 
             if (status === 429) {
-              controller.enqueue(encoder.encode(sseEvent("error", { error: "Rate limit exceeded. Please try again later." })));
+              controller.enqueue(encoder.encode(sseEvent("error", { error: "Rate limit exceeded. Please try again in a moment." })));
             } else if (status === 402) {
               controller.enqueue(encoder.encode(sseEvent("error", { error: "Payment required. Please add credits." })));
             } else {
@@ -486,7 +635,6 @@ The user trusts you with full repository management.` : "⚠️ GitHub token is 
             return;
           }
 
-          // Parse the streaming response
           const reader = aiResp.body!.getReader();
           const decoder = new TextDecoder();
           let buffer = "";
@@ -566,25 +714,28 @@ The user trusts you with full repository management.` : "⚠️ GitHub token is 
               args: sanitizeArgs(args),
             })));
 
-            let result = await executeTool(tc.name, args, githubToken || "");
-            const parsedResult = JSON.parse(result);
+            let result = await executeTool(tc.name, args, tokens);
+            let parsedResult = JSON.parse(result);
 
-            // Auto-retry on SHA conflict
-            if (parsedResult.error && parsedResult.error.includes("422") && (tc.name === "write_file_to_github" || tc.name === "push_multiple_files")) {
-              controller.enqueue(encoder.encode(sseEvent("thinking", {
-                step: iteration + 1,
-                status: "retrying",
-                message: "SHA conflict detected, retrying with fresh SHA...",
-              })));
-              // Retry the same tool call (executeTool already fetches SHA)
-              await new Promise(r => setTimeout(r, 1000));
-              result = await executeTool(tc.name, args, githubToken || "");
+            // Auto-retry on SHA conflict (up to 2 retries)
+            if (parsedResult.error && parsedResult.error.includes("422") &&
+              (tc.name === "write_file_to_github" || tc.name === "push_multiple_files")) {
+              for (let retry = 0; retry < 2; retry++) {
+                controller.enqueue(encoder.encode(sseEvent("thinking", {
+                  step: iteration + 1,
+                  status: "retrying",
+                  message: `SHA conflict, retry ${retry + 1}/2...`,
+                })));
+                await new Promise(r => setTimeout(r, 1500));
+                result = await executeTool(tc.name, args, tokens);
+                parsedResult = JSON.parse(result);
+                if (!parsedResult.error) break;
+              }
             }
 
-            const finalResult = JSON.parse(result);
             controller.enqueue(encoder.encode(sseEvent("tool_result", {
               tool: tc.name,
-              result: finalResult,
+              result: parsedResult,
             })));
 
             conversationMessages.push({
@@ -598,7 +749,7 @@ The user trusts you with full repository management.` : "⚠️ GitHub token is 
         }
 
         // Max iterations reached
-        controller.enqueue(encoder.encode(sseDelta("\n\n⚠️ Maximum iterations reached. You can continue by sending another message.")));
+        controller.enqueue(encoder.encode(sseDelta("\n\n⚠️ Maximum iterations reached. Send another message to continue.")));
         controller.enqueue(encoder.encode("data: [DONE]\n\n"));
         controller.close();
       },
