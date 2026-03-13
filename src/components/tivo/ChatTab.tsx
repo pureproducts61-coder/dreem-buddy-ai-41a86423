@@ -21,6 +21,7 @@ export interface Message {
 
 interface ChatTabProps {
   initialSessionId?: string | null;
+  initialMode?: TivoMode | null;
 }
 
 export function ChatTab({ initialSessionId }: ChatTabProps) {
