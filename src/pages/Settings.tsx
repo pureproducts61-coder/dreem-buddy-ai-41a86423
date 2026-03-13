@@ -29,6 +29,8 @@ interface SettingsData {
   tavilyApiKey: string;
   hfToken: string;
   vercelToken: string;
+  supabaseUrl: string;
+  supabaseAnonKey: string;
   autoSave: boolean;
   syncEnabled: boolean;
 }
