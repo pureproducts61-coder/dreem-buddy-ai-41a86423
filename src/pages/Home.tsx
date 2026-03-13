@@ -8,6 +8,7 @@ import { ControlPanel } from '@/components/tivo/ControlPanel';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
+import type { TivoMode } from '@/components/tivo/SmartInputBar';
 
 type BottomTab = 'vault' | 'chat' | 'preview';
 
@@ -22,9 +23,11 @@ const Home = () => {
   const [activeTab, setActiveTab] = useState<BottomTab>('chat');
   const [menuOpen, setMenuOpen] = useState(false);
   const [openSessionId, setOpenSessionId] = useState<string | null>(null);
+  const [openSessionMode, setOpenSessionMode] = useState<TivoMode | null>(null);
 
-  const handleOpenSession = (sessionId: string) => {
+  const handleOpenSession = (sessionId: string, mode?: string) => {
     setOpenSessionId(sessionId);
+    setOpenSessionMode((mode as TivoMode) || 'build');
     setActiveTab('chat');
   };
 
@@ -41,7 +44,7 @@ const Home = () => {
           )}
           {activeTab === 'chat' && (
             <motion.div key={`chat-${openSessionId || 'default'}`} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }} className="flex-1 flex flex-col min-h-0">
-              <ChatTab initialSessionId={openSessionId} />
+              <ChatTab initialSessionId={openSessionId} initialMode={openSessionMode} />
             </motion.div>
           )}
           {activeTab === 'preview' && (

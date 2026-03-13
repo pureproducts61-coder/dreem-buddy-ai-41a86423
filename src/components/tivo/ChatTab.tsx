@@ -21,12 +21,13 @@ export interface Message {
 
 interface ChatTabProps {
   initialSessionId?: string | null;
+  initialMode?: TivoMode | null;
 }
 
-export function ChatTab({ initialSessionId }: ChatTabProps) {
+export function ChatTab({ initialSessionId, initialMode }: ChatTabProps) {
   const { t } = useLanguage();
   const { toast } = useToast();
-  const [mode, setMode] = useState<TivoMode>(initialSessionId ? 'build' : 'plan');
+  const [mode, setMode] = useState<TivoMode>(initialMode || (initialSessionId ? 'build' : 'plan'));
   const [messages, setMessages] = useState<Record<TivoMode, Message[]>>({
     build: [],
     automation: [],

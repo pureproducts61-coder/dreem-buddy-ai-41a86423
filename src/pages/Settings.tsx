@@ -29,6 +29,8 @@ interface SettingsData {
   tavilyApiKey: string;
   hfToken: string;
   vercelToken: string;
+  supabaseUrl: string;
+  supabaseAnonKey: string;
   autoSave: boolean;
   syncEnabled: boolean;
 }
@@ -44,6 +46,8 @@ const defaultSettings: SettingsData = {
   tavilyApiKey: '',
   hfToken: '',
   vercelToken: '',
+  supabaseUrl: '',
+  supabaseAnonKey: '',
   autoSave: true,
   syncEnabled: false,
 };
@@ -329,6 +333,23 @@ const Settings = () => {
             {renderApiKeyInput('hfToken', 'Hugging Face Token', 'hf_...',
               <Globe className="h-3.5 w-3.5" />,
               'Access HF models & Spaces. huggingface.co → Settings → Access Tokens')}
+          </CardContent>
+        </Card>
+
+        {/* Database */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Server className="h-5 w-5" />
+              Database (Supabase)
+            </CardTitle>
+            <CardDescription>Connect your own Supabase project for data persistence</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            {renderApiKeyInput('supabaseUrl', 'Supabase URL', 'https://xxx.supabase.co',
+              <Globe className="h-3.5 w-3.5" />, 'Project URL from Supabase Dashboard → Settings → API')}
+            {renderApiKeyInput('supabaseAnonKey', 'Supabase Anon Key', 'eyJ...',
+              <Key className="h-3.5 w-3.5" />, 'Publishable anon key from Supabase Dashboard → Settings → API')}
           </CardContent>
         </Card>
 

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Trash2, FolderOpen, MessageCircle, Clock, Loader2 } from 'lucide-react';
+import { Trash2, FolderOpen, MessageCircle, Clock, Loader2, Hammer, MessageSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -8,9 +8,10 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { cn } from '@/lib/utils';
 
 interface ProjectVaultProps {
-  onOpenSession?: (sessionId: string) => void;
+  onOpenSession?: (sessionId: string, mode?: string) => void;
 }
 
 export function ProjectVault({ onOpenSession }: ProjectVaultProps) {
@@ -27,12 +28,17 @@ export function ProjectVault({ onOpenSession }: ProjectVaultProps) {
   async function loadSessions() {
     setLoading(true);
     try {
-      const buildSessions = await chatPersistence.getSessions('build');
-      setSessions(buildSessions);
+      // Load both build and plan sessions
+      const [buildSessions, planSessions] = await Promise.all([
+        chatPersistence.getSessions('build'),
+        chatPersistence.getSessions('plan'),
+      ]);
+      const allSessions = [...buildSessions, ...planSessions]
+        .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+      setSessions(allSessions);
 
-      // Load message counts
       const counts: Record<string, number> = {};
-      for (const s of buildSessions) {
+      for (const s of allSessions) {
         const msgs = await chatPersistence.getMessages(s.id);
         counts[s.id] = msgs.length;
       }
@@ -63,11 +69,16 @@ export function ProjectVault({ onOpenSession }: ProjectVaultProps) {
     return `${days}d ago`;
   }
 
+  const modeInfo = {
+    build: { icon: Hammer, label: 'Build', color: 'bg-primary/10 text-primary' },
+    plan: { icon: MessageSquare, label: 'Plan', color: 'bg-emerald-500/10 text-emerald-500' },
+  };
+
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-y-auto">
       <div className="px-5 pt-6 pb-4">
         <h2 className="text-xl font-display font-bold tracking-tight">{t('vault.title')}</h2>
-        <p className="text-xs text-muted-foreground mt-1">Build মোডে তৈরি করা প্রজেক্টগুলো</p>
+        <p className="text-xs text-muted-foreground mt-1">Build ও Plan মোডের প্রজেক্ট ও চ্যাট</p>
       </div>
 
       <div className="flex-1 px-4 pb-4 space-y-3">
@@ -84,51 +95,56 @@ export function ProjectVault({ onOpenSession }: ProjectVaultProps) {
             <div className="h-16 w-16 rounded-2xl bg-secondary flex items-center justify-center mb-4">
               <FolderOpen className="h-7 w-7 text-muted-foreground" />
             </div>
-            <p className="text-sm text-muted-foreground">কোনো বিল্ড সেশন নেই</p>
-            <p className="text-xs text-muted-foreground/60 mt-1">Chat ট্যাবে Build মোডে কাজ শুরু করুন</p>
+            <p className="text-sm text-muted-foreground">কোনো সেশন নেই</p>
+            <p className="text-xs text-muted-foreground/60 mt-1">Chat ট্যাবে কাজ শুরু করুন</p>
           </motion.div>
         ) : (
           <AnimatePresence>
-            {sessions.map((session, i) => (
-              <motion.button
-                key={session.id}
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.05 }}
-                onClick={() => onOpenSession?.(session.id)}
-                className="w-full text-left rounded-2xl border border-border/40 bg-card p-5 hover:border-primary/30 hover:bg-accent/30 transition-all group"
-              >
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-base font-semibold truncate">{session.title}</h3>
-                    <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1">
-                        <Clock className="h-3 w-3" />
-                        {formatDate(session.updated_at)}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <MessageCircle className="h-3 w-3" />
-                        {messageCounts[session.id] || 0} messages
-                      </span>
+            {sessions.map((session, i) => {
+              const info = modeInfo[session.mode as keyof typeof modeInfo] || modeInfo.plan;
+              const ModeIcon = info.icon;
+              return (
+                <motion.button
+                  key={session.id}
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.05 }}
+                  onClick={() => onOpenSession?.(session.id, session.mode)}
+                  className="w-full text-left rounded-2xl border border-border/40 bg-card p-5 hover:border-primary/30 hover:bg-accent/30 transition-all group"
+                >
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-base font-semibold truncate">{session.title}</h3>
+                      <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1">
+                          <Clock className="h-3 w-3" />
+                          {formatDate(session.updated_at)}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <MessageCircle className="h-3 w-3" />
+                          {messageCounts[session.id] || 0}
+                        </span>
+                      </div>
                     </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive hover:bg-destructive/10"
+                      onClick={(e) => { e.stopPropagation(); setDeleteId(session.id); }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive hover:bg-destructive/10"
-                    onClick={(e) => { e.stopPropagation(); setDeleteId(session.id); }}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
 
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-primary/10 text-primary">
-                    Build
-                  </span>
-                </div>
-              </motion.button>
-            ))}
+                  <div className="flex items-center gap-2">
+                    <span className={cn('inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full', info.color)}>
+                      <ModeIcon className="h-2.5 w-2.5" />
+                      {info.label}
+                    </span>
+                  </div>
+                </motion.button>
+              );
+            })}
           </AnimatePresence>
         )}
       </div>
