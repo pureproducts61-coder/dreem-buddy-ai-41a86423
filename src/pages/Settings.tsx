@@ -46,6 +46,8 @@ const defaultSettings: SettingsData = {
   tavilyApiKey: '',
   hfToken: '',
   vercelToken: '',
+  supabaseUrl: '',
+  supabaseAnonKey: '',
   autoSave: true,
   syncEnabled: false,
 };
