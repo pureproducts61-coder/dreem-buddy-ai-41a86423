@@ -1,9 +1,8 @@
-import { useState } from 'react';
-import { ThumbsUp, ThumbsDown, Copy, Check, Loader2, FileCode } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { Copy, Check, Loader2, FileCode } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import { useRef, useEffect } from 'react';
 import { StreamingMessage } from './StreamingMessage';
 import tivoLogo from '@/assets/tivo-logo.png';
 import type { ToolEvent } from '@/services/aiChatService';
@@ -23,37 +22,6 @@ interface BuildWorkspaceProps {
   activeFiles?: string[];
 }
 
-function MessageActions({ content }: { content: string }) {
-  const [copied, setCopied] = useState(false);
-  const [liked, setLiked] = useState<'like' | 'dislike' | null>(null);
-
-  const handleCopy = async () => {
-    await navigator.clipboard.writeText(content);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  return (
-    <div className="flex items-center gap-1 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
-      <button onClick={() => setLiked(liked === 'like' ? null : 'like')}
-        className={cn('h-7 w-7 rounded-lg flex items-center justify-center transition-colors',
-          liked === 'like' ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:text-foreground hover:bg-secondary')}>
-        <ThumbsUp className="h-3.5 w-3.5" />
-      </button>
-      <button onClick={() => setLiked(liked === 'dislike' ? null : 'dislike')}
-        className={cn('h-7 w-7 rounded-lg flex items-center justify-center transition-colors',
-          liked === 'dislike' ? 'bg-destructive/15 text-destructive' : 'text-muted-foreground hover:text-foreground hover:bg-secondary')}>
-        <ThumbsDown className="h-3.5 w-3.5" />
-      </button>
-      <button onClick={handleCopy}
-        className="h-7 w-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors">
-        {copied ? <Check className="h-3.5 w-3.5 text-primary" /> : <Copy className="h-3.5 w-3.5" />}
-      </button>
-    </div>
-  );
-}
-
-/** Extract file names from tool events for minimal activity display */
 function getActiveFileNames(events: ToolEvent[]): string[] {
   const files: string[] = [];
   for (const e of events) {
@@ -64,17 +32,40 @@ function getActiveFileNames(events: ToolEvent[]): string[] {
   return [...new Set(files)];
 }
 
+function CopyButton({ content }: { content: string }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(content);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+  return (
+    <button onClick={handleCopy} className="h-6 w-6 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors opacity-0 group-hover:opacity-100">
+      {copied ? <Check className="h-3 w-3 text-primary" /> : <Copy className="h-3 w-3" />}
+    </button>
+  );
+}
+
 export function BuildWorkspace({ messages, isLoading, onOpenMenu, activeFiles = [] }: BuildWorkspaceProps) {
   const { t } = useLanguage();
   const scrollRef = useRef<HTMLDivElement>(null);
+  const isNearBottom = useRef(true);
+
+  const handleScroll = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    isNearBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+  };
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+    if (isNearBottom.current) {
+      scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+    }
   }, [messages, isLoading]);
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-6 space-y-5">
+      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-5 py-6 space-y-5">
         <AnimatePresence mode="popLayout">
           {messages.map((msg, idx) => {
             const fileNames = msg.toolEvents ? getActiveFileNames(msg.toolEvents) : [];
@@ -83,8 +74,9 @@ export function BuildWorkspace({ messages, isLoading, onOpenMenu, activeFiles = 
             return (
               <motion.div
                 key={msg.id}
-                initial={{ opacity: 0, y: 12 }}
+                initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.2 }}
                 className={cn('group', msg.role === 'user' ? 'flex justify-end' : '')}
               >
                 {msg.role === 'user' ? (
@@ -96,9 +88,9 @@ export function BuildWorkspace({ messages, isLoading, onOpenMenu, activeFiles = 
                     <div className="flex items-center gap-2 mb-1.5">
                       <img src={tivoLogo} alt="TIVO" className="w-4 h-4" />
                       <span className="text-[11px] font-medium text-muted-foreground">TIVO AI</span>
+                      <CopyButton content={msg.content} />
                     </div>
 
-                    {/* Minimal file activity: only show file names worked on */}
                     {fileNames.length > 0 && (
                       <div className="flex flex-wrap gap-1.5 mb-2">
                         {fileNames.map((f, i) => (
@@ -111,7 +103,6 @@ export function BuildWorkspace({ messages, isLoading, onOpenMenu, activeFiles = 
                     )}
 
                     <StreamingMessage content={msg.content} isLatest={isLatest} />
-                    <MessageActions content={msg.content} />
                   </div>
                 )}
               </motion.div>
@@ -119,7 +110,6 @@ export function BuildWorkspace({ messages, isLoading, onOpenMenu, activeFiles = 
           })}
         </AnimatePresence>
 
-        {/* Clean loading indicator */}
         {isLoading && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center gap-2 py-2">
             <img src={tivoLogo} alt="TIVO" className="w-4 h-4" />
