@@ -68,8 +68,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     sessionStorage.removeItem('tivo_user');
   };
 
+  const isAdmin = user?.email === ADMIN_EMAIL && !!ADMIN_EMAIL;
+
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, logout }}>
+    <AuthContext.Provider value={{ user, isAdmin, isLoading, login, logout }}>
       {children}
     </AuthContext.Provider>
   );
