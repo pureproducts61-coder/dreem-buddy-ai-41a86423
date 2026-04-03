@@ -7,6 +7,7 @@ interface User {
 
 interface AuthContextType {
   user: User | null;
+  isAdmin: boolean;
   isLoading: boolean;
   login: (email: string, password: string, remember?: boolean) => Promise<boolean>;
   logout: () => void;
@@ -67,8 +68,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     sessionStorage.removeItem('tivo_user');
   };
 
+  const isAdmin = user?.email === ADMIN_EMAIL && !!ADMIN_EMAIL;
+
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, logout }}>
+    <AuthContext.Provider value={{ user, isAdmin, isLoading, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

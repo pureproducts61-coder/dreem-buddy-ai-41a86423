@@ -1,0 +1,278 @@
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import {
+  ArrowLeft, Users, CreditCard, Key, Bot, Server, Search, Globe, Rocket, Github,
+  CheckCircle2, XCircle, Eye, EyeOff, Save, Shield, Brain, Settings2,
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
+import { Separator } from '@/components/ui/separator';
+import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
+import { ThemeLanguageToggle } from '@/components/ThemeLanguageToggle';
+
+const STORAGE_KEY = 'dreem-settings';
+
+interface AdminSettings {
+  backendUrl: string;
+  masterSecret: string;
+  aiModel: string;
+  geminiApiKey: string;
+  groqApiKey: string;
+  deepseekApiKey: string;
+  tavilyApiKey: string;
+  hfToken: string;
+  vercelToken: string;
+  supabaseUrl: string;
+  supabaseAnonKey: string;
+  autoSave: boolean;
+  syncEnabled: boolean;
+  defaultUserCredits: number;
+}
+
+const defaultAdminSettings: AdminSettings = {
+  backendUrl: '', masterSecret: '', aiModel: 'gemini',
+  geminiApiKey: '', groqApiKey: '', deepseekApiKey: '',
+  tavilyApiKey: '', hfToken: '', vercelToken: '',
+  supabaseUrl: '', supabaseAnonKey: '',
+  autoSave: true, syncEnabled: false, defaultUserCredits: 50,
+};
+
+const AdminPanel = () => {
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const { user, isAdmin } = useAuth();
+
+  const [settings, setSettings] = useState<AdminSettings>(() => {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    const backendUrl = localStorage.getItem('tivo-hf-url') || '';
+    const masterSecret = localStorage.getItem('tivo-master-secret') || '';
+    const credits = parseInt(localStorage.getItem('tivo-default-credits') || '50', 10);
+    if (stored) {
+      try {
+        return { ...defaultAdminSettings, ...JSON.parse(stored), backendUrl, masterSecret, defaultUserCredits: credits };
+      } catch { /* fallthrough */ }
+    }
+    return { ...defaultAdminSettings, backendUrl, masterSecret, defaultUserCredits: credits };
+  });
+
+  const [showKeys, setShowKeys] = useState<Record<string, boolean>>({});
+  const [hasChanges, setHasChanges] = useState(false);
+
+  useEffect(() => {
+    if (!isAdmin) navigate('/');
+  }, [isAdmin, navigate]);
+
+  const update = <K extends keyof AdminSettings>(key: K, value: AdminSettings[K]) => {
+    setSettings((prev) => ({ ...prev, [key]: value }));
+    setHasChanges(true);
+  };
+
+  const toggleKey = (k: string) => setShowKeys((p) => ({ ...p, [k]: !p[k] }));
+
+  const handleSave = () => {
+    localStorage.setItem('tivo-hf-url', settings.backendUrl);
+    localStorage.setItem('tivo-master-secret', settings.masterSecret);
+    localStorage.setItem('tivo-default-credits', String(settings.defaultUserCredits));
+    const { backendUrl, masterSecret, defaultUserCredits, ...rest } = settings;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(rest));
+    setHasChanges(false);
+    toast({ title: 'Settings saved', description: 'All configurations updated successfully.' });
+  };
+
+  const mask = (v: string) => !v ? '' : v.length <= 8 ? '••••••••' : v.slice(0, 4) + '••••••••' + v.slice(-4);
+  const configured = (v: string) => !!v && v.length > 3;
+
+  const apiField = (id: keyof AdminSettings, label: string, placeholder: string, icon: React.ReactNode, desc?: string) => {
+    const val = settings[id] as string;
+    const vis = showKeys[id];
+    return (
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between">
+          <Label htmlFor={id} className="flex items-center gap-2">{icon}{label}</Label>
+          <Badge variant="outline" className={`text-[10px] gap-1 ${configured(val) ? 'border-primary/30 text-primary' : 'border-muted-foreground/30 text-muted-foreground'}`}>
+            {configured(val) ? <><CheckCircle2 className="h-2.5 w-2.5" /> Active</> : <><XCircle className="h-2.5 w-2.5" /> Not set</>}
+          </Badge>
+        </div>
+        {desc && <p className="text-[11px] text-muted-foreground">{desc}</p>}
+        <div className="relative">
+          <Input id={id} type={vis ? 'text' : 'password'} value={vis ? val : mask(val)}
+            onChange={(e) => update(id, e.target.value)} placeholder={placeholder} className="pr-10 font-mono text-sm" />
+          <Button type="button" variant="ghost" size="icon" className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7" onClick={() => toggleKey(id)}>
+            {vis ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+          </Button>
+        </div>
+      </div>
+    );
+  };
+
+  if (!isAdmin) return null;
+
+  return (
+    <div className="min-h-screen bg-background">
+      <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur">
+        <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-4">
+          <div className="flex items-center gap-3">
+            <Button variant="ghost" size="icon" onClick={() => navigate('/')}><ArrowLeft className="h-4 w-4" /></Button>
+            <div className="flex items-center gap-2">
+              <Shield className="h-5 w-5 text-primary" />
+              <h1 className="font-semibold">Admin Panel</h1>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <ThemeLanguageToggle />
+            {hasChanges && (
+              <Button size="sm" onClick={handleSave}><Save className="mr-1.5 h-4 w-4" />Save</Button>
+            )}
+          </div>
+        </div>
+      </header>
+
+      <main className="mx-auto max-w-5xl p-4 md:p-8">
+        <Tabs defaultValue="api-keys" className="space-y-6">
+          <TabsList className="grid w-full grid-cols-4">
+            <TabsTrigger value="api-keys" className="gap-1.5"><Key className="h-3.5 w-3.5" />API Keys</TabsTrigger>
+            <TabsTrigger value="users" className="gap-1.5"><Users className="h-3.5 w-3.5" />Users</TabsTrigger>
+            <TabsTrigger value="credits" className="gap-1.5"><CreditCard className="h-3.5 w-3.5" />Credits</TabsTrigger>
+            <TabsTrigger value="system" className="gap-1.5"><Settings2 className="h-3.5 w-3.5" />System</TabsTrigger>
+          </TabsList>
+
+          {/* API Keys Tab */}
+          <TabsContent value="api-keys" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2"><Brain className="h-5 w-5" />AI Provider Keys</CardTitle>
+                <CardDescription>These keys power AI capabilities for all users</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                {apiField('geminiApiKey', 'Gemini API Key', 'AIza...', <Bot className="h-3.5 w-3.5" />, 'Google AI Studio → Get API Key')}
+                {apiField('groqApiKey', 'Groq API Key', 'gsk_...', <Bot className="h-3.5 w-3.5" />, 'console.groq.com → API Keys')}
+                {apiField('deepseekApiKey', 'DeepSeek API Key', 'sk-...', <Bot className="h-3.5 w-3.5" />, 'platform.deepseek.com → API Keys')}
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2"><Key className="h-5 w-5" />Tools & Integrations</CardTitle>
+                <CardDescription>Tokens for deployment, search, and hosting services</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                {apiField('vercelToken', 'Vercel Token', 'vercel_...', <Rocket className="h-3.5 w-3.5" />, 'Vercel → Settings → Tokens')}
+                {apiField('tavilyApiKey', 'Tavily API Key', 'tvly-...', <Search className="h-3.5 w-3.5" />, 'tavily.com → Dashboard → API Keys')}
+                {apiField('hfToken', 'Hugging Face Token', 'hf_...', <Globe className="h-3.5 w-3.5" />, 'huggingface.co → Settings → Access Tokens')}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Users Tab */}
+          <TabsContent value="users" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2"><Users className="h-5 w-5" />User Management</CardTitle>
+                <CardDescription>Manage registered users and their access</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="rounded-lg border border-dashed border-border/50 p-8 text-center">
+                  <Users className="h-10 w-10 mx-auto text-muted-foreground/40 mb-3" />
+                  <p className="text-sm text-muted-foreground mb-1">No database connected</p>
+                  <p className="text-xs text-muted-foreground/60">
+                    Configure database credentials in the System tab to enable user management
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Credits Tab */}
+          <TabsContent value="credits" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2"><CreditCard className="h-5 w-5" />Credit System</CardTitle>
+                <CardDescription>Configure default credits for new users</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-1.5">
+                  <Label>Default Credits per User</Label>
+                  <p className="text-[11px] text-muted-foreground">New users will receive this many credits upon registration</p>
+                  <Input type="number" min={0} value={settings.defaultUserCredits}
+                    onChange={(e) => update('defaultUserCredits', parseInt(e.target.value, 10) || 0)} className="max-w-[200px]" />
+                </div>
+                <Separator />
+                <div className="flex items-center gap-3 p-3 rounded-lg bg-primary/5 border border-primary/10">
+                  <Shield className="h-5 w-5 text-primary shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium">Admin Access</p>
+                    <p className="text-xs text-muted-foreground">You have unlimited access as admin</p>
+                  </div>
+                  <Badge className="ml-auto">Unlimited</Badge>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* System Tab */}
+          <TabsContent value="system" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2"><Server className="h-5 w-5" />Backend</CardTitle>
+                <CardDescription>HuggingFace Spaces or custom backend</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {apiField('backendUrl', 'Backend URL', 'https://your-space.hf.space', <Globe className="h-3.5 w-3.5" />)}
+                {apiField('masterSecret', 'Master Secret', '••••••••••••', <Key className="h-3.5 w-3.5" />)}
+                <Separator />
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label>Auto Save</Label>
+                    <p className="text-xs text-muted-foreground">Automatically save changes</p>
+                  </div>
+                  <Switch checked={settings.autoSave} onCheckedChange={(c) => update('autoSave', c)} />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label>Sync Enabled</Label>
+                    <p className="text-xs text-muted-foreground">Auto-sync with backend</p>
+                  </div>
+                  <Switch checked={settings.syncEnabled} onCheckedChange={(c) => update('syncEnabled', c)} />
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2"><Server className="h-5 w-5" />Database (Supabase)</CardTitle>
+                <CardDescription>Connect your own database for persistent storage</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                {apiField('supabaseUrl', 'Supabase URL', 'https://xxx.supabase.co', <Globe className="h-3.5 w-3.5" />)}
+                {apiField('supabaseAnonKey', 'Supabase Anon Key', 'eyJ...', <Key className="h-3.5 w-3.5" />)}
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2"><Bot className="h-5 w-5" />AI Model</CardTitle>
+                <CardDescription>Default AI model for the system</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Select value={settings.aiModel} onValueChange={(v) => update('aiModel', v)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="gemini">Google Gemini</SelectItem>
+                    <SelectItem value="groq">Groq (Llama)</SelectItem>
+                    <SelectItem value="deepseek">DeepSeek</SelectItem>
+                  </SelectContent>
+                </Select>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+      </main>
+    </div>
+  );
+};
+
+export default AdminPanel;
