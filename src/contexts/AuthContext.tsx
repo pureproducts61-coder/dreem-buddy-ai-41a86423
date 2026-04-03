@@ -12,9 +12,9 @@ interface AuthContextType {
   logout: () => void;
 }
 
-// Dummy admin credentials — replace with backend auth when connected
-const ADMIN_EMAIL = 'admin@tivo.ai';
-const ADMIN_PASSWORD = 'tivo2025';
+// Admin credentials from Vercel environment variables
+const ADMIN_EMAIL = import.meta.env.VITE_ADMIN_EMAIL || '';
+const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || '';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
