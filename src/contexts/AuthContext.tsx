@@ -7,6 +7,7 @@ interface User {
 
 interface AuthContextType {
   user: User | null;
+  isAdmin: boolean;
   isLoading: boolean;
   login: (email: string, password: string, remember?: boolean) => Promise<boolean>;
   logout: () => void;
