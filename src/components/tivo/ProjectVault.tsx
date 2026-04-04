@@ -3,7 +3,7 @@ import { Trash2, FolderOpen, MessageCircle, Clock, Loader2, Hammer, MessageSquar
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { motion, AnimatePresence } from 'framer-motion';
-import { chatPersistence, type ChatSession } from '@/services/chatPersistenceService';
+import { hybridChatPersistence } from '@/services/hybridStorageService';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -16,7 +16,7 @@ interface ProjectVaultProps {
 
 export function ProjectVault({ onOpenSession }: ProjectVaultProps) {
   const { t } = useLanguage();
-  const [sessions, setSessions] = useState<ChatSession[]>([]);
+  const [sessions, setSessions] = useState<Array<{ id: string; user_id: string; mode: string; title: string; created_at: string; updated_at: string }>>([]);
   const [loading, setLoading] = useState(true);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [messageCounts, setMessageCounts] = useState<Record<string, number>>({});
@@ -30,8 +30,8 @@ export function ProjectVault({ onOpenSession }: ProjectVaultProps) {
     try {
       // Load both build and plan sessions
       const [buildSessions, planSessions] = await Promise.all([
-        chatPersistence.getSessions('build'),
-        chatPersistence.getSessions('plan'),
+        hybridChatPersistence.getSessions('build'),
+        hybridChatPersistence.getSessions('plan'),
       ]);
       const allSessions = [...buildSessions, ...planSessions]
         .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
@@ -39,7 +39,7 @@ export function ProjectVault({ onOpenSession }: ProjectVaultProps) {
 
       const counts: Record<string, number> = {};
       for (const s of allSessions) {
-        const msgs = await chatPersistence.getMessages(s.id);
+        const msgs = await hybridChatPersistence.getMessages(s.id);
         counts[s.id] = msgs.length;
       }
       setMessageCounts(counts);
@@ -52,7 +52,7 @@ export function ProjectVault({ onOpenSession }: ProjectVaultProps) {
 
   async function handleDelete() {
     if (!deleteId) return;
-    await chatPersistence.deleteSession(deleteId);
+    await hybridChatPersistence.deleteSession(deleteId);
     setSessions(prev => prev.filter(s => s.id !== deleteId));
     setDeleteId(null);
   }

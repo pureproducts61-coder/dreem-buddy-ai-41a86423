@@ -73,12 +73,103 @@ export type Database = {
         }
         Relationships: []
       }
+      credit_usage: {
+        Row: {
+          action: string
+          amount: number
+          created_at: string
+          description: string | null
+          id: string
+          user_id: string
+        }
+        Insert: {
+          action: string
+          amount: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          user_id: string
+        }
+        Update: {
+          action?: string
+          amount?: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_profiles: {
+        Row: {
+          created_at: string
+          credits: number
+          display_name: string | null
+          email: string | null
+          github_token: string | null
+          id: string
+          last_active: string | null
+          role: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          credits?: number
+          display_name?: string | null
+          email?: string | null
+          github_token?: string | null
+          id?: string
+          last_active?: string | null
+          role?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          credits?: number
+          display_name?: string | null
+          email?: string | null
+          github_token?: string | null
+          id?: string
+          last_active?: string | null
+          role?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      admin_list_profiles: {
+        Args: never
+        Returns: {
+          created_at: string
+          credits: number
+          display_name: string | null
+          email: string | null
+          github_token: string | null
+          id: string
+          last_active: string | null
+          role: string
+          updated_at: string
+          user_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "user_profiles"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      admin_update_credits: {
+        Args: { new_credits: number; target_user_id: string }
+        Returns: undefined
+      }
+      ensure_user_profile: { Args: never; Returns: undefined }
     }
     Enums: {
       [_ in never]: never

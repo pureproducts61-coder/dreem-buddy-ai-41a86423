@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, Users, CreditCard, Key, Bot, Server, Search, Globe, Rocket, Github,
+  ArrowLeft, Users, CreditCard, Key, Bot, Server, Search, Globe, Rocket,
   CheckCircle2, XCircle, Eye, EyeOff, Save, Shield, Brain, Settings2,
+  RefreshCw, Minus, Plus, UserCheck, UserX,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,9 +14,12 @@ import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { ThemeLanguageToggle } from '@/components/ThemeLanguageToggle';
+import { supabase } from '@/integrations/supabase/client';
+import { isDbConnected } from '@/services/hybridStorageService';
 
 const STORAGE_KEY = 'dreem-settings';
 
@@ -44,10 +48,22 @@ const defaultAdminSettings: AdminSettings = {
   autoSave: true, syncEnabled: false, defaultUserCredits: 50,
 };
 
+interface UserProfile {
+  id: string;
+  user_id: string;
+  email: string | null;
+  display_name: string | null;
+  role: string;
+  credits: number;
+  github_token: string | null;
+  last_active: string | null;
+  created_at: string;
+}
+
 const AdminPanel = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { user, isAdmin } = useAuth();
+  const { isAdmin } = useAuth();
 
   const [settings, setSettings] = useState<AdminSettings>(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
@@ -64,10 +80,46 @@ const AdminPanel = () => {
 
   const [showKeys, setShowKeys] = useState<Record<string, boolean>>({});
   const [hasChanges, setHasChanges] = useState(false);
+  const [users, setUsers] = useState<UserProfile[]>([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [dbAvailable, setDbAvailable] = useState(false);
 
   useEffect(() => {
     if (!isAdmin) navigate('/');
   }, [isAdmin, navigate]);
+
+  useEffect(() => {
+    setDbAvailable(isDbConnected());
+    if (isDbConnected()) loadUsers();
+  }, []);
+
+  const loadUsers = async () => {
+    setUsersLoading(true);
+    try {
+      const { data, error } = await supabase.rpc('admin_list_profiles');
+      if (error) throw error;
+      setUsers((data || []) as unknown as UserProfile[]);
+    } catch (e) {
+      console.error('Failed to load users:', e);
+      setUsers([]);
+    } finally {
+      setUsersLoading(false);
+    }
+  };
+
+  const updateUserCredits = async (userId: string, newCredits: number) => {
+    try {
+      const { error } = await supabase.rpc('admin_update_credits', {
+        target_user_id: userId,
+        new_credits: newCredits,
+      });
+      if (error) throw error;
+      setUsers(prev => prev.map(u => u.user_id === userId ? { ...u, credits: newCredits } : u));
+      toast({ title: 'Credits updated' });
+    } catch (e) {
+      toast({ title: 'Error', description: String(e), variant: 'destructive' });
+    }
+  };
 
   const update = <K extends keyof AdminSettings>(key: K, value: AdminSettings[K]) => {
     setSettings((prev) => ({ ...prev, [key]: value }));
@@ -110,6 +162,15 @@ const AdminPanel = () => {
         </div>
       </div>
     );
+  };
+
+  const formatDate = (d: string | null) => {
+    if (!d) return '—';
+    const diff = Date.now() - new Date(d).getTime();
+    if (diff < 60000) return 'Just now';
+    if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+    if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
+    return `${Math.floor(diff / 86400000)}d ago`;
   };
 
   if (!isAdmin) return null;
@@ -173,17 +234,103 @@ const AdminPanel = () => {
           <TabsContent value="users" className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2"><Users className="h-5 w-5" />User Management</CardTitle>
-                <CardDescription>Manage registered users and their access</CardDescription>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2"><Users className="h-5 w-5" />User Management</CardTitle>
+                    <CardDescription>
+                      {dbAvailable ? `${users.length} registered user(s)` : 'Database not connected'}
+                    </CardDescription>
+                  </div>
+                  {dbAvailable && (
+                    <Button variant="outline" size="sm" onClick={loadUsers} disabled={usersLoading}>
+                      <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${usersLoading ? 'animate-spin' : ''}`} />
+                      Refresh
+                    </Button>
+                  )}
+                </div>
               </CardHeader>
               <CardContent>
-                <div className="rounded-lg border border-dashed border-border/50 p-8 text-center">
-                  <Users className="h-10 w-10 mx-auto text-muted-foreground/40 mb-3" />
-                  <p className="text-sm text-muted-foreground mb-1">No database connected</p>
-                  <p className="text-xs text-muted-foreground/60">
-                    Configure database credentials in the System tab to enable user management
-                  </p>
-                </div>
+                {!dbAvailable ? (
+                  <div className="rounded-lg border border-dashed border-border/50 p-8 text-center">
+                    <Users className="h-10 w-10 mx-auto text-muted-foreground/40 mb-3" />
+                    <p className="text-sm text-muted-foreground mb-1">No database connected</p>
+                    <p className="text-xs text-muted-foreground/60">
+                      Configure Supabase in the System tab to enable user management
+                    </p>
+                  </div>
+                ) : usersLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <RefreshCw className="h-5 w-5 animate-spin text-muted-foreground" />
+                  </div>
+                ) : users.length === 0 ? (
+                  <div className="rounded-lg border border-dashed border-border/50 p-8 text-center">
+                    <UserX className="h-10 w-10 mx-auto text-muted-foreground/40 mb-3" />
+                    <p className="text-sm text-muted-foreground">No users registered yet</p>
+                  </div>
+                ) : (
+                  <div className="rounded-md border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Email</TableHead>
+                          <TableHead>Role</TableHead>
+                          <TableHead>Credits</TableHead>
+                          <TableHead>GitHub</TableHead>
+                          <TableHead>Last Active</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {users.map((u) => (
+                          <TableRow key={u.id}>
+                            <TableCell className="font-mono text-xs">{u.email || '—'}</TableCell>
+                            <TableCell>
+                              <Badge variant={u.role === 'admin' ? 'default' : 'secondary'} className="text-[10px]">
+                                {u.role}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-1">
+                                <Button variant="ghost" size="icon" className="h-6 w-6"
+                                  onClick={() => updateUserCredits(u.user_id, Math.max(0, u.credits - 10))}>
+                                  <Minus className="h-3 w-3" />
+                                </Button>
+                                <span className="font-mono text-sm w-10 text-center">{u.credits}</span>
+                                <Button variant="ghost" size="icon" className="h-6 w-6"
+                                  onClick={() => updateUserCredits(u.user_id, u.credits + 10)}>
+                                  <Plus className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              {u.github_token ? (
+                                <UserCheck className="h-4 w-4 text-primary" />
+                              ) : (
+                                <XCircle className="h-4 w-4 text-muted-foreground/40" />
+                              )}
+                            </TableCell>
+                            <TableCell className="text-xs text-muted-foreground">{formatDate(u.last_active)}</TableCell>
+                            <TableCell className="text-right">
+                              <Input
+                                type="number"
+                                min={0}
+                                className="w-20 h-7 text-xs inline-block"
+                                placeholder="Set"
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    const val = parseInt((e.target as HTMLInputElement).value, 10);
+                                    if (!isNaN(val)) updateUserCredits(u.user_id, val);
+                                    (e.target as HTMLInputElement).value = '';
+                                  }
+                                }}
+                              />
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -244,8 +391,13 @@ const AdminPanel = () => {
             </Card>
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2"><Server className="h-5 w-5" />Database (Supabase)</CardTitle>
-                <CardDescription>Connect your own database for persistent storage</CardDescription>
+                <CardTitle className="flex items-center gap-2"><Server className="h-5 w-5" />Database</CardTitle>
+                <CardDescription>
+                  {dbAvailable
+                    ? <span className="text-primary">✅ Connected</span>
+                    : <span>Not connected — data stored locally</span>
+                  }
+                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-5">
                 {apiField('supabaseUrl', 'Supabase URL', 'https://xxx.supabase.co', <Globe className="h-3.5 w-3.5" />)}

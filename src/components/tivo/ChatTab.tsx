@@ -8,7 +8,7 @@ import { ControlPanel } from '@/components/tivo/ControlPanel';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { streamChat, hasAnyAIConfig, type ToolEvent } from '@/services/aiChatService';
-import { chatPersistence } from '@/services/chatPersistenceService';
+import { hybridChatPersistence } from '@/services/hybridStorageService';
 import { useToast } from '@/hooks/use-toast';
 
 export interface Message {
@@ -62,12 +62,12 @@ export function ChatTab({ initialSessionId, initialMode }: ChatTabProps) {
             : undefined;
 
           const session = sessionId
-            ? { id: sessionId } // Use provided session
-            : await chatPersistence.getOrCreateSession(m);
+            ? { id: sessionId }
+            : await hybridChatPersistence.getOrCreateSession(m);
 
           if (session) {
             newSessionIds[m] = session.id;
-            const dbMessages = await chatPersistence.getMessages(session.id);
+            const dbMessages = await hybridChatPersistence.getMessages(session.id);
             newMessages[m] = dbMessages.map(msg => ({
               id: msg.id,
               role: msg.role as 'user' | 'assistant',
@@ -93,7 +93,7 @@ export function ChatTab({ initialSessionId, initialMode }: ChatTabProps) {
 
     let currentSessionId = sessionIds[mode];
     if (!currentSessionId) {
-      const session = await chatPersistence.getOrCreateSession(mode);
+      const session = await hybridChatPersistence.getOrCreateSession(mode);
       if (session) {
         currentSessionId = session.id;
         setSessionIds(prev => ({ ...prev, [mode]: session.id }));
@@ -101,7 +101,7 @@ export function ChatTab({ initialSessionId, initialMode }: ChatTabProps) {
     }
 
     const savedUserMsg = currentSessionId
-      ? await chatPersistence.saveMessage(currentSessionId, 'user', messageContent)
+      ? await hybridChatPersistence.saveMessage(currentSessionId, 'user', messageContent)
       : null;
 
     const userMsg: Message = {
@@ -167,7 +167,7 @@ export function ChatTab({ initialSessionId, initialMode }: ChatTabProps) {
       },
       onDone: async () => {
         if (currentSessionId && assistantContent) {
-          const saved = await chatPersistence.saveMessage(currentSessionId, 'assistant', assistantContent);
+          const saved = await hybridChatPersistence.saveMessage(currentSessionId, 'assistant', assistantContent);
           if (saved) {
             setMessages(prev => ({
               ...prev,

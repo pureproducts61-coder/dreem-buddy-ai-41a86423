@@ -1,4 +1,5 @@
 // AI Chat Service - streams from edge function with tool calling support
+import { getConfiguredCredentials } from './hybridStorageService';
 const STORAGE_KEY = 'dreem-settings';
 
 interface ChatMessage {
@@ -65,6 +66,10 @@ export async function streamChat({
   const vercelToken = settings.vercelToken || '';
   const tavilyApiKey = settings.tavilyApiKey || '';
 
+  // Build credentials context for AI
+  const credentials = getConfiguredCredentials();
+  const isAdmin = !!import.meta.env.VITE_ADMIN_EMAIL;
+
   if (!CHAT_URL || CHAT_URL.includes('undefined')) {
     await mockStreamResponse(messages, onDelta, onDone);
     return;
@@ -85,6 +90,8 @@ export async function streamChat({
         githubToken: githubToken || undefined,
         vercelToken: vercelToken || undefined,
         tavilyApiKey: tavilyApiKey || undefined,
+        credentials,
+        isAdmin,
       }),
     });
 
