@@ -39,7 +39,7 @@ export function ProjectVault({ onOpenSession }: ProjectVaultProps) {
 
       const counts: Record<string, number> = {};
       for (const s of allSessions) {
-        const msgs = await chatPersistence.getMessages(s.id);
+        const msgs = await hybridChatPersistence.getMessages(s.id);
         counts[s.id] = msgs.length;
       }
       setMessageCounts(counts);
