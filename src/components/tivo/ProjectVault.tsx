@@ -52,7 +52,7 @@ export function ProjectVault({ onOpenSession }: ProjectVaultProps) {
 
   async function handleDelete() {
     if (!deleteId) return;
-    await chatPersistence.deleteSession(deleteId);
+    await hybridChatPersistence.deleteSession(deleteId);
     setSessions(prev => prev.filter(s => s.id !== deleteId));
     setDeleteId(null);
   }
