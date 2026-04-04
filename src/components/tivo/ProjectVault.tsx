@@ -3,7 +3,7 @@ import { Trash2, FolderOpen, MessageCircle, Clock, Loader2, Hammer, MessageSquar
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { motion, AnimatePresence } from 'framer-motion';
-import { chatPersistence, type ChatSession } from '@/services/chatPersistenceService';
+import { hybridChatPersistence } from '@/services/hybridStorageService';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
