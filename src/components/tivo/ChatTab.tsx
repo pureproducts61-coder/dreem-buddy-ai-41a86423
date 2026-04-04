@@ -167,7 +167,7 @@ export function ChatTab({ initialSessionId, initialMode }: ChatTabProps) {
       },
       onDone: async () => {
         if (currentSessionId && assistantContent) {
-          const saved = await chatPersistence.saveMessage(currentSessionId, 'assistant', assistantContent);
+          const saved = await hybridChatPersistence.saveMessage(currentSessionId, 'assistant', assistantContent);
           if (saved) {
             setMessages(prev => ({
               ...prev,
