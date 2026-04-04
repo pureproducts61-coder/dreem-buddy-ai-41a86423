@@ -16,7 +16,7 @@ interface ProjectVaultProps {
 
 export function ProjectVault({ onOpenSession }: ProjectVaultProps) {
   const { t } = useLanguage();
-  const [sessions, setSessions] = useState<ChatSession[]>([]);
+  const [sessions, setSessions] = useState<Array<{ id: string; user_id: string; mode: string; title: string; created_at: string; updated_at: string }>>([]);
   const [loading, setLoading] = useState(true);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [messageCounts, setMessageCounts] = useState<Record<string, number>>({});
