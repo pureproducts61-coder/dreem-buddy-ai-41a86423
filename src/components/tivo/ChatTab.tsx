@@ -93,7 +93,7 @@ export function ChatTab({ initialSessionId, initialMode }: ChatTabProps) {
 
     let currentSessionId = sessionIds[mode];
     if (!currentSessionId) {
-      const session = await chatPersistence.getOrCreateSession(mode);
+      const session = await hybridChatPersistence.getOrCreateSession(mode);
       if (session) {
         currentSessionId = session.id;
         setSessionIds(prev => ({ ...prev, [mode]: session.id }));
