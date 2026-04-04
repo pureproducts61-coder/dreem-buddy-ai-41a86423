@@ -30,8 +30,8 @@ export function ProjectVault({ onOpenSession }: ProjectVaultProps) {
     try {
       // Load both build and plan sessions
       const [buildSessions, planSessions] = await Promise.all([
-        chatPersistence.getSessions('build'),
-        chatPersistence.getSessions('plan'),
+        hybridChatPersistence.getSessions('build'),
+        hybridChatPersistence.getSessions('plan'),
       ]);
       const allSessions = [...buildSessions, ...planSessions]
         .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
