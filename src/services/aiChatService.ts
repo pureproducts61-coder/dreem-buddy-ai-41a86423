@@ -1,4 +1,5 @@
 // AI Chat Service - streams from edge function with tool calling support
+import { getConfiguredCredentials } from './hybridStorageService';
 const STORAGE_KEY = 'dreem-settings';
 
 interface ChatMessage {
