@@ -66,6 +66,10 @@ export async function streamChat({
   const vercelToken = settings.vercelToken || '';
   const tavilyApiKey = settings.tavilyApiKey || '';
 
+  // Build credentials context for AI
+  const credentials = getConfiguredCredentials();
+  const isAdmin = !!import.meta.env.VITE_ADMIN_EMAIL;
+
   if (!CHAT_URL || CHAT_URL.includes('undefined')) {
     await mockStreamResponse(messages, onDelta, onDone);
     return;
@@ -86,6 +90,8 @@ export async function streamChat({
         githubToken: githubToken || undefined,
         vercelToken: vercelToken || undefined,
         tavilyApiKey: tavilyApiKey || undefined,
+        credentials,
+        isAdmin,
       }),
     });
 
