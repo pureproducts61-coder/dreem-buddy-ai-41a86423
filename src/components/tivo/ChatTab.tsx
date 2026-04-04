@@ -62,12 +62,12 @@ export function ChatTab({ initialSessionId, initialMode }: ChatTabProps) {
             : undefined;
 
           const session = sessionId
-            ? { id: sessionId } // Use provided session
-            : await chatPersistence.getOrCreateSession(m);
+            ? { id: sessionId }
+            : await hybridChatPersistence.getOrCreateSession(m);
 
           if (session) {
             newSessionIds[m] = session.id;
-            const dbMessages = await chatPersistence.getMessages(session.id);
+            const dbMessages = await hybridChatPersistence.getMessages(session.id);
             newMessages[m] = dbMessages.map(msg => ({
               id: msg.id,
               role: msg.role as 'user' | 'assistant',
