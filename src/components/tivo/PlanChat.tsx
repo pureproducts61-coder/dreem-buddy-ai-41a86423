@@ -30,9 +30,9 @@ function CopyButton({ content }: { content: string }) {
   return (
     <button
       onClick={handleCopy}
-      className="h-6 w-6 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors opacity-0 group-hover:opacity-100"
+      className="h-7 w-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors opacity-0 group-hover:opacity-100"
     >
-      {copied ? <Check className="h-3 w-3 text-primary" /> : <Copy className="h-3 w-3" />}
+      {copied ? <Check className="h-3.5 w-3.5 text-primary" /> : <Copy className="h-3.5 w-3.5" />}
     </button>
   );
 }
@@ -55,7 +55,7 @@ export function PlanChat({ messages, isLoading }: PlanChatProps) {
   }, [messages, isLoading]);
 
   return (
-    <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-5 py-6 space-y-5">
+    <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-4 sm:px-6 py-6 space-y-6">
       <AnimatePresence mode="popLayout">
         {messages.map((msg, idx) => (
           <motion.div
@@ -66,14 +66,14 @@ export function PlanChat({ messages, isLoading }: PlanChatProps) {
             className={cn('group', msg.role === 'user' ? 'flex justify-end' : '')}
           >
             {msg.role === 'user' ? (
-              <div className="max-w-[85%] rounded-2xl rounded-br-md bg-primary text-primary-foreground px-4 py-3 text-sm">
+              <div className="max-w-[85%] rounded-2xl rounded-br-md bg-primary text-primary-foreground px-4 py-3 text-[15px] leading-relaxed">
                 <p className="whitespace-pre-wrap">{msg.content}</p>
               </div>
             ) : (
-              <div className="space-y-1">
-                <div className="flex items-center gap-2 mb-1.5">
-                  <img src={tivoLogo} alt="TIVO" className="w-4 h-4" />
-                  <span className="text-[11px] font-medium text-muted-foreground">TIVO AI</span>
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 mb-2">
+                  <img src={tivoLogo} alt="TIVO" className="w-5 h-5" />
+                  <span className="text-xs font-semibold text-muted-foreground">TIVO AI</span>
                   <CopyButton content={msg.content} />
                 </div>
                 <StreamingMessage
@@ -87,10 +87,10 @@ export function PlanChat({ messages, isLoading }: PlanChatProps) {
       </AnimatePresence>
 
       {isLoading && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center gap-2 py-2">
-          <img src={tivoLogo} alt="TIVO" className="w-4 h-4" />
-          <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
-          <span className="text-xs text-muted-foreground">Thinking...</span>
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center gap-2.5 py-3">
+          <img src={tivoLogo} alt="TIVO" className="w-5 h-5" />
+          <Loader2 className="h-4 w-4 animate-spin text-primary" />
+          <span className="text-sm text-muted-foreground">Thinking...</span>
         </motion.div>
       )}
     </div>

@@ -1,4 +1,4 @@
-// Hybrid Storage: uses Supabase when connected, falls back to localStorage
+// Hybrid Storage: uses Supabase when connected & authenticated, falls back to localStorage
 import { supabase } from '@/integrations/supabase/client';
 
 const STORAGE_KEY = 'dreem-settings';
@@ -11,6 +11,34 @@ function getSettings() {
     return stored ? JSON.parse(stored) : {};
   } catch { return {}; }
 }
+
+// Check if DB is truly usable (user is authenticated)
+let _dbUsable: boolean | null = null;
+let _dbCheckPromise: Promise<boolean> | null = null;
+
+async function checkDbUsable(): Promise<boolean> {
+  if (_dbUsable !== null) return _dbUsable;
+  if (_dbCheckPromise) return _dbCheckPromise;
+
+  _dbCheckPromise = (async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      _dbUsable = !!user;
+      return _dbUsable;
+    } catch {
+      _dbUsable = false;
+      return false;
+    }
+  })();
+
+  return _dbCheckPromise;
+}
+
+// Reset DB check on auth state change
+supabase.auth.onAuthStateChange(() => {
+  _dbUsable = null;
+  _dbCheckPromise = null;
+});
 
 export function isDbConnected(): boolean {
   const settings = getSettings();
@@ -77,7 +105,8 @@ function saveLocalMessages(messages: LocalMessage[]) {
 
 export const hybridChatPersistence = {
   async getOrCreateSession(mode: string): Promise<LocalSession | null> {
-    if (isDbConnected()) {
+    const dbOk = await checkDbUsable();
+    if (dbOk) {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return this._localGetOrCreateSession(mode, 'local-user');
@@ -130,7 +159,8 @@ export const hybridChatPersistence = {
   },
 
   async getMessages(sessionId: string): Promise<LocalMessage[]> {
-    if (isDbConnected()) {
+    const dbOk = await checkDbUsable();
+    if (dbOk) {
       try {
         const { data, error } = await supabase
           .from('chat_messages')
@@ -147,7 +177,11 @@ export const hybridChatPersistence = {
   },
 
   async saveMessage(sessionId: string, role: string, content: string): Promise<LocalMessage | null> {
-    if (isDbConnected()) {
+    // Always save locally first
+    const localMsg = this._localSaveMessage(sessionId, role, content);
+
+    const dbOk = await checkDbUsable();
+    if (dbOk) {
       try {
         const { data, error } = await supabase
           .from('chat_messages')
@@ -163,10 +197,10 @@ export const hybridChatPersistence = {
 
         return data as unknown as LocalMessage;
       } catch {
-        return this._localSaveMessage(sessionId, role, content);
+        return localMsg;
       }
     }
-    return this._localSaveMessage(sessionId, role, content);
+    return localMsg;
   },
 
   _localSaveMessage(sessionId: string, role: string, content: string): LocalMessage {
@@ -192,7 +226,8 @@ export const hybridChatPersistence = {
   },
 
   async getSessions(mode?: string): Promise<LocalSession[]> {
-    if (isDbConnected()) {
+    const dbOk = await checkDbUsable();
+    if (dbOk) {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return this._localGetSessions(mode);
@@ -220,7 +255,8 @@ export const hybridChatPersistence = {
   },
 
   async deleteSession(sessionId: string): Promise<void> {
-    if (isDbConnected()) {
+    const dbOk = await checkDbUsable();
+    if (dbOk) {
       try {
         await supabase.from('chat_messages').delete().eq('session_id', sessionId);
         await supabase.from('chat_sessions').delete().eq('id', sessionId);
@@ -232,7 +268,8 @@ export const hybridChatPersistence = {
   },
 
   async createNewSession(mode: string, title?: string): Promise<LocalSession | null> {
-    if (isDbConnected()) {
+    const dbOk = await checkDbUsable();
+    if (dbOk) {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return this._localCreateSession(mode, 'local-user', title);
@@ -266,8 +303,24 @@ export const hybridChatPersistence = {
     return session;
   },
 
+  async updateSessionTitle(sessionId: string, title: string): Promise<void> {
+    const dbOk = await checkDbUsable();
+    if (dbOk) {
+      try {
+        await supabase.from('chat_sessions').update({ title }).eq('id', sessionId);
+      } catch { /* fallback */ }
+    }
+    const sessions = getLocalSessions();
+    const idx = sessions.findIndex(s => s.id === sessionId);
+    if (idx !== -1) {
+      sessions[idx].title = title;
+      saveLocalSessions(sessions);
+    }
+  },
+
   async updateMessage(messageId: string, content: string): Promise<void> {
-    if (isDbConnected()) {
+    const dbOk = await checkDbUsable();
+    if (dbOk) {
       try {
         await supabase.from('chat_messages').update({ content }).eq('id', messageId);
       } catch { /* fallback */ }
