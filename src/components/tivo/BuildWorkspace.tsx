@@ -40,8 +40,8 @@ function CopyButton({ content }: { content: string }) {
     setTimeout(() => setCopied(false), 2000);
   };
   return (
-    <button onClick={handleCopy} className="h-6 w-6 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors opacity-0 group-hover:opacity-100">
-      {copied ? <Check className="h-3 w-3 text-primary" /> : <Copy className="h-3 w-3" />}
+    <button onClick={handleCopy} className="h-7 w-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors opacity-0 group-hover:opacity-100">
+      {copied ? <Check className="h-3.5 w-3.5 text-primary" /> : <Copy className="h-3.5 w-3.5" />}
     </button>
   );
 }
@@ -65,7 +65,7 @@ export function BuildWorkspace({ messages, isLoading, onOpenMenu, activeFiles = 
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-5 py-6 space-y-5">
+      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-4 sm:px-6 py-6 space-y-6">
         <AnimatePresence mode="popLayout">
           {messages.map((msg, idx) => {
             const fileNames = msg.toolEvents ? getActiveFileNames(msg.toolEvents) : [];
@@ -80,22 +80,22 @@ export function BuildWorkspace({ messages, isLoading, onOpenMenu, activeFiles = 
                 className={cn('group', msg.role === 'user' ? 'flex justify-end' : '')}
               >
                 {msg.role === 'user' ? (
-                  <div className="max-w-[85%] rounded-2xl rounded-br-md bg-primary text-primary-foreground px-4 py-3 text-sm">
+                  <div className="max-w-[85%] rounded-2xl rounded-br-md bg-primary text-primary-foreground px-4 py-3 text-[15px] leading-relaxed">
                     <p className="whitespace-pre-wrap">{msg.content}</p>
                   </div>
                 ) : (
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2 mb-1.5">
-                      <img src={tivoLogo} alt="TIVO" className="w-4 h-4" />
-                      <span className="text-[11px] font-medium text-muted-foreground">TIVO AI</span>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 mb-2">
+                      <img src={tivoLogo} alt="TIVO" className="w-5 h-5" />
+                      <span className="text-xs font-semibold text-muted-foreground">TIVO AI</span>
                       <CopyButton content={msg.content} />
                     </div>
 
                     {fileNames.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5 mb-2">
+                      <div className="flex flex-wrap gap-1.5 mb-3">
                         {fileNames.map((f, i) => (
-                          <span key={i} className="inline-flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded-md bg-secondary text-muted-foreground">
-                            <FileCode className="h-2.5 w-2.5" />
+                          <span key={i} className="inline-flex items-center gap-1 text-xs font-mono px-2.5 py-1 rounded-lg bg-secondary/60 text-muted-foreground border border-border/20">
+                            <FileCode className="h-3 w-3 text-primary" />
                             {f.split('/').pop()}
                           </span>
                         ))}
@@ -111,16 +111,16 @@ export function BuildWorkspace({ messages, isLoading, onOpenMenu, activeFiles = 
         </AnimatePresence>
 
         {isLoading && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center gap-2 py-2">
-            <img src={tivoLogo} alt="TIVO" className="w-4 h-4" />
-            <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center gap-2.5 py-3">
+            <img src={tivoLogo} alt="TIVO" className="w-5 h-5" />
+            <Loader2 className="h-4 w-4 animate-spin text-primary" />
             {activeFiles.length > 0 ? (
-              <div className="flex items-center gap-1.5">
-                <FileCode className="h-3 w-3 text-muted-foreground" />
-                <span className="text-xs text-muted-foreground font-mono">{activeFiles[activeFiles.length - 1]}</span>
+              <div className="flex items-center gap-2">
+                <FileCode className="h-3.5 w-3.5 text-primary" />
+                <span className="text-sm text-muted-foreground font-mono">{activeFiles[activeFiles.length - 1]}</span>
               </div>
             ) : (
-              <span className="text-xs text-muted-foreground">Working...</span>
+              <span className="text-sm text-muted-foreground">Working...</span>
             )}
           </motion.div>
         )}

@@ -5,6 +5,7 @@ import { BuildWorkspace } from '@/components/tivo/BuildWorkspace';
 import { AutomationWorkspace } from '@/components/tivo/AutomationWorkspace';
 import { PlanChat } from '@/components/tivo/PlanChat';
 import { ControlPanel } from '@/components/tivo/ControlPanel';
+import { SuggestionChips } from '@/components/tivo/SuggestionChips';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { streamChat, hasAnyAIConfig, type ToolEvent } from '@/services/aiChatService';
@@ -22,6 +23,23 @@ export interface Message {
 interface ChatTabProps {
   initialSessionId?: string | null;
   initialMode?: TivoMode | null;
+}
+
+// Extract suggestion chips from AI response
+function extractSuggestions(content: string): string[] {
+  // Match lines like: - **suggestion text** or • suggestion text at the end
+  const suggestions: string[] = [];
+  const lines = content.split('\n');
+  const lastLines = lines.slice(-10);
+  
+  for (const line of lastLines) {
+    const match = line.match(/^[-•]\s*\*{0,2}(.+?)\*{0,2}\s*$/);
+    if (match && match[1].length < 80 && match[1].length > 5) {
+      suggestions.push(match[1].trim());
+    }
+  }
+  
+  return suggestions.slice(0, 4);
 }
 
 export function ChatTab({ initialSessionId, initialMode }: ChatTabProps) {
@@ -42,6 +60,7 @@ export function ChatTab({ initialSessionId, initialMode }: ChatTabProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [sessionsLoaded, setSessionsLoaded] = useState(false);
   const [activeFiles, setActiveFiles] = useState<string[]>([]);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
 
   // Load sessions and messages on mount
   useEffect(() => {
@@ -56,7 +75,6 @@ export function ChatTab({ initialSessionId, initialMode }: ChatTabProps) {
         };
 
         for (const m of modes) {
-          // If we have an initial session ID for build, use it
           const sessionId = m === 'build' && initialSessionId
             ? initialSessionId
             : undefined;
@@ -89,7 +107,28 @@ export function ChatTab({ initialSessionId, initialMode }: ChatTabProps) {
   }, [initialSessionId]);
 
   const handleSendMessage = useCallback(async (content: string, files?: File[]) => {
-    const messageContent = files ? `${content}\n\n📎 ${files.map(f => f.name).join(', ')}` : content;
+    setSuggestions([]);
+    
+    // Read file contents if any
+    let messageContent = content;
+    if (files && files.length > 0) {
+      const fileContents: string[] = [];
+      for (const file of files) {
+        try {
+          if (file.type.startsWith('text/') || file.name.match(/\.(json|md|txt|csv|tsx?|jsx?|html|css|py|yml|yaml|xml|sql|sh|env|toml|cfg|ini)$/i)) {
+            const text = await file.text();
+            fileContents.push(`📄 **${file.name}**:\n\`\`\`\n${text}\n\`\`\``);
+          } else if (file.type.startsWith('image/')) {
+            fileContents.push(`🖼️ **${file.name}** (image file, ${(file.size / 1024).toFixed(1)}KB)`);
+          } else {
+            fileContents.push(`📎 **${file.name}** (${file.type || 'unknown'}, ${(file.size / 1024).toFixed(1)}KB)`);
+          }
+        } catch {
+          fileContents.push(`📎 **${file.name}** (could not read)`);
+        }
+      }
+      messageContent = `${content}\n\n${fileContents.join('\n\n')}`;
+    }
 
     let currentSessionId = sessionIds[mode];
     if (!currentSessionId) {
@@ -98,6 +137,12 @@ export function ChatTab({ initialSessionId, initialMode }: ChatTabProps) {
         currentSessionId = session.id;
         setSessionIds(prev => ({ ...prev, [mode]: session.id }));
       }
+    }
+
+    // Auto-title session from first message
+    if (currentSessionId && messages[mode].length === 0) {
+      const title = content.slice(0, 60) + (content.length > 60 ? '...' : '');
+      await hybridChatPersistence.updateSessionTitle(currentSessionId, title);
     }
 
     const savedUserMsg = currentSessionId
@@ -122,10 +167,10 @@ export function ChatTab({ initialSessionId, initialMode }: ChatTabProps) {
     const aiMessages = currentMsgs.map(m => ({ role: m.role, content: m.content }));
 
     const modeContext = mode === 'build'
-      ? 'You are in BUILD mode. Generate code, components, and project files. Always provide working code.'
+      ? 'You are in BUILD mode. Generate code, components, and project files. Always provide working code. After completing work, suggest 2-3 next steps as bullet points.'
       : mode === 'automation'
       ? 'You are in AUTOMATION mode. Help with CI/CD, testing, deployment automation.'
-      : 'You are in PLAN mode. Help plan projects, discuss architecture, and create roadmaps.';
+      : 'You are in PLAN mode. Help plan projects, discuss architecture, and create roadmaps. Be conversational and detailed. After each response, suggest 2-3 follow-up questions or next steps as bullet points.';
 
     const messagesForAI = [
       { role: 'user' as const, content: `[System: ${modeContext}]` },
@@ -156,7 +201,6 @@ export function ChatTab({ initialSessionId, initialMode }: ChatTabProps) {
       },
       onToolEvent: (event) => {
         toolEvents.push(event);
-        // Track active files for the loading indicator
         if (event.args?.path && typeof event.args.path === 'string') {
           setActiveFiles(prev => [...prev, event.args!.path as string]);
         }
@@ -177,6 +221,9 @@ export function ChatTab({ initialSessionId, initialMode }: ChatTabProps) {
             }));
           }
         }
+        // Extract suggestions from the response
+        const extracted = extractSuggestions(assistantContent);
+        setSuggestions(extracted);
         setIsLoading(false);
         setActiveFiles([]);
       },
@@ -190,6 +237,11 @@ export function ChatTab({ initialSessionId, initialMode }: ChatTabProps) {
       },
     });
   }, [mode, messages, sessionIds, toast]);
+
+  const handleSuggestionSelect = useCallback((suggestion: string) => {
+    setSuggestions([]);
+    handleSendMessage(suggestion);
+  }, [handleSendMessage]);
 
   const currentMessages = messages[mode];
   const isCleanSlate = mode === 'plan' && currentMessages.length === 0 && !isLoading;
@@ -239,6 +291,11 @@ export function ChatTab({ initialSessionId, initialMode }: ChatTabProps) {
           )}
         </AnimatePresence>
       </div>
+
+      {/* Suggestion Chips */}
+      {!isLoading && suggestions.length > 0 && (
+        <SuggestionChips suggestions={suggestions} onSelect={handleSuggestionSelect} />
+      )}
 
       <SmartInputBar
         mode={mode}
