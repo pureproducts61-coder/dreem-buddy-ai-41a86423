@@ -84,6 +84,25 @@ export function ControlPanel({ open, onClose }: ControlPanelProps) {
               })}
             </div>
 
+            {/* Download/Build */}
+            <div className="px-4 pb-2">
+              <motion.button
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.2 }}
+                className="w-full flex items-center gap-3 rounded-xl p-3.5 hover:bg-secondary/80 transition-colors text-left group"
+                onClick={() => { onClose(); setDeliveryOpen(true); }}
+              >
+                <div className="h-9 w-9 rounded-xl bg-secondary flex items-center justify-center text-neon-blue">
+                  <Download className="h-4 w-4" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-medium">ডাউনলোড / বিল্ড</p>
+                  <p className="text-xs text-muted-foreground">ZIP, EXE, APK অপশন</p>
+                </div>
+              </motion.button>
+            </div>
+
             {/* Divider & Settings/Logout */}
             <div className="border-t border-border/30 mx-4" />
             <div className="px-4 py-3 space-y-1">
@@ -105,6 +124,13 @@ export function ControlPanel({ open, onClose }: ControlPanelProps) {
           </motion.div>
         </>
       )}
+
+      <BuildDeliveryDialog
+        open={deliveryOpen}
+        onClose={() => setDeliveryOpen(false)}
+        projectName="tivo-project"
+        files={[]}
+      />
     </AnimatePresence>
   );
 }
