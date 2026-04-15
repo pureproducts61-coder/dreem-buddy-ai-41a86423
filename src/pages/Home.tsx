@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Archive, MessageCircle, Eye } from 'lucide-react';
 import { HeaderMenu } from '@/components/tivo/HeaderMenu';
 import { ChatTab } from '@/components/tivo/ChatTab';

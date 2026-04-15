@@ -225,6 +225,12 @@ export function ChatTab({ initialSessionId, initialMode }: ChatTabProps) {
         // Extract suggestions from the response
         const extracted = extractSuggestions(assistantContent);
         setSuggestions(extracted);
+        
+        // In build mode, try to extract code and send to preview
+        if (mode === 'build' && assistantContent) {
+          extractAndPreviewCode(assistantContent);
+        }
+        
         setIsLoading(false);
         setActiveFiles([]);
       },
