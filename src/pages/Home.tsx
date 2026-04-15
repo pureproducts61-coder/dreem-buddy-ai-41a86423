@@ -25,6 +25,15 @@ const Home = () => {
   const [openSessionId, setOpenSessionId] = useState<string | null>(null);
   const [openSessionMode, setOpenSessionMode] = useState<TivoMode | null>(null);
 
+  // Listen for auto tab switch (e.g. preview bridge after build)
+  useEffect(() => {
+    const handler = (e: CustomEvent) => {
+      if (e.detail?.tab) setActiveTab(e.detail.tab);
+    };
+    window.addEventListener('tivo-switch-tab', handler as EventListener);
+    return () => window.removeEventListener('tivo-switch-tab', handler as EventListener);
+  }, []);
+
   const handleOpenSession = (sessionId: string, mode?: string) => {
     setOpenSessionId(sessionId);
     setOpenSessionMode((mode as TivoMode) || 'build');
