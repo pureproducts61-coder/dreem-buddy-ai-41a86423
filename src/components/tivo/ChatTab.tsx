@@ -11,6 +11,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { streamChat, hasAnyAIConfig, type ToolEvent } from '@/services/aiChatService';
 import { hybridChatPersistence } from '@/services/hybridStorageService';
 import { useToast } from '@/hooks/use-toast';
+import { extractAndPreviewCode } from '@/services/previewBridge';
 
 export interface Message {
   id: string;
