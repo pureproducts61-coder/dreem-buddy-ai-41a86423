@@ -1,5 +1,6 @@
 // AI Chat Service - streams from edge function with tool calling support
 import { getConfiguredCredentials } from './hybridStorageService';
+import { getMemoryContext, addMemoryEntry } from './githubMemoryService';
 const STORAGE_KEY = 'dreem-settings';
 
 interface ChatMessage {
@@ -70,6 +71,18 @@ export async function streamChat({
   const credentials = getConfiguredCredentials();
   const isAdmin = !!import.meta.env.VITE_ADMIN_EMAIL;
 
+  // Inject AI memory context
+  let messagesWithMemory = [...messages];
+  try {
+    const memoryCtx = await getMemoryContext();
+    if (memoryCtx) {
+      messagesWithMemory = [
+        { role: 'user' as const, content: `[System Memory]\n${memoryCtx}` },
+        ...messages,
+      ];
+    }
+  } catch { /* ignore memory errors */ }
+
   if (!CHAT_URL || CHAT_URL.includes('undefined')) {
     await mockStreamResponse(messages, onDelta, onDone);
     return;
@@ -83,7 +96,7 @@ export async function streamChat({
         Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
       },
       body: JSON.stringify({
-        messages,
+        messages: messagesWithMemory,
         provider,
         apiKey: apiKey || undefined,
         model: undefined,
