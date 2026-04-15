@@ -1,10 +1,12 @@
-import { X, Upload, Pencil, GitBranch, History, Settings, LogOut } from 'lucide-react';
+import { useState } from 'react';
+import { X, Upload, Pencil, GitBranch, History, Settings, LogOut, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
+import { BuildDeliveryDialog } from './BuildDeliveryDialog';
 
 interface ControlPanelProps {
   open: boolean;
@@ -22,6 +24,7 @@ export function ControlPanel({ open, onClose }: ControlPanelProps) {
   const { t } = useLanguage();
   const { logout } = useAuth();
   const navigate = useNavigate();
+  const [deliveryOpen, setDeliveryOpen] = useState(false);
 
   return (
     <AnimatePresence>
