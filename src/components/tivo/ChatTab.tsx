@@ -12,6 +12,7 @@ import { streamChat, hasAnyAIConfig, type ToolEvent } from '@/services/aiChatSer
 import { hybridChatPersistence } from '@/services/hybridStorageService';
 import { useToast } from '@/hooks/use-toast';
 import { extractAndPreviewCode } from '@/services/previewBridge';
+import { Plus } from 'lucide-react';
 
 export interface Message {
   id: string;
