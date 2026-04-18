@@ -63,49 +63,43 @@ export function ChatTab({ initialSessionId, initialMode }: ChatTabProps) {
   const [activeFiles, setActiveFiles] = useState<string[]>([]);
   const [suggestions, setSuggestions] = useState<string[]>([]);
 
-  // Load sessions and messages on mount
+  // Only load messages when user explicitly opens a session from Vault
   useEffect(() => {
-    async function loadSessions() {
+    async function loadOpenedSession() {
+      if (!initialSessionId) {
+        // Fresh start — no auto-load
+        setSessionsLoaded(true);
+        return;
+      }
       try {
-        const modes: TivoMode[] = ['build', 'automation', 'plan'];
-        const newMessages: Record<TivoMode, Message[]> = { build: [], automation: [], plan: [] };
-        const newSessionIds: Record<TivoMode, string | null> = {
-          build: initialSessionId || null,
-          automation: null,
-          plan: null,
-        };
-
-        for (const m of modes) {
-          const sessionId = m === 'build' && initialSessionId
-            ? initialSessionId
-            : undefined;
-
-          const session = sessionId
-            ? { id: sessionId }
-            : await hybridChatPersistence.getOrCreateSession(m);
-
-          if (session) {
-            newSessionIds[m] = session.id;
-            const dbMessages = await hybridChatPersistence.getMessages(session.id);
-            newMessages[m] = dbMessages.map(msg => ({
-              id: msg.id,
-              role: msg.role as 'user' | 'assistant',
-              content: msg.content,
-              timestamp: new Date(msg.created_at),
-            }));
-          }
-        }
-
-        setSessionIds(newSessionIds);
-        setMessages(newMessages);
+        const targetMode = (initialMode || 'build') as TivoMode;
+        const dbMessages = await hybridChatPersistence.getMessages(initialSessionId);
+        setSessionIds(prev => ({ ...prev, [targetMode]: initialSessionId }));
+        setMessages(prev => ({
+          ...prev,
+          [targetMode]: dbMessages.map(msg => ({
+            id: msg.id,
+            role: msg.role as 'user' | 'assistant',
+            content: msg.content,
+            timestamp: new Date(msg.created_at),
+          })),
+        }));
       } catch (e) {
-        console.error('Failed to load chat sessions:', e);
+        console.error('Failed to load session:', e);
       } finally {
         setSessionsLoaded(true);
       }
     }
-    loadSessions();
-  }, [initialSessionId]);
+    loadOpenedSession();
+  }, [initialSessionId, initialMode]);
+
+  // Start a fresh new chat in the current mode
+  const handleNewChat = useCallback(async () => {
+    setSuggestions([]);
+    setMessages(prev => ({ ...prev, [mode]: [] }));
+    setSessionIds(prev => ({ ...prev, [mode]: null }));
+    setActiveFiles([]);
+  }, [mode]);
 
   const handleSendMessage = useCallback(async (content: string, files?: File[]) => {
     setSuggestions([]);
