@@ -76,6 +76,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   // Legacy email/password login — now uses Supabase auth
   const login = async (email: string, password: string, _remember = false) => {
+    // First attempt: try to bootstrap as admin (idempotent — only succeeds if creds match the
+    // ADMIN_EMAIL/ADMIN_PASSWORD secrets). Failures here are silently ignored so regular users
+    // can still sign in normally with their own accounts.
+    try {
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-bootstrap`;
+      await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim(), password }),
+      });
+    } catch {
+      // ignore — fall through to normal sign-in
+    }
+
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error || !data.user) return false;
     // Role sync will happen automatically via onAuthStateChange
