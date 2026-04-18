@@ -127,7 +127,8 @@ export function ChatTab({ initialSessionId, initialMode }: ChatTabProps) {
 
     let currentSessionId = sessionIds[mode];
     if (!currentSessionId) {
-      const session = await hybridChatPersistence.getOrCreateSession(mode);
+      // Create a brand new session for this conversation
+      const session = await hybridChatPersistence.createNewSession(mode);
       if (session) {
         currentSessionId = session.id;
         setSessionIds(prev => ({ ...prev, [mode]: session.id }));
