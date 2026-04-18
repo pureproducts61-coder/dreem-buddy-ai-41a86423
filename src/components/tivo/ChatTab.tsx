@@ -252,6 +252,17 @@ export function ChatTab({ initialSessionId, initialMode }: ChatTabProps) {
   return (
     <div className="flex-1 flex flex-col min-h-0">
       <div className="flex-1 flex flex-col min-h-0 relative">
+        {/* Floating New Chat button — appears when conversation has messages */}
+        {currentMessages.length > 0 && (
+          <button
+            onClick={handleNewChat}
+            className="absolute top-3 right-3 z-20 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-card/90 backdrop-blur-md border border-border/40 text-xs font-medium text-foreground hover:bg-secondary transition-colors shadow-md"
+            title="Start new chat"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            New
+          </button>
+        )}
         <AnimatePresence mode="wait">
           {mode === 'build' && (
             <motion.div key="build" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.2 }} className="flex-1 flex flex-col min-h-0">
