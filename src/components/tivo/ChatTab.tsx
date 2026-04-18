@@ -12,6 +12,7 @@ import { streamChat, hasAnyAIConfig, type ToolEvent } from '@/services/aiChatSer
 import { hybridChatPersistence } from '@/services/hybridStorageService';
 import { useToast } from '@/hooks/use-toast';
 import { extractAndPreviewCode } from '@/services/previewBridge';
+import { Plus } from 'lucide-react';
 
 export interface Message {
   id: string;
@@ -63,49 +64,43 @@ export function ChatTab({ initialSessionId, initialMode }: ChatTabProps) {
   const [activeFiles, setActiveFiles] = useState<string[]>([]);
   const [suggestions, setSuggestions] = useState<string[]>([]);
 
-  // Load sessions and messages on mount
+  // Only load messages when user explicitly opens a session from Vault
   useEffect(() => {
-    async function loadSessions() {
+    async function loadOpenedSession() {
+      if (!initialSessionId) {
+        // Fresh start — no auto-load
+        setSessionsLoaded(true);
+        return;
+      }
       try {
-        const modes: TivoMode[] = ['build', 'automation', 'plan'];
-        const newMessages: Record<TivoMode, Message[]> = { build: [], automation: [], plan: [] };
-        const newSessionIds: Record<TivoMode, string | null> = {
-          build: initialSessionId || null,
-          automation: null,
-          plan: null,
-        };
-
-        for (const m of modes) {
-          const sessionId = m === 'build' && initialSessionId
-            ? initialSessionId
-            : undefined;
-
-          const session = sessionId
-            ? { id: sessionId }
-            : await hybridChatPersistence.getOrCreateSession(m);
-
-          if (session) {
-            newSessionIds[m] = session.id;
-            const dbMessages = await hybridChatPersistence.getMessages(session.id);
-            newMessages[m] = dbMessages.map(msg => ({
-              id: msg.id,
-              role: msg.role as 'user' | 'assistant',
-              content: msg.content,
-              timestamp: new Date(msg.created_at),
-            }));
-          }
-        }
-
-        setSessionIds(newSessionIds);
-        setMessages(newMessages);
+        const targetMode = (initialMode || 'build') as TivoMode;
+        const dbMessages = await hybridChatPersistence.getMessages(initialSessionId);
+        setSessionIds(prev => ({ ...prev, [targetMode]: initialSessionId }));
+        setMessages(prev => ({
+          ...prev,
+          [targetMode]: dbMessages.map(msg => ({
+            id: msg.id,
+            role: msg.role as 'user' | 'assistant',
+            content: msg.content,
+            timestamp: new Date(msg.created_at),
+          })),
+        }));
       } catch (e) {
-        console.error('Failed to load chat sessions:', e);
+        console.error('Failed to load session:', e);
       } finally {
         setSessionsLoaded(true);
       }
     }
-    loadSessions();
-  }, [initialSessionId]);
+    loadOpenedSession();
+  }, [initialSessionId, initialMode]);
+
+  // Start a fresh new chat in the current mode
+  const handleNewChat = useCallback(async () => {
+    setSuggestions([]);
+    setMessages(prev => ({ ...prev, [mode]: [] }));
+    setSessionIds(prev => ({ ...prev, [mode]: null }));
+    setActiveFiles([]);
+  }, [mode]);
 
   const handleSendMessage = useCallback(async (content: string, files?: File[]) => {
     setSuggestions([]);
@@ -133,7 +128,8 @@ export function ChatTab({ initialSessionId, initialMode }: ChatTabProps) {
 
     let currentSessionId = sessionIds[mode];
     if (!currentSessionId) {
-      const session = await hybridChatPersistence.getOrCreateSession(mode);
+      // Create a brand new session for this conversation
+      const session = await hybridChatPersistence.createNewSession(mode);
       if (session) {
         currentSessionId = session.id;
         setSessionIds(prev => ({ ...prev, [mode]: session.id }));
@@ -256,6 +252,17 @@ export function ChatTab({ initialSessionId, initialMode }: ChatTabProps) {
   return (
     <div className="flex-1 flex flex-col min-h-0">
       <div className="flex-1 flex flex-col min-h-0 relative">
+        {/* Floating New Chat button — appears when conversation has messages */}
+        {currentMessages.length > 0 && (
+          <button
+            onClick={handleNewChat}
+            className="absolute top-3 right-3 z-20 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-card/90 backdrop-blur-md border border-border/40 text-xs font-medium text-foreground hover:bg-secondary transition-colors shadow-md"
+            title="Start new chat"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            New
+          </button>
+        )}
         <AnimatePresence mode="wait">
           {mode === 'build' && (
             <motion.div key="build" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.2 }} className="flex-1 flex flex-col min-h-0">

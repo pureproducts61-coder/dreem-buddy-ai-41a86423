@@ -170,6 +170,11 @@ export type Database = {
         Returns: undefined
       }
       ensure_user_profile: { Args: never; Returns: undefined }
+      get_my_role: { Args: never; Returns: string }
+      promote_admin_by_email: {
+        Args: { target_email: string }
+        Returns: string
+      }
     }
     Enums: {
       [_ in never]: never
