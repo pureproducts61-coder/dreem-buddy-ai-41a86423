@@ -197,13 +197,19 @@ const AdminPanel = () => {
       </header>
 
       <main className="mx-auto max-w-5xl p-4 md:p-8">
-        <Tabs defaultValue="api-keys" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="api-keys" className="gap-1.5"><Key className="h-3.5 w-3.5" />API Keys</TabsTrigger>
-            <TabsTrigger value="users" className="gap-1.5"><Users className="h-3.5 w-3.5" />Users</TabsTrigger>
-            <TabsTrigger value="credits" className="gap-1.5"><CreditCard className="h-3.5 w-3.5" />Credits</TabsTrigger>
-            <TabsTrigger value="system" className="gap-1.5"><Settings2 className="h-3.5 w-3.5" />System</TabsTrigger>
+        <Tabs defaultValue="status" className="space-y-6">
+          <TabsList className="grid w-full grid-cols-5 h-auto">
+            <TabsTrigger value="status" className="gap-1.5 flex-col sm:flex-row py-2"><Activity className="h-3.5 w-3.5" /><span className="text-[11px] sm:text-xs">Status</span></TabsTrigger>
+            <TabsTrigger value="api-keys" className="gap-1.5 flex-col sm:flex-row py-2"><Key className="h-3.5 w-3.5" /><span className="text-[11px] sm:text-xs">Keys</span></TabsTrigger>
+            <TabsTrigger value="users" className="gap-1.5 flex-col sm:flex-row py-2"><Users className="h-3.5 w-3.5" /><span className="text-[11px] sm:text-xs">Users</span></TabsTrigger>
+            <TabsTrigger value="credits" className="gap-1.5 flex-col sm:flex-row py-2"><CreditCard className="h-3.5 w-3.5" /><span className="text-[11px] sm:text-xs">Credits</span></TabsTrigger>
+            <TabsTrigger value="system" className="gap-1.5 flex-col sm:flex-row py-2"><Settings2 className="h-3.5 w-3.5" /><span className="text-[11px] sm:text-xs">System</span></TabsTrigger>
           </TabsList>
+
+          {/* System Status Tab — secrets + capabilities */}
+          <TabsContent value="status" className="space-y-6">
+            <SystemStatusPanel settings={settings} dbAvailable={dbAvailable} />
+          </TabsContent>
 
           {/* API Keys Tab */}
           <TabsContent value="api-keys" className="space-y-6">
