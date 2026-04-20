@@ -85,11 +85,18 @@ export function ProjectVault({ onOpenSession }: ProjectVaultProps) {
     plan: { icon: MessageSquare, label: 'Plan', color: 'bg-emerald-500/10 text-emerald-500' },
   };
 
+  function notImplemented(action: string) {
+    toast({
+      title: `${action} — শীঘ্রই আসছে`,
+      description: 'এই ফিচারটি Phase 2-এ সক্রিয় হবে',
+    });
+  }
+
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-y-auto">
       <div className="px-5 pt-6 pb-4">
         <h2 className="text-xl font-display font-bold tracking-tight">{t('vault.title')}</h2>
-        <p className="text-xs text-muted-foreground mt-1">Build ও Plan মোডের প্রজেক্ট ও চ্যাট</p>
+        <p className="text-xs text-muted-foreground mt-1">প্রতিটি প্রজেক্টের ⋮ মেনু থেকে Edit / Deploy / Build access করুন</p>
       </div>
 
       <div className="flex-1 px-4 pb-4 space-y-3">
@@ -115,45 +122,84 @@ export function ProjectVault({ onOpenSession }: ProjectVaultProps) {
               const info = modeInfo[session.mode as keyof typeof modeInfo] || modeInfo.plan;
               const ModeIcon = info.icon;
               return (
-                <motion.button
+                <motion.div
                   key={session.id}
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.05 }}
-                  onClick={() => onOpenSession?.(session.id, session.mode)}
-                  className="w-full text-left rounded-2xl border border-border/40 bg-card p-5 hover:border-primary/30 hover:bg-accent/30 transition-all group"
+                  className="relative rounded-2xl border border-border/40 bg-card hover:border-primary/30 hover:bg-accent/20 transition-all group overflow-hidden"
                 >
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="flex-1 min-w-0">
-                      <h3 className="text-base font-semibold truncate">{session.title}</h3>
-                      <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground">
-                        <span className="flex items-center gap-1">
-                          <Clock className="h-3 w-3" />
-                          {formatDate(session.updated_at)}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <MessageCircle className="h-3 w-3" />
-                          {messageCounts[session.id] || 0}
-                        </span>
-                      </div>
+                  <button
+                    onClick={() => onOpenSession?.(session.id, session.mode)}
+                    className="w-full text-left p-5 pr-14"
+                  >
+                    <h3 className="text-base font-semibold truncate pr-2">{session.title}</h3>
+                    <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1">
+                        <Clock className="h-3 w-3" />
+                        {formatDate(session.updated_at)}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <MessageCircle className="h-3 w-3" />
+                        {messageCounts[session.id] || 0}
+                      </span>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive hover:bg-destructive/10"
-                      onClick={(e) => { e.stopPropagation(); setDeleteId(session.id); }}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
+                    <div className="flex items-center gap-2 mt-3">
+                      <span className={cn('inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full', info.color)}>
+                        <ModeIcon className="h-2.5 w-2.5" />
+                        {info.label}
+                      </span>
+                    </div>
+                  </button>
 
-                  <div className="flex items-center gap-2">
-                    <span className={cn('inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full', info.color)}>
-                      <ModeIcon className="h-2.5 w-2.5" />
-                      {info.label}
-                    </span>
-                  </div>
-                </motion.button>
+                  {/* Action menu — always visible on mobile */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="absolute top-3 right-3 h-9 w-9 rounded-xl bg-background/60 backdrop-blur hover:bg-background border border-border/40"
+                      >
+                        <MoreVertical className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-56">
+                      <DropdownMenuLabel className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
+                        Project Actions
+                      </DropdownMenuLabel>
+                      <DropdownMenuItem onClick={() => onOpenSession?.(session.id, session.mode)}>
+                        <ExternalLink className="h-3.5 w-3.5 mr-2" />Open
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => notImplemented('Edit (নাম ও ডোমেইন)')}>
+                        <Pencil className="h-3.5 w-3.5 mr-2" />Edit name & domain
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuLabel className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
+                        Deploy
+                      </DropdownMenuLabel>
+                      <DropdownMenuItem onClick={() => notImplemented('Deploy')}>
+                        <GitBranch className="h-3.5 w-3.5 mr-2" />Deploy to Vercel
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => notImplemented('GitHub connect')}>
+                        <Github className="h-3.5 w-3.5 mr-2" />Connect to GitHub
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setBuildSession({ id: session.id, title: session.title })}>
+                        <Download className="h-3.5 w-3.5 mr-2" />Download / Build (ZIP, EXE, APK)
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => notImplemented('History')}>
+                        <History className="h-3.5 w-3.5 mr-2" />History
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onClick={() => setDeleteId(session.id)}
+                        className="text-destructive focus:text-destructive focus:bg-destructive/10"
+                      >
+                        <Trash2 className="h-3.5 w-3.5 mr-2" />Delete session
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </motion.div>
               );
             })}
           </AnimatePresence>
@@ -172,6 +218,13 @@ export function ProjectVault({ onOpenSession }: ProjectVaultProps) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <BuildDeliveryDialog
+        open={!!buildSession}
+        onClose={() => setBuildSession(null)}
+        projectName={buildSession?.title || 'tivo-project'}
+        files={[]}
+      />
     </div>
   );
 }
