@@ -24,6 +24,7 @@ import { isDbConnected } from '@/services/hybridStorageService';
 import { AdminMonitoringTab } from '@/components/admin/AdminMonitoringTab';
 import { AdminMessagesTab } from '@/components/admin/AdminMessagesTab';
 import { AdminNotificationsTab } from '@/components/admin/AdminNotificationsTab';
+import { CustomDbTab } from '@/components/admin/CustomDbTab';
 
 const STORAGE_KEY = 'dreem-settings';
 
@@ -231,6 +232,8 @@ const AdminPanel = () => {
             <AdminNotificationsTab />
           </TabsContent>
 
+          {/* Custom DB switch — appears inside the System tab */}
+
           {/* API Keys Tab */}
           <TabsContent value="api-keys" className="space-y-6">
             <Card>
@@ -391,6 +394,7 @@ const AdminPanel = () => {
 
           {/* System Tab */}
           <TabsContent value="system" className="space-y-6">
+            <CustomDbTab />
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2"><Server className="h-5 w-5" />Backend</CardTitle>
