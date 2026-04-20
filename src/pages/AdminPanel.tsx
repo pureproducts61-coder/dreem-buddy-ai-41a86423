@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Users, CreditCard, Key, Bot, Server, Search, Globe, Rocket,
   CheckCircle2, XCircle, Eye, EyeOff, Save, Shield, Brain, Settings2,
-  RefreshCw, Minus, Plus, UserCheck, UserX,
+  RefreshCw, Minus, Plus, UserCheck, UserX, Activity, Database, Zap,
+  Hammer, MessageSquare, Image as ImageIcon, Sparkles, GitBranch,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
