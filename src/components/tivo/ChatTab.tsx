@@ -13,6 +13,7 @@ import { hybridChatPersistence } from '@/services/hybridStorageService';
 import { useToast } from '@/hooks/use-toast';
 import { extractAndPreviewCode } from '@/services/previewBridge';
 import { Plus } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 
 export interface Message {
   id: string;
@@ -47,6 +48,7 @@ function extractSuggestions(content: string): string[] {
 export function ChatTab({ initialSessionId, initialMode }: ChatTabProps) {
   const { t } = useLanguage();
   const { toast } = useToast();
+  const { user, isAdmin } = useAuth();
   const [mode, setMode] = useState<TivoMode>(initialMode || (initialSessionId ? 'build' : 'plan'));
   const [messages, setMessages] = useState<Record<TivoMode, Message[]>>({
     build: [],
@@ -192,6 +194,7 @@ export function ChatTab({ initialSessionId, initialMode }: ChatTabProps) {
 
     await streamChat({
       messages: messagesForAI,
+      userContext: { isAdmin, email: user?.email, userId: user?.id },
       onDelta: (chunk) => {
         assistantContent += chunk;
         updateAssistantMsg();
