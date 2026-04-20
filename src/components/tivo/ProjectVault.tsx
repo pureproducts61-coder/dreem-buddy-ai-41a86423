@@ -1,5 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Trash2, FolderOpen, MessageCircle, Clock, Loader2, Hammer, MessageSquare } from 'lucide-react';
+import {
+  Trash2, FolderOpen, MessageCircle, Clock, Loader2, Hammer, MessageSquare,
+  MoreVertical, Pencil, GitBranch, History, Download, Github, ExternalLink,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -8,6 +11,12 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
+  DropdownMenuSeparator, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { useToast } from '@/hooks/use-toast';
+import { BuildDeliveryDialog } from './BuildDeliveryDialog';
 import { cn } from '@/lib/utils';
 
 interface ProjectVaultProps {
@@ -16,10 +25,12 @@ interface ProjectVaultProps {
 
 export function ProjectVault({ onOpenSession }: ProjectVaultProps) {
   const { t } = useLanguage();
+  const { toast } = useToast();
   const [sessions, setSessions] = useState<Array<{ id: string; user_id: string; mode: string; title: string; created_at: string; updated_at: string }>>([]);
   const [loading, setLoading] = useState(true);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [messageCounts, setMessageCounts] = useState<Record<string, number>>({});
+  const [buildSession, setBuildSession] = useState<{ id: string; title: string } | null>(null);
 
   useEffect(() => {
     loadSessions();
