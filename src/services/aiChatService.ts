@@ -1,6 +1,7 @@
 // AI Chat Service - streams from edge function with tool calling support
 import { getConfiguredCredentials } from './hybridStorageService';
 import { getMemoryContext, addMemoryEntry } from './githubMemoryService';
+import { supabase } from '@/integrations/supabase/client';
 const STORAGE_KEY = 'dreem-settings';
 
 interface ChatMessage {
@@ -53,12 +54,14 @@ export async function streamChat({
   onDone,
   onError,
   onToolEvent,
+  userContext,
 }: {
   messages: ChatMessage[];
   onDelta: (text: string) => void;
   onDone: () => void;
   onError?: (error: string) => void;
   onToolEvent?: (event: ToolEvent) => void;
+  userContext?: { isAdmin: boolean; email?: string; userId?: string };
 }) {
   const provider = getActiveProvider();
   const apiKey = getApiKeyForProvider(provider);
@@ -69,7 +72,21 @@ export async function streamChat({
 
   // Build credentials context for AI
   const credentials = getConfiguredCredentials();
-  const isAdmin = !!import.meta.env.VITE_ADMIN_EMAIL;
+  // Determine real user context: prefer caller-supplied (from AuthContext),
+  // fall back to a fresh session lookup so the AI always knows WHO it talks to.
+  let isAdmin = userContext?.isAdmin ?? false;
+  let userEmail = userContext?.email;
+  let userId = userContext?.userId;
+  if (!userContext) {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      userEmail = session?.user?.email;
+      userId = session?.user?.id;
+      // role lookup
+      const { data } = await supabase.rpc('get_my_role');
+      isAdmin = (data as unknown as string) === 'admin';
+    } catch { /* ignore */ }
+  }
 
   // Inject AI memory context
   let messagesWithMemory = [...messages];
@@ -105,6 +122,8 @@ export async function streamChat({
         tavilyApiKey: tavilyApiKey || undefined,
         credentials,
         isAdmin,
+        userEmail,
+        userId,
       }),
     });
 
