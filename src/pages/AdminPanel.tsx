@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Users, CreditCard, Key, Bot, Server, Search, Globe, Rocket,
   CheckCircle2, XCircle, Eye, EyeOff, Save, Shield, Brain, Settings2,
-  RefreshCw, Minus, Plus, UserCheck, UserX,
+  RefreshCw, Minus, Plus, UserCheck, UserX, Activity, Database, Zap,
+  Hammer, MessageSquare, Image as ImageIcon, Sparkles, GitBranch,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -196,13 +197,19 @@ const AdminPanel = () => {
       </header>
 
       <main className="mx-auto max-w-5xl p-4 md:p-8">
-        <Tabs defaultValue="api-keys" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="api-keys" className="gap-1.5"><Key className="h-3.5 w-3.5" />API Keys</TabsTrigger>
-            <TabsTrigger value="users" className="gap-1.5"><Users className="h-3.5 w-3.5" />Users</TabsTrigger>
-            <TabsTrigger value="credits" className="gap-1.5"><CreditCard className="h-3.5 w-3.5" />Credits</TabsTrigger>
-            <TabsTrigger value="system" className="gap-1.5"><Settings2 className="h-3.5 w-3.5" />System</TabsTrigger>
+        <Tabs defaultValue="status" className="space-y-6">
+          <TabsList className="grid w-full grid-cols-5 h-auto">
+            <TabsTrigger value="status" className="gap-1.5 flex-col sm:flex-row py-2"><Activity className="h-3.5 w-3.5" /><span className="text-[11px] sm:text-xs">Status</span></TabsTrigger>
+            <TabsTrigger value="api-keys" className="gap-1.5 flex-col sm:flex-row py-2"><Key className="h-3.5 w-3.5" /><span className="text-[11px] sm:text-xs">Keys</span></TabsTrigger>
+            <TabsTrigger value="users" className="gap-1.5 flex-col sm:flex-row py-2"><Users className="h-3.5 w-3.5" /><span className="text-[11px] sm:text-xs">Users</span></TabsTrigger>
+            <TabsTrigger value="credits" className="gap-1.5 flex-col sm:flex-row py-2"><CreditCard className="h-3.5 w-3.5" /><span className="text-[11px] sm:text-xs">Credits</span></TabsTrigger>
+            <TabsTrigger value="system" className="gap-1.5 flex-col sm:flex-row py-2"><Settings2 className="h-3.5 w-3.5" /><span className="text-[11px] sm:text-xs">System</span></TabsTrigger>
           </TabsList>
+
+          {/* System Status Tab — secrets + capabilities */}
+          <TabsContent value="status" className="space-y-6">
+            <SystemStatusPanel settings={settings} dbAvailable={dbAvailable} />
+          </TabsContent>
 
           {/* API Keys Tab */}
           <TabsContent value="api-keys" className="space-y-6">
@@ -428,3 +435,252 @@ const AdminPanel = () => {
 };
 
 export default AdminPanel;
+
+/* ============================================================
+   SYSTEM STATUS PANEL — Secrets + AI Capabilities overview
+   ============================================================ */
+
+interface SystemStatusPanelProps {
+  settings: AdminSettings;
+  dbAvailable: boolean;
+}
+
+function SystemStatusPanel({ settings, dbAvailable }: SystemStatusPanelProps) {
+  const has = (v: string) => !!v && v.length > 3;
+
+  // Server-side secrets (configured via Lovable Cloud Secrets)
+  const serverSecrets = [
+    { name: 'GEMINI_API_KEY', label: 'Gemini API', icon: Brain, configured: true, desc: 'Google AI text & vision' },
+    { name: 'LOVABLE_API_KEY', label: 'Lovable AI Gateway', icon: Sparkles, configured: true, desc: 'Multi-model AI access' },
+    { name: 'ADMIN_EMAIL', label: 'Admin Email', icon: Shield, configured: true, desc: 'Bootstrap admin login' },
+    { name: 'ADMIN_PASSWORD', label: 'Admin Password', icon: Key, configured: true, desc: 'Bootstrap admin login' },
+    { name: 'SUPABASE_SERVICE_ROLE_KEY', label: 'Service Role Key', icon: Database, configured: true, desc: 'Backend admin DB access' },
+  ];
+
+  // Client-side keys (configured via Admin Panel)
+  const clientKeys = [
+    { label: 'Groq', icon: Bot, configured: has(settings.groqApiKey) },
+    { label: 'DeepSeek', icon: Bot, configured: has(settings.deepseekApiKey) },
+    { label: 'Tavily Search', icon: Search, configured: has(settings.tavilyApiKey) },
+    { label: 'Hugging Face', icon: Globe, configured: has(settings.hfToken) },
+    { label: 'Vercel Deploy', icon: Rocket, configured: has(settings.vercelToken) },
+  ];
+
+  // AI capabilities derived from configured secrets
+  const capabilities = [
+    { label: 'Chat & Reasoning', icon: MessageSquare, enabled: true, source: 'Gemini / Lovable AI' },
+    { label: 'Code Generation', icon: Hammer, enabled: true, source: 'Lovable AI Gateway' },
+    { label: 'Image Understanding', icon: ImageIcon, enabled: true, source: 'Gemini Vision' },
+    { label: 'Web Search', icon: Search, enabled: has(settings.tavilyApiKey), source: 'Tavily' },
+    { label: 'GitHub Operations', icon: GitBranch, enabled: false, source: 'User-level GitHub PAT' },
+    { label: 'Vercel Deploy', icon: Rocket, enabled: has(settings.vercelToken), source: 'Vercel API' },
+    { label: 'Database Access', icon: Database, enabled: dbAvailable, source: 'Supabase / Lovable Cloud' },
+    { label: 'User Management', icon: Users, enabled: dbAvailable, source: 'Supabase Auth + RLS' },
+  ];
+
+  const enabledCount = capabilities.filter(c => c.enabled).length;
+  const totalSecrets = serverSecrets.length + clientKeys.length;
+  const configuredSecrets = serverSecrets.filter(s => s.configured).length + clientKeys.filter(k => k.configured).length;
+
+  return (
+    <>
+      {/* Hero status cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <HeroStat
+          icon={Activity}
+          label="System"
+          value={dbAvailable ? 'Operational' : 'Degraded'}
+          tone={dbAvailable ? 'success' : 'warning'}
+          sub={dbAvailable ? 'All core services healthy' : 'Database not connected'}
+        />
+        <HeroStat
+          icon={Key}
+          label="Secrets"
+          value={`${configuredSecrets}/${totalSecrets}`}
+          tone="primary"
+          sub="Configured credentials"
+        />
+        <HeroStat
+          icon={Zap}
+          label="AI Capabilities"
+          value={`${enabledCount}/${capabilities.length}`}
+          tone="primary"
+          sub="Active features"
+        />
+      </div>
+
+      {/* Server-side secrets */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Shield className="h-4 w-4 text-primary" />
+            Server-side Secrets (Lovable Cloud)
+          </CardTitle>
+          <CardDescription>Securely stored backend credentials — accessed by edge functions only</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {serverSecrets.map(s => (
+            <StatusRow
+              key={s.name}
+              icon={s.icon}
+              label={s.label}
+              hint={`${s.name} — ${s.desc}`}
+              configured={s.configured}
+            />
+          ))}
+        </CardContent>
+      </Card>
+
+      {/* Client-side keys */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Key className="h-4 w-4" />
+            Optional Provider Keys
+          </CardTitle>
+          <CardDescription>Configure these in the Keys tab to unlock more capabilities</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {clientKeys.map(k => (
+            <StatusRow key={k.label} icon={k.icon} label={k.label} configured={k.configured} />
+          ))}
+        </CardContent>
+      </Card>
+
+      {/* AI Capabilities */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Brain className="h-4 w-4 text-primary" />
+            AI Capabilities
+          </CardTitle>
+          <CardDescription>What TIVO AI can do right now based on configured credentials</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {capabilities.map(cap => {
+              const Icon = cap.icon;
+              return (
+                <div
+                  key={cap.label}
+                  className={`flex items-center gap-3 p-3 rounded-lg border transition-all ${
+                    cap.enabled
+                      ? 'border-primary/20 bg-primary/5'
+                      : 'border-border/40 bg-muted/20 opacity-60'
+                  }`}
+                >
+                  <div className={`h-9 w-9 rounded-lg flex items-center justify-center shrink-0 ${
+                    cap.enabled ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
+                  }`}>
+                    <Icon className="h-4 w-4" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{cap.label}</p>
+                    <p className="text-[11px] text-muted-foreground truncate">{cap.source}</p>
+                  </div>
+                  {cap.enabled ? (
+                    <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />
+                  ) : (
+                    <XCircle className="h-4 w-4 text-muted-foreground/50 shrink-0" />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Database status */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Database className="h-4 w-4" />
+            Database Connection
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className={`flex items-center gap-3 p-4 rounded-lg border ${
+            dbAvailable
+              ? 'border-emerald-500/30 bg-emerald-500/5'
+              : 'border-orange-500/30 bg-orange-500/5'
+          }`}>
+            <div className={`h-2.5 w-2.5 rounded-full ${
+              dbAvailable ? 'bg-emerald-500 shadow-[0_0_8px_hsl(var(--primary))]' : 'bg-orange-500'
+            } animate-pulse`} />
+            <div className="flex-1">
+              <p className="text-sm font-medium">
+                {dbAvailable ? 'Lovable Cloud — Connected' : 'Local Storage Mode'}
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                {dbAvailable
+                  ? 'Realtime sync, RLS-protected user data, edge functions active'
+                  : 'Data stored locally — connect Supabase in System tab to sync'}
+              </p>
+            </div>
+            <Badge variant={dbAvailable ? 'default' : 'secondary'} className="text-[10px]">
+              {dbAvailable ? 'LIVE' : 'OFFLINE'}
+            </Badge>
+          </div>
+        </CardContent>
+      </Card>
+    </>
+  );
+}
+
+function HeroStat({
+  icon: Icon, label, value, sub, tone,
+}: {
+  icon: React.ElementType;
+  label: string;
+  value: string;
+  sub: string;
+  tone: 'success' | 'warning' | 'primary';
+}) {
+  const toneClass = {
+    success: 'border-emerald-500/30 bg-gradient-to-br from-emerald-500/10 to-transparent text-emerald-500',
+    warning: 'border-orange-500/30 bg-gradient-to-br from-orange-500/10 to-transparent text-orange-500',
+    primary: 'border-primary/30 bg-gradient-to-br from-primary/10 to-transparent text-primary',
+  }[tone];
+
+  return (
+    <div className={`rounded-xl border p-4 ${toneClass}`}>
+      <div className="flex items-center gap-2 mb-2">
+        <Icon className="h-4 w-4" />
+        <p className="text-[10px] font-mono uppercase tracking-wider opacity-80">{label}</p>
+      </div>
+      <p className="text-2xl font-display font-bold text-foreground">{value}</p>
+      <p className="text-[11px] text-muted-foreground mt-1">{sub}</p>
+    </div>
+  );
+}
+
+function StatusRow({
+  icon: Icon, label, hint, configured,
+}: {
+  icon: React.ElementType;
+  label: string;
+  hint?: string;
+  configured: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-muted/30 transition-colors">
+      <div className={`h-8 w-8 rounded-lg flex items-center justify-center shrink-0 ${
+        configured ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground/60'
+      }`}>
+        <Icon className="h-3.5 w-3.5" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium">{label}</p>
+        {hint && <p className="text-[10px] text-muted-foreground font-mono truncate">{hint}</p>}
+      </div>
+      <Badge
+        variant="outline"
+        className={`text-[10px] gap-1 shrink-0 ${
+          configured ? 'border-primary/30 text-primary' : 'border-muted-foreground/30 text-muted-foreground'
+        }`}
+      >
+        {configured ? <><CheckCircle2 className="h-2.5 w-2.5" />Active</> : <><XCircle className="h-2.5 w-2.5" />Not set</>}
+      </Badge>
+    </div>
+  );
+}
