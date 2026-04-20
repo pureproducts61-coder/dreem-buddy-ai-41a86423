@@ -14,6 +14,75 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_messages: {
+        Row: {
+          admin_reply: string | null
+          category: string
+          created_at: string
+          id: string
+          message: string
+          status: string
+          subject: string
+          updated_at: string
+          user_email: string | null
+          user_id: string
+        }
+        Insert: {
+          admin_reply?: string | null
+          category?: string
+          created_at?: string
+          id?: string
+          message: string
+          status?: string
+          subject: string
+          updated_at?: string
+          user_email?: string | null
+          user_id: string
+        }
+        Update: {
+          admin_reply?: string | null
+          category?: string
+          created_at?: string
+          id?: string
+          message?: string
+          status?: string
+          subject?: string
+          updated_at?: string
+          user_email?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      ai_notifications: {
+        Row: {
+          body: string | null
+          created_at: string
+          id: string
+          metadata: Json | null
+          read: boolean
+          title: string
+          type: string
+        }
+        Insert: {
+          body?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          read?: boolean
+          title: string
+          type?: string
+        }
+        Update: {
+          body?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          read?: boolean
+          title?: string
+          type?: string
+        }
+        Relationships: []
+      }
       chat_messages: {
         Row: {
           content: string
@@ -100,6 +169,30 @@ export type Database = {
         }
         Relationships: []
       }
+      user_blocks: {
+        Row: {
+          blocked_by: string
+          created_at: string
+          id: string
+          reason: string | null
+          user_id: string
+        }
+        Insert: {
+          blocked_by: string
+          created_at?: string
+          id?: string
+          reason?: string | null
+          user_id: string
+        }
+        Update: {
+          blocked_by?: string
+          created_at?: string
+          id?: string
+          reason?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_profiles: {
         Row: {
           created_at: string
@@ -139,11 +232,73 @@ export type Database = {
         }
         Relationships: []
       }
+      user_projects: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          metadata: Json | null
+          name: string
+          status: string | null
+          type: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          metadata?: Json | null
+          name: string
+          status?: string | null
+          type?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          metadata?: Json | null
+          name?: string
+          status?: string | null
+          type?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      admin_block_user: {
+        Args: { block_reason?: string; target_user_id: string }
+        Returns: undefined
+      }
+      admin_dashboard_stats: { Args: never; Returns: Json }
+      admin_list_messages: {
+        Args: never
+        Returns: {
+          admin_reply: string | null
+          category: string
+          created_at: string
+          id: string
+          message: string
+          status: string
+          subject: string
+          updated_at: string
+          user_email: string | null
+          user_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "admin_messages"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       admin_list_profiles: {
         Args: never
         Returns: {
@@ -165,12 +320,32 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      admin_list_user_projects: {
+        Args: never
+        Returns: {
+          blocked: boolean
+          created_at: string
+          description: string
+          id: string
+          name: string
+          status: string
+          type: string
+          updated_at: string
+          user_email: string
+          user_id: string
+        }[]
+      }
+      admin_unblock_user: {
+        Args: { target_user_id: string }
+        Returns: undefined
+      }
       admin_update_credits: {
         Args: { new_credits: number; target_user_id: string }
         Returns: undefined
       }
       ensure_user_profile: { Args: never; Returns: undefined }
       get_my_role: { Args: never; Returns: string }
+      is_user_blocked: { Args: { target_user_id: string }; Returns: boolean }
       promote_admin_by_email: {
         Args: { target_email: string }
         Returns: string

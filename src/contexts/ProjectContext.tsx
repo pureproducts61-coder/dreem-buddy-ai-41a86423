@@ -1,4 +1,6 @@
 import { createContext, useContext, useState, ReactNode, useEffect } from 'react';
+import { logUserProject } from '@/services/userActivityService';
+import { supabase } from '@/integrations/supabase/client';
 
 export interface Project {
   id: string;
@@ -55,6 +57,12 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
       isFavorite: false,
     };
     setProjects((prev) => [newProject, ...prev]);
+    // Track on backend so admin can monitor (best-effort, non-blocking)
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user?.id) {
+        logUserProject(session.user.id, name, description);
+      }
+    }).catch(() => { /* ignore */ });
     return newProject;
   };
 

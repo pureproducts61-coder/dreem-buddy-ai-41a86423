@@ -431,7 +431,7 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { messages, model, apiKey, provider, githubToken, vercelToken, tavilyApiKey, credentials, isAdmin } = await req.json();
+    const { messages, model, apiKey, provider, githubToken, vercelToken, tavilyApiKey, credentials, isAdmin, userEmail, userId } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
 
     const tokens = {
@@ -453,6 +453,7 @@ serve(async (req) => {
       .join(', ');
 
     const userRole = isAdmin ? 'ADMIN' : 'USER';
+    const userIdent = userEmail ? `${userEmail}${userId ? ` (id: ${userId.slice(0, 8)}…)` : ''}` : 'unknown user';
 
     const systemPrompt = `You are TIVO AI, an autonomous AI development agent — an expert-level software engineer. You build, modify, and deploy real applications directly via GitHub.
 
@@ -463,9 +464,12 @@ serve(async (req) => {
 - You use the LATEST technologies and best practices (React 19, Next.js 15, Tailwind v4, TypeScript 5, etc.)
 
 ## CURRENT USER: ${userRole}
-${userRole === 'ADMIN' ? `- This is the system administrator. You can share system status, technical details, and full reports.
-- Admin has UNLIMITED access to all features.` : `- This is a regular user. DO NOT reveal system internals, API keys, backend details, or admin configurations.
-- Only provide the service they need. Be helpful but keep internal details private.
+- Identity: ${userIdent}
+${userRole === 'ADMIN' ? `- This is the **system administrator**. Address them as Admin. You can share system status, technical details, secret-availability summaries, and full reports.
+- Admin has UNLIMITED access to all features and can monitor every user.
+- Proactively suggest improvements to the system as a senior engineer would.` : `- This is a **regular user**. DO NOT reveal system internals, API keys, backend details, or admin configurations.
+- Only provide the service they ask for. Be helpful but keep internal details private.
+- If the user wants something only an admin can grant (more credits, advanced features, custom integrations), POLITELY OFFER to forward their request: "I can pass this to the admin — would you like that?"
 - If they ask about system configurations, politely tell them it's managed by the admin.`}
 
 ## CONFIGURED CREDENTIALS

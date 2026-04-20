@@ -4,7 +4,7 @@ import {
   ArrowLeft, Users, CreditCard, Key, Bot, Server, Search, Globe, Rocket,
   CheckCircle2, XCircle, Eye, EyeOff, Save, Shield, Brain, Settings2,
   RefreshCw, Minus, Plus, UserCheck, UserX, Activity, Database, Zap,
-  Hammer, MessageSquare, Image as ImageIcon, Sparkles, GitBranch,
+  Hammer, MessageSquare, Image as ImageIcon, Sparkles, GitBranch, Bell, Inbox,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,6 +21,10 @@ import { useAuth } from '@/contexts/AuthContext';
 import { ThemeLanguageToggle } from '@/components/ThemeLanguageToggle';
 import { supabase } from '@/integrations/supabase/client';
 import { isDbConnected } from '@/services/hybridStorageService';
+import { AdminMonitoringTab } from '@/components/admin/AdminMonitoringTab';
+import { AdminMessagesTab } from '@/components/admin/AdminMessagesTab';
+import { AdminNotificationsTab } from '@/components/admin/AdminNotificationsTab';
+import { CustomDbTab } from '@/components/admin/CustomDbTab';
 
 const STORAGE_KEY = 'dreem-settings';
 
@@ -198,11 +202,13 @@ const AdminPanel = () => {
 
       <main className="mx-auto max-w-5xl p-4 md:p-8">
         <Tabs defaultValue="status" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5 h-auto">
+          <TabsList className="grid w-full grid-cols-4 sm:grid-cols-7 h-auto">
             <TabsTrigger value="status" className="gap-1.5 flex-col sm:flex-row py-2"><Activity className="h-3.5 w-3.5" /><span className="text-[11px] sm:text-xs">Status</span></TabsTrigger>
+            <TabsTrigger value="monitor" className="gap-1.5 flex-col sm:flex-row py-2"><Zap className="h-3.5 w-3.5" /><span className="text-[11px] sm:text-xs">Monitor</span></TabsTrigger>
+            <TabsTrigger value="messages" className="gap-1.5 flex-col sm:flex-row py-2"><Inbox className="h-3.5 w-3.5" /><span className="text-[11px] sm:text-xs">Inbox</span></TabsTrigger>
+            <TabsTrigger value="notifications" className="gap-1.5 flex-col sm:flex-row py-2"><Bell className="h-3.5 w-3.5" /><span className="text-[11px] sm:text-xs">Alerts</span></TabsTrigger>
             <TabsTrigger value="api-keys" className="gap-1.5 flex-col sm:flex-row py-2"><Key className="h-3.5 w-3.5" /><span className="text-[11px] sm:text-xs">Keys</span></TabsTrigger>
             <TabsTrigger value="users" className="gap-1.5 flex-col sm:flex-row py-2"><Users className="h-3.5 w-3.5" /><span className="text-[11px] sm:text-xs">Users</span></TabsTrigger>
-            <TabsTrigger value="credits" className="gap-1.5 flex-col sm:flex-row py-2"><CreditCard className="h-3.5 w-3.5" /><span className="text-[11px] sm:text-xs">Credits</span></TabsTrigger>
             <TabsTrigger value="system" className="gap-1.5 flex-col sm:flex-row py-2"><Settings2 className="h-3.5 w-3.5" /><span className="text-[11px] sm:text-xs">System</span></TabsTrigger>
           </TabsList>
 
@@ -210,6 +216,23 @@ const AdminPanel = () => {
           <TabsContent value="status" className="space-y-6">
             <SystemStatusPanel settings={settings} dbAvailable={dbAvailable} />
           </TabsContent>
+
+          {/* Monitoring */}
+          <TabsContent value="monitor" className="space-y-6">
+            <AdminMonitoringTab />
+          </TabsContent>
+
+          {/* Messages from users */}
+          <TabsContent value="messages" className="space-y-6">
+            <AdminMessagesTab />
+          </TabsContent>
+
+          {/* AI notifications */}
+          <TabsContent value="notifications" className="space-y-6">
+            <AdminNotificationsTab />
+          </TabsContent>
+
+          {/* Custom DB switch — appears inside the System tab */}
 
           {/* API Keys Tab */}
           <TabsContent value="api-keys" className="space-y-6">
@@ -371,6 +394,7 @@ const AdminPanel = () => {
 
           {/* System Tab */}
           <TabsContent value="system" className="space-y-6">
+            <CustomDbTab />
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2"><Server className="h-5 w-5" />Backend</CardTitle>
