@@ -1,10 +1,12 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { Send, Mic, MicOff, Plus, X, Hammer, Zap, MessageSquare, Layers } from 'lucide-react';
+import { Send, Mic, MicOff, Plus, X, Hammer, Zap, MessageSquare, Coins } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
+import { useCredits } from '@/hooks/useCredits';
+import { CREDIT_COST_PER_MESSAGE } from '@/services/creditsService';
 
 export type TivoMode = 'build' | 'automation' | 'plan';
 
@@ -14,6 +16,8 @@ interface SmartInputBarProps {
   onSendMessage: (content: string, files?: File[]) => void;
   isLoading: boolean;
   className?: string;
+  externalDraft?: string;
+  onRequestMoreCredits?: () => void;
 }
 
 const modeConfig = {
@@ -22,7 +26,7 @@ const modeConfig = {
   plan: { icon: MessageSquare, label: 'Plan', color: 'text-emerald-500' },
 };
 
-export function SmartInputBar({ mode, onModeChange, onSendMessage, isLoading, className }: SmartInputBarProps) {
+export function SmartInputBar({ mode, onModeChange, onSendMessage, isLoading, className, externalDraft, onRequestMoreCredits }: SmartInputBarProps) {
   const { t } = useLanguage();
   const [input, setInput] = useState('');
   const [isListening, setIsListening] = useState(false);
@@ -31,15 +35,30 @@ export function SmartInputBar({ mode, onModeChange, onSendMessage, isLoading, cl
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const recognitionRef = useRef<any>(null);
+  const { credits, isAdmin } = useCredits();
 
   const ActiveIcon = modeConfig[mode].icon;
+  const isAdminUser = isAdmin;
+  const outOfCredits = !isAdminUser && credits <= 0;
+
+  // Allow parent to inject a draft (e.g. from suggestion chip click)
+  useEffect(() => {
+    if (externalDraft !== undefined) {
+      setInput(externalDraft);
+      requestAnimationFrame(() => textareaRef.current?.focus());
+    }
+  }, [externalDraft]);
 
   const handleSend = useCallback(() => {
     if (!input.trim() || isLoading) return;
+    if (outOfCredits) {
+      onRequestMoreCredits?.();
+      return;
+    }
     onSendMessage(input.trim(), attachedFiles.length > 0 ? attachedFiles : undefined);
     setInput('');
     setAttachedFiles([]);
-  }, [input, isLoading, onSendMessage, attachedFiles]);
+  }, [input, isLoading, onSendMessage, attachedFiles, outOfCredits, onRequestMoreCredits]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -142,24 +161,24 @@ export function SmartInputBar({ mode, onModeChange, onSendMessage, isLoading, cl
         value={input}
         onChange={(e) => setInput(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder={t('home.inputPlaceholder')}
+        placeholder={outOfCredits ? 'Out of credits — request more from admin' : t('home.inputPlaceholder')}
         rows={1}
-        className="w-full min-h-[44px] max-h-[160px] resize-none bg-transparent border-0 outline-none text-foreground placeholder:text-muted-foreground/50 px-3 pt-3 pb-1 text-sm leading-relaxed"
+        className="w-full min-h-[52px] max-h-[180px] resize-none bg-transparent border-0 outline-none text-foreground placeholder:text-muted-foreground/50 px-4 pt-4 pb-1 text-base leading-relaxed"
         disabled={isLoading}
       />
 
       {/* Bottom action bar */}
-      <div className="flex items-center justify-between px-2 pb-2 pt-1">
-        <div className="flex items-center gap-0.5">
+      <div className="flex items-center justify-between px-3 pb-3 pt-1 gap-2">
+        <div className="flex items-center gap-1.5">
           {/* Mode Popover */}
           <Popover open={modeOpen} onOpenChange={setModeOpen}>
             <PopoverTrigger asChild>
               <Button
                 variant="ghost"
                 size="icon"
-                className={cn('h-8 w-8 rounded-xl', modeConfig[mode].color)}
+                className={cn('h-10 w-10 rounded-full bg-secondary/50 hover:bg-secondary', modeConfig[mode].color)}
               >
-                <ActiveIcon className="h-4 w-4" />
+                <ActiveIcon className="h-[18px] w-[18px]" />
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-44 p-1.5" side="top" align="start">
@@ -190,33 +209,54 @@ export function SmartInputBar({ mode, onModeChange, onSendMessage, isLoading, cl
             variant="ghost"
             size="icon"
             className={cn(
-              'h-8 w-8 rounded-xl transition-colors',
+              'h-10 w-10 rounded-full bg-secondary/50 hover:bg-secondary transition-colors',
               isListening && 'bg-destructive/10 text-destructive'
             )}
             onClick={toggleVoice}
           >
-            {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+            {isListening ? <MicOff className="h-[18px] w-[18px]" /> : <Mic className="h-[18px] w-[18px]" />}
           </Button>
 
           {/* Attach */}
-          <Button variant="ghost" size="icon" className="h-8 w-8 rounded-xl" onClick={() => fileInputRef.current?.click()}>
-            <Plus className="h-4 w-4" />
+          <Button variant="ghost" size="icon" className="h-10 w-10 rounded-full bg-secondary/50 hover:bg-secondary" onClick={() => fileInputRef.current?.click()}>
+            <Plus className="h-[18px] w-[18px]" />
           </Button>
           <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleFileChange} />
         </div>
 
-        {/* Send */}
-        <Button
-          size="icon"
-          className={cn(
-            'h-8 w-8 rounded-xl transition-all',
-            input.trim() ? 'glow-primary' : ''
+        <div className="flex items-center gap-2">
+          {/* Credits badge */}
+          {!isAdminUser && (
+            <button
+              onClick={() => outOfCredits && onRequestMoreCredits?.()}
+              className={cn(
+                'flex items-center gap-1 px-2.5 h-7 rounded-full text-[11px] font-mono transition-colors',
+                outOfCredits
+                  ? 'bg-destructive/15 text-destructive hover:bg-destructive/25'
+                  : credits < 10
+                    ? 'bg-amber-500/15 text-amber-500'
+                    : 'bg-secondary/40 text-muted-foreground'
+              )}
+              title={`${credits} credits remaining (${CREDIT_COST_PER_MESSAGE}/message)`}
+            >
+              <Coins className="h-3 w-3" />
+              {credits}
+            </button>
           )}
-          onClick={handleSend}
-          disabled={!input.trim() || isLoading}
-        >
-          <Send className="h-4 w-4" />
-        </Button>
+
+          {/* Send */}
+          <Button
+            size="icon"
+            className={cn(
+              'h-11 w-11 rounded-full transition-all shadow-md',
+              input.trim() && !outOfCredits ? 'glow-primary' : ''
+            )}
+            onClick={handleSend}
+            disabled={!input.trim() || isLoading}
+          >
+            <Send className="h-[18px] w-[18px]" />
+          </Button>
+        </div>
       </div>
 
       {/* Listening indicator */}
