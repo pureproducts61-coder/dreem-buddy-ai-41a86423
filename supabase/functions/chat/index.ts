@@ -211,16 +211,94 @@ const TOOLS = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "send_message_to_admin",
+      description: "Forward the current user's request to the system admin (e.g. when they ask for more credits, a new feature, or report an issue and agree to send it). Always confirm with the user first.",
+      parameters: {
+        type: "object",
+        properties: {
+          subject: { type: "string", description: "Short subject line" },
+          message: { type: "string", description: "Full message body" },
+          category: { type: "string", enum: ["feedback", "feature", "bug", "upgrade", "other"], description: "Category" },
+        },
+        required: ["subject", "message"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "create_admin_notification",
+      description: "Create a system notification visible to the admin (use for alerting about important events, errors, or milestones during a build).",
+      parameters: {
+        type: "object",
+        properties: {
+          title: { type: "string" },
+          body: { type: "string" },
+          type: { type: "string", enum: ["info", "warning", "error", "success"] },
+        },
+        required: ["title"],
+        additionalProperties: false,
+      },
+    },
+  },
 ];
 
 // ── Execute a tool call ─────────────────────────────────────
 async function executeTool(
   name: string,
   args: Record<string, unknown>,
-  tokens: { github: string; vercel: string; tavily: string }
+  tokens: { github: string; vercel: string; tavily: string },
+  ctx: { userId?: string; userEmail?: string; supabaseUrl: string; serviceRoleKey: string }
 ): Promise<string> {
   try {
     switch (name) {
+      case "send_message_to_admin": {
+        if (!ctx.userId) return JSON.stringify({ error: "User context missing." });
+        const { subject, message, category } = args as Record<string, string>;
+        const res = await fetch(`${ctx.supabaseUrl}/rest/v1/admin_messages`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: ctx.serviceRoleKey,
+            Authorization: `Bearer ${ctx.serviceRoleKey}`,
+            Prefer: "return=representation",
+          },
+          body: JSON.stringify({
+            user_id: ctx.userId,
+            user_email: ctx.userEmail || null,
+            subject: subject || "Message from user",
+            message: message || "",
+            category: category || "feedback",
+          }),
+        });
+        if (!res.ok) return JSON.stringify({ error: `Failed: ${res.status} ${await res.text()}` });
+        return JSON.stringify({ success: true, sent: true });
+      }
+
+      case "create_admin_notification": {
+        const { title, body, type } = args as Record<string, string>;
+        const res = await fetch(`${ctx.supabaseUrl}/rest/v1/ai_notifications`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: ctx.serviceRoleKey,
+            Authorization: `Bearer ${ctx.serviceRoleKey}`,
+          },
+          body: JSON.stringify({
+            title: title || "Notification",
+            body: body || null,
+            type: type || "info",
+            metadata: { from_user: ctx.userEmail || ctx.userId || "unknown" },
+          }),
+        });
+        if (!res.ok) return JSON.stringify({ error: `Failed: ${res.status}` });
+        return JSON.stringify({ success: true });
+      }
+
       case "create_github_repo": {
         if (!tokens.github) return JSON.stringify({ error: "GitHub token not configured. Add it in Settings → Tools & Integrations." });
         const result = await githubFetch("/user/repos", tokens.github, {
@@ -433,6 +511,9 @@ serve(async (req) => {
   try {
     const { messages, model, apiKey, provider, githubToken, vercelToken, tavilyApiKey, credentials, isAdmin, userEmail, userId } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
+    const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+    const toolCtx = { userId, userEmail, supabaseUrl: SUPABASE_URL, serviceRoleKey: SERVICE_ROLE };
 
     const tokens = {
       github: githubToken || "",
@@ -709,7 +790,7 @@ ${tokens.github ? `GitHub token configured with FULL ACCESS. You can manage repo
               args: sanitizeArgs(args),
             })));
 
-            let result = await executeTool(tc.name, args, tokens);
+            let result = await executeTool(tc.name, args, tokens, toolCtx);
             let parsedResult = JSON.parse(result);
 
             // Auto-retry on SHA conflict (up to 2 retries)
@@ -722,7 +803,7 @@ ${tokens.github ? `GitHub token configured with FULL ACCESS. You can manage repo
                   message: `SHA conflict, retry ${retry + 1}/2...`,
                 })));
                 await new Promise(r => setTimeout(r, 1500));
-                result = await executeTool(tc.name, args, tokens);
+                result = await executeTool(tc.name, args, tokens, toolCtx);
                 parsedResult = JSON.parse(result);
                 if (!parsedResult.error) break;
               }
