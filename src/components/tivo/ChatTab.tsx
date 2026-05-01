@@ -14,6 +14,8 @@ import { useToast } from '@/hooks/use-toast';
 import { extractAndPreviewCode } from '@/services/previewBridge';
 import { Plus } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { deductCredits } from '@/services/creditsService';
+import { SendToAdminDialog } from './SendToAdminDialog';
 
 export interface Message {
   id: string;
@@ -65,6 +67,8 @@ export function ChatTab({ initialSessionId, initialMode }: ChatTabProps) {
   const [sessionsLoaded, setSessionsLoaded] = useState(false);
   const [activeFiles, setActiveFiles] = useState<string[]>([]);
   const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [draft, setDraft] = useState<string | undefined>(undefined);
+  const [creditDialogOpen, setCreditDialogOpen] = useState(false);
 
   // Only load messages when user explicitly opens a session from Vault
   useEffect(() => {
@@ -106,6 +110,23 @@ export function ChatTab({ initialSessionId, initialMode }: ChatTabProps) {
 
   const handleSendMessage = useCallback(async (content: string, files?: File[]) => {
     setSuggestions([]);
+
+    // Deduct credits BEFORE making the AI call (admins are bypassed server-side)
+    try {
+      await deductCredits();
+    } catch (e) {
+      if (String(e).includes('INSUFFICIENT_CREDITS')) {
+        toast({
+          title: 'Out of credits',
+          description: 'Request more credits from the admin to continue.',
+          variant: 'destructive',
+        });
+        setCreditDialogOpen(true);
+        return;
+      }
+      // soft-fail other errors
+      console.warn('credit deduct failed', e);
+    }
     
     // Read file contents if any
     let messageContent = content;
@@ -246,8 +267,9 @@ export function ChatTab({ initialSessionId, initialMode }: ChatTabProps) {
 
   const handleSuggestionSelect = useCallback((suggestion: string) => {
     setSuggestions([]);
-    handleSendMessage(suggestion);
-  }, [handleSendMessage]);
+    // Put it in the input bar instead of auto-sending
+    setDraft(suggestion + ' '); // trailing space differentiates re-clicks
+  }, []);
 
   const currentMessages = messages[mode];
   const isCleanSlate = mode === 'plan' && currentMessages.length === 0 && !isLoading;
@@ -319,9 +341,12 @@ export function ChatTab({ initialSessionId, initialMode }: ChatTabProps) {
         onModeChange={setMode}
         onSendMessage={handleSendMessage}
         isLoading={isLoading}
+        externalDraft={draft}
+        onRequestMoreCredits={() => setCreditDialogOpen(true)}
       />
 
       <ControlPanel open={menuOpen} onClose={() => setMenuOpen(false)} />
+      <SendToAdminDialog open={creditDialogOpen} onClose={() => setCreditDialogOpen(false)} />
     </div>
   );
 }
