@@ -268,6 +268,36 @@ export type Database = {
         }
         Relationships: []
       }
+      user_secrets: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          updated_at: string
+          user_id: string
+          value: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          updated_at?: string
+          user_id: string
+          value: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          updated_at?: string
+          user_id?: string
+          value?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -342,6 +372,10 @@ export type Database = {
       admin_update_credits: {
         Args: { new_credits: number; target_user_id: string }
         Returns: undefined
+      }
+      deduct_credits: {
+        Args: { amount: number; reason?: string }
+        Returns: number
       }
       ensure_user_profile: { Args: never; Returns: undefined }
       get_my_role: { Args: never; Returns: string }

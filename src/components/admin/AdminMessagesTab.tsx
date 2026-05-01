@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { getAllMessages, markMessageHandled, type AdminMessage } from '@/services/userActivityService';
+import { supabase } from '@/integrations/supabase/client';
 
 export function AdminMessagesTab() {
   const { toast } = useToast();
@@ -21,7 +22,14 @@ export function AdminMessagesTab() {
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+    const channel = supabase
+      .channel('admin-inbox')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'admin_messages' }, () => load())
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, []);
 
   const handleHandle = async (id: string) => {
     try {

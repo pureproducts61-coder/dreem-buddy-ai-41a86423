@@ -10,6 +10,7 @@ import {
   getAdminStats, getAllProjects, blockUser, unblockUser,
   type AdminStats, type UserProjectRow,
 } from '@/services/userActivityService';
+import { supabase } from '@/integrations/supabase/client';
 
 export function AdminMonitoringTab() {
   const { toast } = useToast();
@@ -28,8 +29,15 @@ export function AdminMonitoringTab() {
 
   useEffect(() => {
     load();
-    const i = setInterval(load, 30000); // auto-refresh
-    return () => clearInterval(i);
+    const i = setInterval(load, 30000); // safety net
+    // Realtime: refresh whenever projects, profiles, or blocks change
+    const channel = supabase
+      .channel('admin-monitor')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'user_projects' }, () => load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'user_profiles' }, () => load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'user_blocks' }, () => load())
+      .subscribe();
+    return () => { clearInterval(i); supabase.removeChannel(channel); };
   }, []);
 
   const handleBlock = async (uid: string, blocked: boolean) => {
