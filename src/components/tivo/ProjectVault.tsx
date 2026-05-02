@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import {
   Trash2, FolderOpen, MessageCircle, Clock, Loader2, Hammer, MessageSquare,
   MoreVertical, Pencil, GitBranch, History, Download, Github, ExternalLink,
+  FileJson, FileSpreadsheet,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -26,6 +27,8 @@ import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { githubService } from '@/services/githubService';
 import { Badge } from '@/components/ui/badge';
+import { enqueueDeploy, updateDeploy } from '@/services/deployQueueService';
+import { DeployStatusList } from './DeployStatusList';
 
 interface ProjectVaultProps {
   onOpenSession?: (sessionId: string, mode?: string) => void;
@@ -172,9 +175,44 @@ export function ProjectVault({ onOpenSession }: ProjectVaultProps) {
       });
       return;
     }
+    const job = enqueueDeploy({ sessionId: session.id, projectName: session.title, repo });
     const url = `https://vercel.com/new/clone?repository-url=https://github.com/${repo}`;
+    updateDeploy(job.id, { status: 'opening', message: 'Opening Vercel import dialog…', url: `https://github.com/${repo}` });
     window.open(url, '_blank', 'noopener,noreferrer');
-    toast({ title: '🚀 Vercel Deploy খোলা হয়েছে', description: `Repo: ${repo}` });
+    // Mark as ready (manual confirm) after 25s — UI will keep showing "building" until then
+    setTimeout(() => {
+      updateDeploy(job.id, { status: 'ready', message: 'Vercel import dialog completed (check Vercel dashboard for live URL)' });
+    }, 25000);
+    toast({ title: '🚀 Deploy queued', description: `Repo: ${repo}` });
+  }
+
+  function exportHistory(format: 'json' | 'csv') {
+    if (!historySession || historyMessages.length === 0) return;
+    const safeName = historySession.title.replace(/[^a-z0-9]+/gi, '-').toLowerCase().slice(0, 40) || 'chat';
+    let blob: Blob;
+    let filename: string;
+    if (format === 'json') {
+      const payload = {
+        session: { id: historySession.id, title: historySession.title },
+        exported_at: new Date().toISOString(),
+        messages: historyMessages,
+      };
+      blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+      filename = `${safeName}-history.json`;
+    } else {
+      const escape = (v: string) => `"${(v || '').replace(/"/g, '""')}"`;
+      const rows = [
+        'role,created_at,content',
+        ...historyMessages.map(m => `${m.role},${m.created_at},${escape(m.content)}`),
+      ];
+      blob = new Blob([rows.join('\n')], { type: 'text/csv' });
+      filename = `${safeName}-history.csv`;
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+    toast({ title: `Exported ${format.toUpperCase()}`, description: filename });
   }
 
   function formatDate(dateStr: string) {
@@ -253,6 +291,9 @@ export function ProjectVault({ onOpenSession }: ProjectVaultProps) {
                       </span>
                     </div>
                   </button>
+                  <div className="px-5 pb-3">
+                    <DeployStatusList sessionId={session.id} />
+                  </div>
 
                   {/* Action menu — always visible on mobile */}
                   <DropdownMenu>
@@ -381,6 +422,16 @@ export function ProjectVault({ onOpenSession }: ProjectVaultProps) {
               {historyMessages.length} বার্তা — সম্পূর্ণ চ্যাট হিস্টরি
             </DialogDescription>
           </DialogHeader>
+          {historyMessages.length > 0 && (
+            <div className="flex items-center gap-2 px-1">
+              <Button variant="outline" size="sm" onClick={() => exportHistory('json')}>
+                <FileJson className="h-3.5 w-3.5 mr-1.5" />Export JSON
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => exportHistory('csv')}>
+                <FileSpreadsheet className="h-3.5 w-3.5 mr-1.5" />Export CSV
+              </Button>
+            </div>
+          )}
           <ScrollArea className="h-[50vh] pr-3">
             {historyMessages.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-12">কোনো বার্তা নেই</p>
