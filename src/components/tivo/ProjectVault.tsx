@@ -194,13 +194,6 @@ export function ProjectVault({ onOpenSession }: ProjectVaultProps) {
     plan: { icon: MessageSquare, label: 'Plan', color: 'bg-emerald-500/10 text-emerald-500' },
   };
 
-  function notImplemented(action: string) {
-    toast({
-      title: `${action} — শীঘ্রই আসছে`,
-      description: 'এই ফিচারটি Phase 2-এ সক্রিয় হবে',
-    });
-  }
-
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-y-auto">
       <div className="px-5 pt-6 pb-4">
