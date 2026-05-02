@@ -18,6 +18,14 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { BuildDeliveryDialog } from './BuildDeliveryDialog';
 import { cn } from '@/lib/utils';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { githubService } from '@/services/githubService';
+import { Badge } from '@/components/ui/badge';
 
 interface ProjectVaultProps {
   onOpenSession?: (sessionId: string, mode?: string) => void;
@@ -31,6 +39,10 @@ export function ProjectVault({ onOpenSession }: ProjectVaultProps) {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [messageCounts, setMessageCounts] = useState<Record<string, number>>({});
   const [buildSession, setBuildSession] = useState<{ id: string; title: string } | null>(null);
+  const [editSession, setEditSession] = useState<{ id: string; title: string; domain: string } | null>(null);
+  const [historySession, setHistorySession] = useState<{ id: string; title: string } | null>(null);
+  const [historyMessages, setHistoryMessages] = useState<Array<{ id: string; role: string; content: string; created_at: string }>>([]);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     loadSessions();
@@ -66,6 +78,103 @@ export function ProjectVault({ onOpenSession }: ProjectVaultProps) {
     await hybridChatPersistence.deleteSession(deleteId);
     setSessions(prev => prev.filter(s => s.id !== deleteId));
     setDeleteId(null);
+  }
+
+  async function handleSaveEdit() {
+    if (!editSession) return;
+    setBusy(true);
+    try {
+      await hybridChatPersistence.updateSessionTitle(editSession.id, editSession.title);
+      // domain is metadata-only — store on localStorage for now
+      try {
+        const map = JSON.parse(localStorage.getItem('tivo-project-domains') || '{}');
+        map[editSession.id] = editSession.domain;
+        localStorage.setItem('tivo-project-domains', JSON.stringify(map));
+      } catch { /* ignore */ }
+      setSessions(prev => prev.map(s => s.id === editSession.id ? { ...s, title: editSession.title } : s));
+      toast({ title: '✅ আপডেট সফল', description: `নাম: ${editSession.title}` });
+      setEditSession(null);
+    } catch (e) {
+      toast({ title: 'ত্রুটি', description: String(e), variant: 'destructive' });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function openEdit(session: { id: string; title: string }) {
+    let domain = '';
+    try {
+      const map = JSON.parse(localStorage.getItem('tivo-project-domains') || '{}');
+      domain = map[session.id] || '';
+    } catch { /* ignore */ }
+    setEditSession({ id: session.id, title: session.title, domain });
+  }
+
+  async function openHistory(session: { id: string; title: string }) {
+    setHistorySession(session);
+    setHistoryMessages([]);
+    try {
+      const msgs = await hybridChatPersistence.getMessages(session.id);
+      setHistoryMessages(msgs);
+    } catch (e) {
+      toast({ title: 'হিস্টরি লোড করা যায়নি', variant: 'destructive' });
+    }
+  }
+
+  async function handleGitHubConnect(session: { id: string; title: string }) {
+    if (!githubService.hasToken()) {
+      toast({
+        title: 'GitHub Token প্রয়োজন',
+        description: 'Settings → Tools & Integrations → GitHub Token যোগ করুন।',
+        variant: 'destructive',
+      });
+      return;
+    }
+    setBusy(true);
+    try {
+      const user = await githubService.getUser();
+      const repoName = session.title.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').slice(0, 50) || `tivo-${session.id.slice(0, 8)}`;
+      try {
+        await githubService.createRepo(repoName, `${session.title} — TIVO AI project`, true);
+        toast({ title: '✅ GitHub-এ Repo তৈরি হয়েছে', description: `${user.login}/${repoName}` });
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        if (msg.includes('already exists') || msg.includes('422')) {
+          toast({ title: 'ℹ️ Repo আগে থেকেই আছে', description: `${user.login}/${repoName} ব্যবহার হচ্ছে` });
+        } else {
+          throw e;
+        }
+      }
+      // store mapping
+      try {
+        const map = JSON.parse(localStorage.getItem('tivo-project-github') || '{}');
+        map[session.id] = `${user.login}/${repoName}`;
+        localStorage.setItem('tivo-project-github', JSON.stringify(map));
+      } catch { /* ignore */ }
+    } catch (e) {
+      toast({ title: 'GitHub সংযোগে ত্রুটি', description: String(e), variant: 'destructive' });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function handleDeploy(session: { id: string; title: string }) {
+    let repo = '';
+    try {
+      const map = JSON.parse(localStorage.getItem('tivo-project-github') || '{}');
+      repo = map[session.id] || '';
+    } catch { /* ignore */ }
+    if (!repo) {
+      toast({
+        title: 'প্রথমে GitHub-এ Connect করুন',
+        description: 'Deploy করার আগে Connect to GitHub চাপুন।',
+        variant: 'destructive',
+      });
+      return;
+    }
+    const url = `https://vercel.com/new/clone?repository-url=https://github.com/${repo}`;
+    window.open(url, '_blank', 'noopener,noreferrer');
+    toast({ title: '🚀 Vercel Deploy খোলা হয়েছে', description: `Repo: ${repo}` });
   }
 
   function formatDate(dateStr: string) {
@@ -170,24 +279,24 @@ export function ProjectVault({ onOpenSession }: ProjectVaultProps) {
                       <DropdownMenuItem onClick={() => onOpenSession?.(session.id, session.mode)}>
                         <ExternalLink className="h-3.5 w-3.5 mr-2" />Open
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => notImplemented('Edit (নাম ও ডোমেইন)')}>
+                      <DropdownMenuItem onClick={() => openEdit(session)}>
                         <Pencil className="h-3.5 w-3.5 mr-2" />Edit name & domain
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
                       <DropdownMenuLabel className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
                         Deploy
                       </DropdownMenuLabel>
-                      <DropdownMenuItem onClick={() => notImplemented('Deploy')}>
+                      <DropdownMenuItem onClick={() => handleDeploy(session)}>
                         <GitBranch className="h-3.5 w-3.5 mr-2" />Deploy to Vercel
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => notImplemented('GitHub connect')}>
+                      <DropdownMenuItem onClick={() => handleGitHubConnect(session)}>
                         <Github className="h-3.5 w-3.5 mr-2" />Connect to GitHub
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => setBuildSession({ id: session.id, title: session.title })}>
                         <Download className="h-3.5 w-3.5 mr-2" />Download / Build (ZIP, EXE, APK)
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
-                      <DropdownMenuItem onClick={() => notImplemented('History')}>
+                      <DropdownMenuItem onClick={() => openHistory(session)}>
                         <History className="h-3.5 w-3.5 mr-2" />History
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
@@ -225,6 +334,91 @@ export function ProjectVault({ onOpenSession }: ProjectVaultProps) {
         projectName={buildSession?.title || 'tivo-project'}
         files={[]}
       />
+
+      {/* Edit name & domain dialog */}
+      <Dialog open={!!editSession} onOpenChange={(o) => !o && setEditSession(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>প্রজেক্ট এডিট করুন</DialogTitle>
+            <DialogDescription>প্রজেক্টের নাম ও কাস্টম ডোমেইন আপডেট করুন</DialogDescription>
+          </DialogHeader>
+          {editSession && (
+            <div className="space-y-4 py-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="proj-name">প্রজেক্ট নাম</Label>
+                <Input
+                  id="proj-name"
+                  value={editSession.title}
+                  onChange={(e) => setEditSession({ ...editSession, title: e.target.value })}
+                  placeholder="My awesome project"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="proj-domain">কাস্টম ডোমেইন (ঐচ্ছিক)</Label>
+                <Input
+                  id="proj-domain"
+                  value={editSession.domain}
+                  onChange={(e) => setEditSession({ ...editSession, domain: e.target.value })}
+                  placeholder="myapp.example.com"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Vercel-এ deploy করার পর এই ডোমেইন কনফিগার হবে।
+                </p>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setEditSession(null)} disabled={busy}>বাতিল</Button>
+            <Button onClick={handleSaveEdit} disabled={busy || !editSession?.title.trim()}>
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : 'সেভ করুন'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* History dialog */}
+      <Dialog open={!!historySession} onOpenChange={(o) => !o && setHistorySession(null)}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <History className="h-4 w-4 text-primary" />
+              {historySession?.title} — হিস্টরি
+            </DialogTitle>
+            <DialogDescription>
+              {historyMessages.length} বার্তা — সম্পূর্ণ চ্যাট হিস্টরি
+            </DialogDescription>
+          </DialogHeader>
+          <ScrollArea className="h-[50vh] pr-3">
+            {historyMessages.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-12">কোনো বার্তা নেই</p>
+            ) : (
+              <div className="space-y-3">
+                {historyMessages.map((m) => (
+                  <div
+                    key={m.id}
+                    className={cn(
+                      'rounded-xl p-3 border text-sm',
+                      m.role === 'user'
+                        ? 'bg-primary/5 border-primary/20'
+                        : 'bg-muted/40 border-border/40'
+                    )}
+                  >
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <Badge variant={m.role === 'user' ? 'default' : 'secondary'} className="text-[10px]">
+                        {m.role === 'user' ? 'আপনি' : 'AI'}
+                      </Badge>
+                      <span className="text-[10px] text-muted-foreground">
+                        {new Date(m.created_at).toLocaleString()}
+                      </span>
+                    </div>
+                    <p className="whitespace-pre-wrap text-foreground/90 line-clamp-6">{m.content}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
