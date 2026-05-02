@@ -1,15 +1,32 @@
-import { useState } from 'react';
+import { useEffect, useRef } from 'react';
 import tivoLogo from '@/assets/tivo-logo.png';
 import { Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useLanguage } from '@/contexts/LanguageContext';
-import { cn } from '@/lib/utils';
+import { useToast } from '@/hooks/use-toast';
+import { getCustomDbConfig, isUsingCustomDb } from '@/services/customSupabaseService';
 
 interface HeaderMenuProps {
   onSettingsClick: () => void;
 }
 
 export function HeaderMenu({ onSettingsClick }: HeaderMenuProps) {
+  const { toast } = useToast();
+  const notified = useRef(false);
+
+  useEffect(() => {
+    if (notified.current) return;
+    const cfg = getCustomDbConfig();
+    const seenKey = 'tivo-custom-db-notified';
+    if (cfg && !localStorage.getItem(seenKey)) {
+      notified.current = true;
+      localStorage.setItem(seenKey, '1');
+      toast({
+        title: isUsingCustomDb() ? '🔌 Custom Supabase সক্রিয়' : '🔌 Custom Supabase শনাক্ত হয়েছে',
+        description: 'Vercel env থেকে কাস্টম DB কনফিগ লোড হয়েছে। Admin → System → Custom DB থেকে schema setup ও data migration চালান।',
+      });
+    }
+  }, [toast]);
+
   return (
     <header className="flex items-center justify-between px-4 py-3 border-b border-border/15">
       <div className="flex items-center gap-2.5 shrink-0">
