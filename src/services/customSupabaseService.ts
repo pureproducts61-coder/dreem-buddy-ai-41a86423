@@ -105,3 +105,32 @@ export async function migrateDataToCustomDb(serviceRoleKey: string): Promise<{ o
     return { ok: false, message: e instanceof Error ? e.message : 'Network error' };
   }
 }
+
+/** Verify the custom DB has expected tables + row counts after migration. */
+export async function verifyCustomDb(serviceRoleKey: string): Promise<{
+  ok: boolean; message: string; checks?: Record<string, { source: number; target: number; ok: boolean }>;
+}> {
+  const cfg = getCustomDbConfig();
+  if (!cfg) return { ok: false, message: 'No custom DB env vars detected.' };
+  try {
+    const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/custom-db-setup`;
+    const { data: { session } } = await defaultClient.auth.getSession();
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+      },
+      body: JSON.stringify({
+        action: 'verify',
+        target_url: cfg.url,
+        target_service_role_key: serviceRoleKey,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) return { ok: false, message: data.error || `Verification failed (${res.status})` };
+    return { ok: !!data.ok, message: data.message || 'Verification done.', checks: data.checks };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : 'Network error' };
+  }
+}

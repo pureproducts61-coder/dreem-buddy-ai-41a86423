@@ -122,7 +122,7 @@ export function SmartInputBar({ mode, onModeChange, onSendMessage, isLoading, cl
 
   return (
     <motion.div
-      className={cn('floating-bar mx-3 mb-3 flex flex-col', className)}
+      className={cn('floating-bar input-thread mx-3 mb-3 flex flex-col', className)}
       initial={{ y: 40, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       transition={{ type: 'spring', damping: 25, stiffness: 300 }}
@@ -173,13 +173,9 @@ export function SmartInputBar({ mode, onModeChange, onSendMessage, isLoading, cl
           {/* Mode Popover */}
           <Popover open={modeOpen} onOpenChange={setModeOpen}>
             <PopoverTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className={cn('h-10 w-10 rounded-full bg-secondary/50 hover:bg-secondary', modeConfig[mode].color)}
-              >
+              <button className={cn('pill-btn', modeConfig[mode].color)} title={`Mode: ${mode}`}>
                 <ActiveIcon className="h-[18px] w-[18px]" />
-              </Button>
+              </button>
             </PopoverTrigger>
             <PopoverContent className="w-44 p-1.5" side="top" align="start">
               {(['build', 'automation', 'plan'] as TivoMode[]).map((m) => {
@@ -205,22 +201,18 @@ export function SmartInputBar({ mode, onModeChange, onSendMessage, isLoading, cl
           </Popover>
 
           {/* Voice */}
-          <Button
-            variant="ghost"
-            size="icon"
-            className={cn(
-              'h-10 w-10 rounded-full bg-secondary/50 hover:bg-secondary transition-colors',
-              isListening && 'bg-destructive/10 text-destructive'
-            )}
+          <button
+            className={cn('pill-btn', isListening && 'bg-destructive/15 text-destructive border-destructive/40 shadow-[0_0_18px_hsl(var(--destructive)/0.25)]')}
             onClick={toggleVoice}
+            title="Voice input"
           >
             {isListening ? <MicOff className="h-[18px] w-[18px]" /> : <Mic className="h-[18px] w-[18px]" />}
-          </Button>
+          </button>
 
           {/* Attach */}
-          <Button variant="ghost" size="icon" className="h-10 w-10 rounded-full bg-secondary/50 hover:bg-secondary" onClick={() => fileInputRef.current?.click()}>
+          <button className="pill-btn" onClick={() => fileInputRef.current?.click()} title="Attach file">
             <Plus className="h-[18px] w-[18px]" />
-          </Button>
+          </button>
           <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleFileChange} />
         </div>
 
@@ -248,8 +240,8 @@ export function SmartInputBar({ mode, onModeChange, onSendMessage, isLoading, cl
           <Button
             size="icon"
             className={cn(
-              'h-11 w-11 rounded-full transition-all shadow-md',
-              input.trim() && !outOfCredits ? 'glow-primary' : ''
+              'h-11 w-11 rounded-full transition-all shadow-md bg-gradient-to-br from-primary to-primary/70 hover:scale-[1.04] active:scale-95',
+              input.trim() && !outOfCredits ? 'glow-primary-strong' : ''
             )}
             onClick={handleSend}
             disabled={!input.trim() || isLoading}

@@ -1,4 +1,3 @@
-import { useStreamingText } from '@/hooks/useStreamingText';
 import { motion } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -41,12 +40,14 @@ function CodeBlock({ language, children }: { language: string; children: string 
 }
 
 export function StreamingMessage({ content, isLatest }: StreamingMessageProps) {
-  const { displayedText, isStreaming } = useStreamingText(content, 15);
-  const text = isLatest ? displayedText : content;
-  const showCursor = isLatest && isStreaming;
+  // Render the streamed text as it arrives — no extra typewriter
+  // (the edge function already streams token-by-token, so this gives
+  // a smooth, append-only flow instead of the jumpy re-type effect).
+  const text = content;
+  const showCursor = isLatest && content.length > 0;
 
   return (
-    <div className="text-[15px] leading-[1.75] text-foreground prose prose-base dark:prose-invert max-w-none prose-headings:text-foreground prose-headings:font-display prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg prose-p:text-foreground prose-p:mb-3 prose-strong:text-foreground prose-strong:font-semibold prose-code:text-primary prose-code:bg-secondary/60 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded-md prose-code:text-sm prose-code:font-medium prose-code:before:content-none prose-code:after:content-none prose-a:text-primary prose-a:underline prose-blockquote:border-primary/40 prose-blockquote:text-muted-foreground prose-blockquote:italic prose-li:text-foreground prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5">
+    <div className="text-[17px] leading-[1.8] text-foreground prose prose-lg dark:prose-invert max-w-none prose-headings:text-foreground prose-headings:font-display prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg prose-p:text-foreground prose-p:mb-3 prose-strong:text-foreground prose-strong:font-semibold prose-code:text-primary prose-code:bg-secondary/60 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded-md prose-code:text-[15px] prose-code:font-medium prose-code:before:content-none prose-code:after:content-none prose-a:text-primary prose-a:underline prose-blockquote:border-primary/40 prose-blockquote:text-muted-foreground prose-blockquote:italic prose-li:text-foreground prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5">
       <ReactMarkdown
         components={{
           code({ className, children, ...props }) {
@@ -65,7 +66,7 @@ export function StreamingMessage({ content, isLatest }: StreamingMessageProps) {
         <motion.span
           animate={{ opacity: [1, 0] }}
           transition={{ duration: 0.5, repeat: Infinity }}
-          className="inline-block w-0.5 h-5 bg-primary ml-0.5 align-middle"
+          className="inline-block w-[3px] h-[18px] bg-primary ml-1 align-middle rounded-sm"
         />
       )}
     </div>

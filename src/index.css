@@ -171,6 +171,36 @@
       inset 0 1px 0 hsl(0 0% 100% / 0.05);
   }
 
+  /* Thread-style hairline border for the input bar */
+  .input-thread {
+    position: relative;
+  }
+  .input-thread::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(135deg,
+      hsl(var(--primary) / 0.5) 0%,
+      hsl(var(--border) / 0.3) 35%,
+      hsl(var(--primary) / 0.25) 65%,
+      hsl(var(--border) / 0.3) 100%);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+            mask-composite: exclude;
+    pointer-events: none;
+  }
+
+  .pill-btn {
+    @apply h-10 w-10 rounded-full inline-flex items-center justify-center transition-all
+           bg-secondary/60 hover:bg-secondary border border-border/40
+           shadow-[inset_0_1px_0_hsl(0_0%_100%/0.06)] hover:shadow-[0_4px_14px_hsl(var(--primary)/0.18)];
+  }
+  .pill-btn-active {
+    @apply bg-primary/15 border-primary/40 text-primary shadow-[0_0_18px_hsl(var(--primary)/0.25)];
+  }
+
   .subtle-grid {
     background-image:
       linear-gradient(hsl(var(--primary) / 0.02) 1px, transparent 1px),

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Database, AlertTriangle, CheckCircle2, Eye, EyeOff, Play, ArrowRightLeft, Power } from 'lucide-react';
+import { Database, AlertTriangle, CheckCircle2, Eye, EyeOff, Play, ArrowRightLeft, Power, ShieldCheck } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,7 +10,7 @@ import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
 import {
   getCustomDbConfig, isUsingCustomDb, setUseCustomDb,
-  setupCustomDb, migrateDataToCustomDb,
+  setupCustomDb, migrateDataToCustomDb, verifyCustomDb,
 } from '@/services/customSupabaseService';
 
 export function CustomDbTab() {
@@ -19,8 +19,8 @@ export function CustomDbTab() {
   const [usingCustom, setUsingCustom] = useState(isUsingCustomDb());
   const [serviceKey, setServiceKey] = useState('');
   const [showKey, setShowKey] = useState(false);
-  const [busy, setBusy] = useState<'setup' | 'migrate' | null>(null);
-  const [lastResult, setLastResult] = useState<{ ok: boolean; message: string; stats?: Record<string, number> } | null>(null);
+  const [busy, setBusy] = useState<'setup' | 'migrate' | 'verify' | null>(null);
+  const [lastResult, setLastResult] = useState<{ ok: boolean; message: string; stats?: Record<string, number>; checks?: Record<string, { source: number; target: number; ok: boolean }> } | null>(null);
 
   useEffect(() => { setUsingCustom(isUsingCustomDb()); }, []);
 
@@ -30,7 +30,7 @@ export function CustomDbTab() {
     toast({ title: v ? 'Switched to custom DB' : 'Switched to default DB', description: 'Reload the page for the change to fully take effect.' });
   };
 
-  const handleAction = async (action: 'setup' | 'migrate') => {
+  const handleAction = async (action: 'setup' | 'migrate' | 'verify') => {
     if (!serviceKey.trim()) {
       toast({ title: 'Service-role key required', variant: 'destructive' });
       return;
@@ -38,7 +38,9 @@ export function CustomDbTab() {
     setBusy(action);
     setLastResult(null);
     try {
-      const fn = action === 'setup' ? setupCustomDb : migrateDataToCustomDb;
+      const fn = action === 'setup' ? setupCustomDb
+        : action === 'migrate' ? migrateDataToCustomDb
+        : verifyCustomDb;
       const res = await fn(serviceKey.trim());
       setLastResult(res);
       toast({
@@ -122,14 +124,18 @@ export function CustomDbTab() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <Button onClick={() => handleAction('setup')} disabled={busy !== null || !serviceKey.trim()} variant="outline">
                 <Play className="h-3.5 w-3.5 mr-1.5" />
                 {busy === 'setup' ? 'Setting up...' : '1. Create schema'}
               </Button>
-              <Button onClick={() => handleAction('migrate')} disabled={busy !== null || !serviceKey.trim()}>
+              <Button onClick={() => handleAction('migrate')} disabled={busy !== null || !serviceKey.trim()} variant="outline">
                 <ArrowRightLeft className="h-3.5 w-3.5 mr-1.5" />
                 {busy === 'migrate' ? 'Migrating...' : '2. Migrate data'}
+              </Button>
+              <Button onClick={() => handleAction('verify')} disabled={busy !== null || !serviceKey.trim()}>
+                <ShieldCheck className="h-3.5 w-3.5 mr-1.5" />
+                {busy === 'verify' ? 'Verifying...' : '3. Verify'}
               </Button>
             </div>
 
@@ -151,6 +157,18 @@ export function CustomDbTab() {
                         <div key={t} className="text-[11px] flex justify-between p-1.5 rounded bg-background/40">
                           <span className="font-mono text-muted-foreground">{t}</span>
                           <Badge variant="outline" className="text-[10px]">{c}</Badge>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {lastResult.checks && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+                      {Object.entries(lastResult.checks).map(([t, c]) => (
+                        <div key={t} className="text-[11px] flex items-center justify-between p-1.5 rounded bg-background/40">
+                          <span className="font-mono text-muted-foreground">{t}</span>
+                          <Badge variant="outline" className={`text-[10px] ${c.ok ? 'border-emerald-500/40 text-emerald-500' : 'border-destructive/40 text-destructive'}`}>
+                            {c.source} → {c.target}
+                          </Badge>
                         </div>
                       ))}
                     </div>
