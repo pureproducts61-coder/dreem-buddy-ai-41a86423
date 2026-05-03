@@ -14,7 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import { extractAndPreviewCode } from '@/services/previewBridge';
 import { Plus } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { deductCredits } from '@/services/creditsService';
+import { deductCredits, CREDIT_COST_PER_MESSAGE } from '@/services/creditsService';
 import { SendToAdminDialog } from './SendToAdminDialog';
 
 export interface Message {
@@ -23,6 +23,8 @@ export interface Message {
   content: string;
   timestamp: Date;
   toolEvents?: ToolEvent[];
+  durationMs?: number;
+  creditsUsed?: number;
 }
 
 interface ChatTabProps {
@@ -200,12 +202,18 @@ export function ChatTab({ initialSessionId, initialMode }: ChatTabProps) {
     let assistantContent = '';
     const assistantId = crypto.randomUUID();
     const toolEvents: ToolEvent[] = [];
+    const startedAt = Date.now();
 
     const updateAssistantMsg = () => {
       setMessages(prev => {
         const modeMessages = prev[mode];
         const lastMsg = modeMessages[modeMessages.length - 1];
-        const msgData = { id: assistantId, role: 'assistant' as const, content: assistantContent, timestamp: new Date(), toolEvents: [...toolEvents] };
+        const msgData = {
+          id: assistantId, role: 'assistant' as const, content: assistantContent,
+          timestamp: new Date(), toolEvents: [...toolEvents],
+          durationMs: Date.now() - startedAt,
+          creditsUsed: isAdmin ? 0 : CREDIT_COST_PER_MESSAGE,
+        };
         if (lastMsg?.id === assistantId) {
           return { ...prev, [mode]: modeMessages.map(m => m.id === assistantId ? msgData : m) };
         }
