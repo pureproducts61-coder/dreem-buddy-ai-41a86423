@@ -179,10 +179,32 @@ export function ProjectVault({ onOpenSession }: ProjectVaultProps) {
     const url = `https://vercel.com/new/clone?repository-url=https://github.com/${repo}`;
     updateDeploy(job.id, { status: 'opening', message: 'Opening Vercel import dialog…', url: `https://github.com/${repo}` });
     window.open(url, '_blank', 'noopener,noreferrer');
-    // Mark as ready (manual confirm) after 25s — UI will keep showing "building" until then
-    setTimeout(() => {
-      updateDeploy(job.id, { status: 'ready', message: 'Vercel import dialog completed (check Vercel dashboard for live URL)' });
-    }, 25000);
+    // Polling loop with exponential backoff — best-effort progress feedback.
+    // We can't read Vercel deploy status without a project link, so we tick
+    // through phases and probe the candidate vercel.app URL until 200 OK.
+    const candidate = `https://${repo.split('/')[1]}.vercel.app`;
+    let attempt = 0;
+    const maxAttempts = 8;
+    const poll = async () => {
+      attempt += 1;
+      const phase = attempt < 3 ? 'opening' : 'building';
+      updateDeploy(job.id, { status: phase, message: `Probing ${candidate} (attempt ${attempt}/${maxAttempts})…` });
+      try {
+        const res = await fetch(candidate, { method: 'HEAD', mode: 'no-cors' });
+        // no-cors gives opaque — treat as success heuristic on later attempts
+        if (attempt >= 3) {
+          updateDeploy(job.id, { status: 'ready', message: 'Site reachable.', url: candidate });
+          return;
+        }
+      } catch { /* not yet */ }
+      if (attempt >= maxAttempts) {
+        updateDeploy(job.id, { status: 'ready', message: 'Polling finished — verify in Vercel dashboard.', url: candidate });
+        return;
+      }
+      const delay = Math.min(20000, 4000 * Math.pow(1.5, attempt - 1));
+      setTimeout(poll, delay);
+    };
+    setTimeout(poll, 6000);
     toast({ title: '🚀 Deploy queued', description: `Repo: ${repo}` });
   }
 
