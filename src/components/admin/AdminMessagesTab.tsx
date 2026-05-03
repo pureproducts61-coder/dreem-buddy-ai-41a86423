@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Mail, MailOpen, RefreshCw, CheckCircle2, Inbox, MessageCircle } from 'lucide-react';
+import { Mail, MailOpen, RefreshCw, CheckCircle2, Inbox } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -14,6 +14,7 @@ export function AdminMessagesTab() {
   const [loading, setLoading] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
   const [reply, setReply] = useState('');
+  const [flashId, setFlashId] = useState<string | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -26,10 +27,20 @@ export function AdminMessagesTab() {
     load();
     const channel = supabase
       .channel('admin-inbox')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'admin_messages' }, () => load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'admin_messages' }, (payload) => {
+        load();
+        if (payload.eventType === 'INSERT') {
+          const id = (payload.new as { id?: string })?.id;
+          if (id) {
+            setFlashId(id);
+            toast({ title: '📬 New user message', description: (payload.new as { subject?: string })?.subject || '' });
+            setTimeout(() => setFlashId(null), 4000);
+          }
+        }
+      })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, []);
+  }, [toast]);
 
   const handleHandle = async (id: string) => {
     try {
@@ -79,7 +90,7 @@ export function AdminMessagesTab() {
                       isHandled ? 'border-border/30 bg-muted/20 opacity-70'
                         : m.status === 'unread' ? 'border-primary/30 bg-primary/5'
                         : 'border-border/40 bg-card'
-                    }`}>
+                    } ${flashId === m.id ? 'ring-2 ring-primary/60 animate-pulse' : ''}`}>
                     <button onClick={() => setOpenId(isOpen ? null : m.id)} className="w-full text-left">
                       <div className="flex items-center gap-2 mb-1">
                         {isHandled ? <MailOpen className="h-3.5 w-3.5 text-muted-foreground" />
