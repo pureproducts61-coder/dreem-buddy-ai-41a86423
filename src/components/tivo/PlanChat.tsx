@@ -41,7 +41,10 @@ export function PlanChat({ messages, isLoading }: PlanChatProps) {
 
   return (
     <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto">
-     <div className="mx-auto max-w-3xl px-4 sm:px-6 py-8 space-y-8">
+     <div className={cn(
+       'mx-auto max-w-3xl px-4 sm:px-6 py-8 space-y-8',
+       messages.length <= 2 && 'min-h-full flex flex-col justify-center',
+     )}>
       <AnimatePresence mode="popLayout">
         {messages.map((msg, idx) => (
           <motion.div
