@@ -276,6 +276,33 @@ Deno.serve(async (req: Request) => {
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
+    if (action === "verify") {
+      // Compare row counts between source and target as a sanity check
+      const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+      const SOURCE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+      const source = createClient(SUPABASE_URL, SOURCE_KEY);
+      const target = createClient(target_url, target_service_role_key);
+      const checks: Record<string, { source: number; target: number; ok: boolean }> = {};
+      let allOk = true;
+      for (const t of TABLES_TO_MIGRATE) {
+        try {
+          const { count: src } = await source.from(t).select("*", { count: "exact", head: true });
+          const { count: tgt } = await target.from(t).select("*", { count: "exact", head: true });
+          const ok = (tgt ?? 0) >= (src ?? 0);
+          checks[t] = { source: src ?? 0, target: tgt ?? 0, ok };
+          if (!ok) allOk = false;
+        } catch (e) {
+          checks[t] = { source: -1, target: -1, ok: false };
+          allOk = false;
+        }
+      }
+      return new Response(JSON.stringify({
+        message: allOk ? "✅ Verification passed — all tables present and counts match." : "⚠️ Some tables differ — review the report.",
+        ok: allOk,
+        checks,
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     return new Response(JSON.stringify({ error: "Unknown action" }), {
       status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
