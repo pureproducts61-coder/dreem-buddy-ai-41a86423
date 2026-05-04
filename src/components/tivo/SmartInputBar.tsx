@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { Send, Mic, MicOff, Paperclip, X, Hammer, Zap, MessageSquare, Coins, Sparkles, CornerDownLeft } from 'lucide-react';
+import { Send, Mic, MicOff, Paperclip, X, Hammer, Zap, MessageSquare, Coins, Sparkles, CornerDownLeft, MoreHorizontal, RefreshCw, Rocket, Github, Download, History, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -18,6 +18,16 @@ interface SmartInputBarProps {
   className?: string;
   externalDraft?: string;
   onRequestMoreCredits?: () => void;
+  /** Optional callback set: when active session exists, expose vault actions */
+  sessionActions?: {
+    onUpdate?: () => void;
+    onEdit?: () => void;
+    onDeploy?: () => void;
+    onConnectGithub?: () => void;
+    onDownload?: () => void;
+    onHistory?: () => void;
+    onDelete?: () => void;
+  };
 }
 
 const modeConfig = {
@@ -26,7 +36,7 @@ const modeConfig = {
   plan: { icon: MessageSquare, label: 'Plan', color: 'text-emerald-500' },
 };
 
-export function SmartInputBar({ mode, onModeChange, onSendMessage, isLoading, className, externalDraft, onRequestMoreCredits }: SmartInputBarProps) {
+export function SmartInputBar({ mode, onModeChange, onSendMessage, isLoading, className, externalDraft, onRequestMoreCredits, sessionActions }: SmartInputBarProps) {
   const { t } = useLanguage();
   const [input, setInput] = useState('');
   const [isListening, setIsListening] = useState(false);
@@ -270,6 +280,40 @@ export function SmartInputBar({ mode, onModeChange, onSendMessage, isLoading, cl
             >
               <CornerDownLeft className="h-[18px] w-[18px]" strokeWidth={2.2} />
             </button>
+          )}
+
+          {/* Session action menu (mirror of vault ⋮) */}
+          {sessionActions && (
+            <Popover>
+              <PopoverTrigger asChild>
+                <button className="pill-btn" title="Project actions">
+                  <MoreHorizontal className="h-[18px] w-[18px]" strokeWidth={2.2} />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent side="top" align="start" className="w-56 p-1.5 rounded-2xl border-border/50 backdrop-blur-2xl bg-popover/95 shadow-2xl shadow-primary/10">
+                <div className="text-[10px] font-mono uppercase tracking-[0.15em] text-muted-foreground px-2 py-1 flex items-center gap-1.5">
+                  <Sparkles className="h-3 w-3 text-primary" />Project Actions
+                </div>
+                {[
+                  { icon: RefreshCw, label: 'Update', cls: 'text-emerald-500', fn: sessionActions.onUpdate },
+                  { icon: Pencil, label: 'Edit name & domain', cls: 'text-amber-500', fn: sessionActions.onEdit },
+                  { icon: Rocket, label: 'Deploy to Vercel', cls: 'text-primary', fn: sessionActions.onDeploy },
+                  { icon: Github, label: 'Connect GitHub', cls: '', fn: sessionActions.onConnectGithub },
+                  { icon: Download, label: 'Download (ZIP/EXE/APK)', cls: 'text-cyan-500', fn: sessionActions.onDownload },
+                  { icon: History, label: 'History & Export', cls: '', fn: sessionActions.onHistory },
+                  { icon: Trash2, label: 'Delete session', cls: 'text-destructive', fn: sessionActions.onDelete },
+                ].filter(a => !!a.fn).map(a => (
+                  <button
+                    key={a.label}
+                    onClick={a.fn}
+                    className={cn('w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs hover:bg-secondary transition-colors', a.cls)}
+                  >
+                    <a.icon className="h-3.5 w-3.5" />
+                    <span className={a.cls.includes('destructive') ? '' : 'text-foreground'}>{a.label}</span>
+                  </button>
+                ))}
+              </PopoverContent>
+            </Popover>
           )}
         </div>
 
