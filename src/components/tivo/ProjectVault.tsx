@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import {
   Trash2, FolderOpen, MessageCircle, Clock, Loader2, Hammer, MessageSquare,
   MoreVertical, Pencil, GitBranch, History, Download, Github, ExternalLink,
-  FileJson, FileSpreadsheet, RefreshCw, Rocket,
+  FileJson, FileSpreadsheet, RefreshCw, Rocket, Sparkles,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/contexts/LanguageContext';
