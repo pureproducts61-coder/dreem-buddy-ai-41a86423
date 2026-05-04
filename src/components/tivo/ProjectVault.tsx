@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import {
   Trash2, FolderOpen, MessageCircle, Clock, Loader2, Hammer, MessageSquare,
   MoreVertical, Pencil, GitBranch, History, Download, Github, ExternalLink,
-  FileJson, FileSpreadsheet,
+  FileJson, FileSpreadsheet, RefreshCw, Rocket,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -323,44 +323,48 @@ export function ProjectVault({ onOpenSession }: ProjectVaultProps) {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="absolute top-3 right-3 h-9 w-9 rounded-xl bg-background/60 backdrop-blur hover:bg-background border border-border/40"
+                        className="absolute top-3 right-3 h-9 w-9 rounded-xl bg-gradient-to-br from-card/90 to-card/60 backdrop-blur-md hover:from-primary/15 hover:to-primary/5 border border-border/50 hover:border-primary/40 shadow-md transition-all"
                       >
                         <MoreVertical className="h-4 w-4" />
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-56">
-                      <DropdownMenuLabel className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
-                        Project Actions
+                    <DropdownMenuContent
+                      align="end"
+                      className="w-60 p-1.5 rounded-2xl border-border/50 backdrop-blur-2xl bg-popover/95 shadow-2xl shadow-primary/10"
+                    >
+                      <DropdownMenuLabel className="text-[10px] font-mono uppercase tracking-[0.15em] text-muted-foreground px-2 pt-1.5 pb-1 flex items-center gap-1.5">
+                        <Sparkles className="h-3 w-3 text-primary" />Project Actions
                       </DropdownMenuLabel>
-                      <DropdownMenuItem onClick={() => onOpenSession?.(session.id, session.mode)}>
-                        <ExternalLink className="h-3.5 w-3.5 mr-2" />Open
+                      <DropdownMenuItem onClick={() => onOpenSession?.(session.id, session.mode)} className="rounded-lg gap-2 text-xs">
+                        <ExternalLink className="h-3.5 w-3.5 text-primary" />Open project
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => openEdit(session)}>
-                        <Pencil className="h-3.5 w-3.5 mr-2" />Edit name & domain
+                      <DropdownMenuItem onClick={() => onOpenSession?.(session.id, session.mode)} className="rounded-lg gap-2 text-xs">
+                        <RefreshCw className="h-3.5 w-3.5 text-emerald-500" />Update (continue with AI)
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => openEdit(session)} className="rounded-lg gap-2 text-xs">
+                        <Pencil className="h-3.5 w-3.5 text-amber-500" />Edit name & domain
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
-                      <DropdownMenuLabel className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
-                        Deploy
-                      </DropdownMenuLabel>
-                      <DropdownMenuItem onClick={() => handleDeploy(session)}>
-                        <GitBranch className="h-3.5 w-3.5 mr-2" />Deploy to Vercel
+                      <DropdownMenuLabel className="text-[10px] font-mono uppercase tracking-[0.15em] text-muted-foreground px-2 pt-1 pb-1">Deploy</DropdownMenuLabel>
+                      <DropdownMenuItem onClick={() => handleDeploy(session)} className="rounded-lg gap-2 text-xs">
+                        <Rocket className="h-3.5 w-3.5 text-primary" />Deploy to Vercel
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleGitHubConnect(session)}>
-                        <Github className="h-3.5 w-3.5 mr-2" />Connect to GitHub
+                      <DropdownMenuItem onClick={() => handleGitHubConnect(session)} className="rounded-lg gap-2 text-xs">
+                        <Github className="h-3.5 w-3.5" />Connect to GitHub
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => setBuildSession({ id: session.id, title: session.title })}>
-                        <Download className="h-3.5 w-3.5 mr-2" />Download / Build (ZIP, EXE, APK)
+                      <DropdownMenuItem onClick={() => setBuildSession({ id: session.id, title: session.title })} className="rounded-lg gap-2 text-xs">
+                        <Download className="h-3.5 w-3.5 text-cyan-500" />Download (ZIP / EXE / APK)
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
-                      <DropdownMenuItem onClick={() => openHistory(session)}>
-                        <History className="h-3.5 w-3.5 mr-2" />History
+                      <DropdownMenuItem onClick={() => openHistory(session)} className="rounded-lg gap-2 text-xs">
+                        <History className="h-3.5 w-3.5" />History & Export
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem
                         onClick={() => setDeleteId(session.id)}
-                        className="text-destructive focus:text-destructive focus:bg-destructive/10"
+                        className="rounded-lg gap-2 text-xs text-destructive focus:text-destructive focus:bg-destructive/10"
                       >
-                        <Trash2 className="h-3.5 w-3.5 mr-2" />Delete session
+                        <Trash2 className="h-3.5 w-3.5" />Delete session
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
