@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { Send, Mic, MicOff, Plus, X, Hammer, Zap, MessageSquare, Coins } from 'lucide-react';
+import { Send, Mic, MicOff, Paperclip, X, Hammer, Zap, MessageSquare, Coins, Sparkles, CornerDownLeft, MoreHorizontal, RefreshCw, Rocket, Github, Download, History, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -18,6 +18,16 @@ interface SmartInputBarProps {
   className?: string;
   externalDraft?: string;
   onRequestMoreCredits?: () => void;
+  /** Optional callback set: when active session exists, expose vault actions */
+  sessionActions?: {
+    onUpdate?: () => void;
+    onEdit?: () => void;
+    onDeploy?: () => void;
+    onConnectGithub?: () => void;
+    onDownload?: () => void;
+    onHistory?: () => void;
+    onDelete?: () => void;
+  };
 }
 
 const modeConfig = {
@@ -26,20 +36,29 @@ const modeConfig = {
   plan: { icon: MessageSquare, label: 'Plan', color: 'text-emerald-500' },
 };
 
-export function SmartInputBar({ mode, onModeChange, onSendMessage, isLoading, className, externalDraft, onRequestMoreCredits }: SmartInputBarProps) {
+export function SmartInputBar({ mode, onModeChange, onSendMessage, isLoading, className, externalDraft, onRequestMoreCredits, sessionActions }: SmartInputBarProps) {
   const { t } = useLanguage();
   const [input, setInput] = useState('');
   const [isListening, setIsListening] = useState(false);
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
   const [modeOpen, setModeOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const recognitionRef = useRef<any>(null);
+  const baseInputRef = useRef('');
   const { credits, isAdmin } = useCredits();
 
   const ActiveIcon = modeConfig[mode].icon;
   const isAdminUser = isAdmin;
   const outOfCredits = !isAdminUser && credits <= 0;
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.matchMedia('(max-width: 640px)').matches);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
 
   // Allow parent to inject a draft (e.g. from suggestion chip click)
   useEffect(() => {
@@ -61,9 +80,30 @@ export function SmartInputBar({ mode, onModeChange, onSendMessage, isLoading, cl
   }, [input, isLoading, onSendMessage, attachedFiles, outOfCredits, onRequestMoreCredits]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    // On mobile: Enter = newline (use Send button instead).
+    // On desktop: Enter = send, Shift/Ctrl+Enter = newline.
+    if (e.key === 'Enter') {
+      if (isMobile) return; // allow newline
+      if (e.shiftKey || e.ctrlKey || e.metaKey) return; // newline
       e.preventDefault();
       handleSend();
+    }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    // Allow native paste; also intercept image files from clipboard
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    const imgs: File[] = [];
+    for (const it of Array.from(items)) {
+      if (it.kind === 'file') {
+        const f = it.getAsFile();
+        if (f) imgs.push(f);
+      }
+    }
+    if (imgs.length > 0) {
+      e.preventDefault();
+      setAttachedFiles(prev => [...prev, ...imgs]);
     }
   };
 
@@ -91,21 +131,28 @@ export function SmartInputBar({ mode, onModeChange, onSendMessage, isLoading, cl
       return;
     }
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) return;
+    if (!SpeechRecognition) {
+      alert('এই ব্রাউজারে Voice সাপোর্ট নেই। Chrome/Edge ব্যবহার করুন।');
+      return;
+    }
+    baseInputRef.current = input ? input + ' ' : '';
     const recognition = new SpeechRecognition();
     recognition.continuous = true;
     recognition.interimResults = true;
-    recognition.lang = 'bn-BD';
+    recognition.lang = navigator.language?.startsWith('bn') ? 'bn-BD' : 'en-US';
     recognitionRef.current = recognition;
     recognition.onresult = (event: any) => {
-      const transcript = Array.from(event.results).map((r: any) => r[0].transcript).join(' ');
-      setInput(transcript);
+      let transcript = '';
+      for (let i = 0; i < event.results.length; i++) {
+        transcript += event.results[i][0].transcript;
+      }
+      setInput(baseInputRef.current + transcript);
     };
     recognition.onerror = () => setIsListening(false);
     recognition.onend = () => setIsListening(false);
     recognition.start();
     setIsListening(true);
-  }, [isListening]);
+  }, [isListening, input]);
 
   useEffect(() => {
     return () => recognitionRef.current?.stop();
@@ -161,6 +208,7 @@ export function SmartInputBar({ mode, onModeChange, onSendMessage, isLoading, cl
         value={input}
         onChange={(e) => setInput(e.target.value)}
         onKeyDown={handleKeyDown}
+        onPaste={handlePaste}
         placeholder={outOfCredits ? 'Out of credits — request more from admin' : t('home.inputPlaceholder')}
         rows={1}
         className="w-full min-h-[52px] max-h-[180px] resize-none bg-transparent border-0 outline-none text-foreground placeholder:text-muted-foreground/50 px-4 pt-4 pb-1 text-base leading-relaxed"
@@ -173,8 +221,9 @@ export function SmartInputBar({ mode, onModeChange, onSendMessage, isLoading, cl
           {/* Mode Popover */}
           <Popover open={modeOpen} onOpenChange={setModeOpen}>
             <PopoverTrigger asChild>
-              <button className={cn('pill-btn', modeConfig[mode].color)} title={`Mode: ${mode}`}>
-                <ActiveIcon className="h-[18px] w-[18px]" />
+              <button className={cn('pill-btn relative', modeConfig[mode].color)} title={`Mode: ${mode}`}>
+                <ActiveIcon className="h-[18px] w-[18px]" strokeWidth={2.2} />
+                <Sparkles className="h-2.5 w-2.5 absolute -top-0.5 -right-0.5 text-primary opacity-80" />
               </button>
             </PopoverTrigger>
             <PopoverContent className="w-44 p-1.5" side="top" align="start">
@@ -206,14 +255,66 @@ export function SmartInputBar({ mode, onModeChange, onSendMessage, isLoading, cl
             onClick={toggleVoice}
             title="Voice input"
           >
-            {isListening ? <MicOff className="h-[18px] w-[18px]" /> : <Mic className="h-[18px] w-[18px]" />}
+            {isListening ? <MicOff className="h-[18px] w-[18px]" strokeWidth={2.2} /> : <Mic className="h-[18px] w-[18px]" strokeWidth={2.2} />}
           </button>
 
           {/* Attach */}
-          <button className="pill-btn" onClick={() => fileInputRef.current?.click()} title="Attach file">
-            <Plus className="h-[18px] w-[18px]" />
+          <button className="pill-btn" onClick={() => fileInputRef.current?.click()} title="Attach file or image">
+            <Paperclip className="h-[18px] w-[18px]" strokeWidth={2.2} />
           </button>
-          <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleFileChange} />
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept="image/*,text/*,.json,.md,.txt,.csv,.pdf,.tsx,.ts,.jsx,.js,.html,.css,.py,.yml,.yaml,.xml,.sql,.sh,.env,.toml,.cfg,.ini"
+            className="hidden"
+            onChange={handleFileChange}
+          />
+
+          {/* Newline helper (mobile-only visual hint) */}
+          {isMobile && (
+            <button
+              className="pill-btn"
+              onClick={() => setInput(v => v + '\n')}
+              title="নতুন লাইন"
+            >
+              <CornerDownLeft className="h-[18px] w-[18px]" strokeWidth={2.2} />
+            </button>
+          )}
+
+          {/* Session action menu (mirror of vault ⋮) */}
+          {sessionActions && (
+            <Popover>
+              <PopoverTrigger asChild>
+                <button className="pill-btn" title="Project actions">
+                  <MoreHorizontal className="h-[18px] w-[18px]" strokeWidth={2.2} />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent side="top" align="start" className="w-56 p-1.5 rounded-2xl border-border/50 backdrop-blur-2xl bg-popover/95 shadow-2xl shadow-primary/10">
+                <div className="text-[10px] font-mono uppercase tracking-[0.15em] text-muted-foreground px-2 py-1 flex items-center gap-1.5">
+                  <Sparkles className="h-3 w-3 text-primary" />Project Actions
+                </div>
+                {[
+                  { icon: RefreshCw, label: 'Update', cls: 'text-emerald-500', fn: sessionActions.onUpdate },
+                  { icon: Pencil, label: 'Edit name & domain', cls: 'text-amber-500', fn: sessionActions.onEdit },
+                  { icon: Rocket, label: 'Deploy to Vercel', cls: 'text-primary', fn: sessionActions.onDeploy },
+                  { icon: Github, label: 'Connect GitHub', cls: '', fn: sessionActions.onConnectGithub },
+                  { icon: Download, label: 'Download (ZIP/EXE/APK)', cls: 'text-cyan-500', fn: sessionActions.onDownload },
+                  { icon: History, label: 'History & Export', cls: '', fn: sessionActions.onHistory },
+                  { icon: Trash2, label: 'Delete session', cls: 'text-destructive', fn: sessionActions.onDelete },
+                ].filter(a => !!a.fn).map(a => (
+                  <button
+                    key={a.label}
+                    onClick={a.fn}
+                    className={cn('w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs hover:bg-secondary transition-colors', a.cls)}
+                  >
+                    <a.icon className="h-3.5 w-3.5" />
+                    <span className={a.cls.includes('destructive') ? '' : 'text-foreground'}>{a.label}</span>
+                  </button>
+                ))}
+              </PopoverContent>
+            </Popover>
+          )}
         </div>
 
         <div className="flex items-center gap-2">

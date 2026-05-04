@@ -16,6 +16,9 @@ import { Plus } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { deductCredits, CREDIT_COST_PER_MESSAGE } from '@/services/creditsService';
 import { SendToAdminDialog } from './SendToAdminDialog';
+import { enqueueDeploy, updateDeploy } from '@/services/deployQueueService';
+import { githubService } from '@/services/githubService';
+import { BuildDeliveryDialog } from './BuildDeliveryDialog';
 
 export interface Message {
   id: string;
@@ -71,6 +74,7 @@ export function ChatTab({ initialSessionId, initialMode }: ChatTabProps) {
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [draft, setDraft] = useState<string | undefined>(undefined);
   const [creditDialogOpen, setCreditDialogOpen] = useState(false);
+  const [downloadOpen, setDownloadOpen] = useState(false);
 
   // Only load messages when user explicitly opens a session from Vault
   useEffect(() => {
@@ -351,10 +355,49 @@ export function ChatTab({ initialSessionId, initialMode }: ChatTabProps) {
         isLoading={isLoading}
         externalDraft={draft}
         onRequestMoreCredits={() => setCreditDialogOpen(true)}
+        sessionActions={sessionIds[mode] ? {
+          onUpdate: () => handleSendMessage('আগের কাজ অনুযায়ী আপডেট করো — সর্বশেষ পরিবর্তন push করে deploy verify করো।'),
+          onDownload: () => setDownloadOpen(true),
+          onDeploy: async () => {
+            const sid = sessionIds[mode]!;
+            try {
+              const map = JSON.parse(localStorage.getItem('tivo-project-github') || '{}');
+              const repo = map[sid];
+              if (!repo) {
+                toast({ title: 'প্রথমে GitHub-এ Connect করুন', variant: 'destructive' });
+                return;
+              }
+              const job = enqueueDeploy({ sessionId: sid, projectName: 'session', repo });
+              updateDeploy(job.id, { status: 'opening', message: 'Opening Vercel…' });
+              window.open(`https://vercel.com/new/clone?repository-url=https://github.com/${repo}`, '_blank');
+            } catch { /* ignore */ }
+          },
+          onConnectGithub: async () => {
+            if (!githubService.hasToken()) {
+              toast({ title: 'GitHub Token দরকার', description: 'Settings → Integrations', variant: 'destructive' });
+              return;
+            }
+            try {
+              const u = await githubService.getUser();
+              const name = `tivo-${(sessionIds[mode] || '').slice(0, 8)}`;
+              try { await githubService.createRepo(name, 'TIVO project', true); } catch { /* exists */ }
+              const map = JSON.parse(localStorage.getItem('tivo-project-github') || '{}');
+              map[sessionIds[mode]!] = `${u.login}/${name}`;
+              localStorage.setItem('tivo-project-github', JSON.stringify(map));
+              toast({ title: '✅ GitHub সংযুক্ত' });
+            } catch (e) { toast({ title: 'GitHub error', description: String(e), variant: 'destructive' }); }
+          },
+        } : undefined}
       />
 
       <ControlPanel open={menuOpen} onClose={() => setMenuOpen(false)} />
       <SendToAdminDialog open={creditDialogOpen} onClose={() => setCreditDialogOpen(false)} />
+      <BuildDeliveryDialog
+        open={downloadOpen}
+        onClose={() => setDownloadOpen(false)}
+        projectName="tivo-session"
+        files={[]}
+      />
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import { Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
@@ -25,25 +25,28 @@ interface PlanChatProps {
 
 export function PlanChat({ messages, isLoading }: PlanChatProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const isNearBottom = useRef(true);
+  const userScrolled = useRef(false);
+  const [, force] = useState(0);
 
   const handleScroll = () => {
     const el = scrollRef.current;
     if (!el) return;
-    isNearBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+    // User has scrolled away — stop auto-following until they return to bottom
+    userScrolled.current = !nearBottom;
+    force(n => n + 1);
   };
 
   useEffect(() => {
-    if (isNearBottom.current) {
+    if (!userScrolled.current) {
       scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
     }
   }, [messages, isLoading]);
 
   return (
-    <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto">
+    <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto overscroll-contain">
      <div className={cn(
-       'mx-auto max-w-3xl px-4 sm:px-6 py-8 space-y-8',
-       messages.length <= 2 && 'min-h-full flex flex-col justify-center',
+       'mx-auto max-w-3xl px-4 sm:px-6 pt-[28vh] pb-8 space-y-8 min-h-full',
      )}>
       <AnimatePresence mode="popLayout">
         {messages.map((msg, idx) => (
