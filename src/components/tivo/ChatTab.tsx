@@ -11,7 +11,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { streamChat, hasAnyAIConfig, type ToolEvent } from '@/services/aiChatService';
 import { hybridChatPersistence } from '@/services/hybridStorageService';
 import { useToast } from '@/hooks/use-toast';
-import { extractAndPreviewCode } from '@/services/previewBridge';
+import { extractAndPreviewCode, previewTaskOutput } from '@/services/previewBridge';
 import { Plus } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { deductCredits, CREDIT_COST_PER_MESSAGE } from '@/services/creditsService';
@@ -273,9 +273,15 @@ export function ChatTab({ initialSessionId, initialMode }: ChatTabProps) {
         const extracted = extractSuggestions(assistantContent);
         setSuggestions(extracted);
         
-        // In build mode, try to extract code and send to preview
-        if (mode === 'build' && assistantContent) {
-          extractAndPreviewCode(assistantContent);
+        // Surface to Preview tab live: code in build mode, formatted report otherwise.
+        if (assistantContent) {
+          const renderedCode = mode === 'build' ? extractAndPreviewCode(assistantContent) : false;
+          if (!renderedCode && assistantContent.length > 200) {
+            const title = mode === 'automation' ? 'Automation Output'
+              : mode === 'plan' ? 'Plan / Report'
+              : 'Task Output';
+            previewTaskOutput(title, assistantContent);
+          }
         }
         
         setIsLoading(false);
