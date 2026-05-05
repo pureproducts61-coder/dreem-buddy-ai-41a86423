@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { Send, Mic, MicOff, Paperclip, X, Hammer, Zap, MessageSquare, Coins, Sparkles, CornerDownLeft, MoreHorizontal, RefreshCw, Rocket, Github, Download, History, Pencil, Trash2 } from 'lucide-react';
+import { Send, Mic, MicOff, Paperclip, X, Hammer, Zap, MessageSquare, Coins, Sparkles, MoreHorizontal, RefreshCw, Rocket, Github, Download, History, Pencil, Trash2, MessagesSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -18,6 +18,8 @@ interface SmartInputBarProps {
   className?: string;
   externalDraft?: string;
   onRequestMoreCredits?: () => void;
+  /** Opens the "Send message to admin" dialog (regular users only). */
+  onMessageAdmin?: () => void;
   /** Optional callback set: when active session exists, expose vault actions */
   sessionActions?: {
     onUpdate?: () => void;
@@ -36,7 +38,7 @@ const modeConfig = {
   plan: { icon: MessageSquare, label: 'Plan', color: 'text-emerald-500' },
 };
 
-export function SmartInputBar({ mode, onModeChange, onSendMessage, isLoading, className, externalDraft, onRequestMoreCredits, sessionActions }: SmartInputBarProps) {
+export function SmartInputBar({ mode, onModeChange, onSendMessage, isLoading, className, externalDraft, onRequestMoreCredits, onMessageAdmin, sessionActions }: SmartInputBarProps) {
   const { t } = useLanguage();
   const [input, setInput] = useState('');
   const [isListening, setIsListening] = useState(false);
@@ -271,14 +273,15 @@ export function SmartInputBar({ mode, onModeChange, onSendMessage, isLoading, cl
             onChange={handleFileChange}
           />
 
-          {/* Newline helper (mobile-only visual hint) */}
-          {isMobile && (
+          {/* Message admin (regular users only) — icon-only smart button */}
+          {!isAdminUser && onMessageAdmin && (
             <button
               className="pill-btn"
-              onClick={() => setInput(v => v + '\n')}
-              title="নতুন লাইন"
+              onClick={onMessageAdmin}
+              title="Message admin"
+              aria-label="Message admin"
             >
-              <CornerDownLeft className="h-[18px] w-[18px]" strokeWidth={2.2} />
+              <MessagesSquare className="h-[18px] w-[18px]" strokeWidth={2.2} />
             </button>
           )}
 
