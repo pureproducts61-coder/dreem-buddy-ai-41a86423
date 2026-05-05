@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { startAdminPushListener, stopAdminPushListener } from '@/services/pushNotificationService';
 
 interface User {
   email: string;
@@ -41,6 +42,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (res.ok) {
         const data = await res.json();
         setIsAdmin(!!data.isAdmin);
+        if (data.isAdmin) {
+          // Auto-start desktop notification listener for admin sessions
+          startAdminPushListener().catch(() => {});
+        } else {
+          stopAdminPushListener();
+        }
       } else {
         setIsAdmin(false);
       }
