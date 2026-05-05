@@ -83,6 +83,45 @@ export type Database = {
         }
         Relationships: []
       }
+      automation_approvals: {
+        Row: {
+          action_type: string
+          admin_note: string | null
+          created_at: string
+          decided_at: string | null
+          details: Json
+          id: string
+          status: string
+          title: string
+          user_email: string | null
+          user_id: string
+        }
+        Insert: {
+          action_type: string
+          admin_note?: string | null
+          created_at?: string
+          decided_at?: string | null
+          details?: Json
+          id?: string
+          status?: string
+          title: string
+          user_email?: string | null
+          user_id: string
+        }
+        Update: {
+          action_type?: string
+          admin_note?: string | null
+          created_at?: string
+          decided_at?: string | null
+          details?: Json
+          id?: string
+          status?: string
+          title?: string
+          user_email?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       chat_messages: {
         Row: {
           content: string
@@ -166,6 +205,30 @@ export type Database = {
           description?: string | null
           id?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      system_controls: {
+        Row: {
+          id: string
+          kill_switch: boolean
+          reason: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          id?: string
+          kill_switch?: boolean
+          reason?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          id?: string
+          kill_switch?: boolean
+          reason?: string | null
+          updated_at?: string
+          updated_by?: string | null
         }
         Relationships: []
       }
