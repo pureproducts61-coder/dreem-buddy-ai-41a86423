@@ -355,6 +355,7 @@ export function ChatTab({ initialSessionId, initialMode }: ChatTabProps) {
         isLoading={isLoading}
         externalDraft={draft}
         onRequestMoreCredits={() => setCreditDialogOpen(true)}
+        onMessageAdmin={() => setCreditDialogOpen(true)}
         sessionActions={sessionIds[mode] ? {
           onUpdate: () => handleSendMessage('আগের কাজ অনুযায়ী আপডেট করো — সর্বশেষ পরিবর্তন push করে deploy verify করো।'),
           onDownload: () => setDownloadOpen(true),
