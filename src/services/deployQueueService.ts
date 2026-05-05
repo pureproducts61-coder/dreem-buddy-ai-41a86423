@@ -12,6 +12,8 @@ export interface DeployJob {
   status: DeployStatus;
   url?: string;
   message?: string;
+  logs?: string[];
+  attempts?: number;
   startedAt: number;
   updatedAt: number;
 }
@@ -58,7 +60,21 @@ export function enqueueDeploy(input: { sessionId: string; projectName: string; r
 }
 
 export function updateDeploy(id: string, patch: Partial<DeployJob>): void {
-  const jobs = read().map(j => j.id === id ? { ...j, ...patch, updatedAt: Date.now() } : j);
+  const jobs = read().map(j => {
+    if (j.id !== id) return j;
+    const next: DeployJob = { ...j, ...patch, updatedAt: Date.now() };
+    if (patch.message) {
+      const stamp = new Date().toLocaleTimeString();
+      next.logs = [...(j.logs || []), `[${stamp}] ${patch.status || j.status}: ${patch.message}`].slice(-30);
+    }
+    return next;
+  });
+  write(jobs);
+}
+
+export function appendDeployLog(id: string, line: string): void {
+  const stamp = new Date().toLocaleTimeString();
+  const jobs = read().map(j => j.id === id ? { ...j, logs: [...(j.logs || []), `[${stamp}] ${line}`].slice(-30), updatedAt: Date.now() } : j);
   write(jobs);
 }
 
