@@ -9,6 +9,8 @@ export function extractAndPreviewCode(content: string): boolean {
   const codeBlockRegex = /```(?:html|htm)\n([\s\S]*?)```/gi;
   const jsxBlockRegex = /```(?:tsx?|jsx?|react)\n([\s\S]*?)```/gi;
   const cssBlockRegex = /```(?:css)\n([\s\S]*?)```/gi;
+  const mdBlockRegex = /```(?:md|markdown|report)\n([\s\S]*?)```/gi;
+  const svgBlockRegex = /```(?:svg)\n([\s\S]*?)```/gi;
 
   let html = '';
 
@@ -39,7 +41,66 @@ export function extractAndPreviewCode(content: string): boolean {
     return true;
   }
 
+  // Markdown / business-report rendering — surface AI reports straight to the Preview tab
+  const mdMatches = [...content.matchAll(mdBlockRegex)];
+  if (mdMatches.length > 0) {
+    const md = mdMatches.map(m => m[1]).join('\n\n');
+    html = wrapMarkdownInHtml(md);
+    dispatchPreview(html);
+    return true;
+  }
+
+  // SVG charts / diagrams
+  const svgMatches = [...content.matchAll(svgBlockRegex)];
+  if (svgMatches.length > 0) {
+    html = wrapInHtml(svgMatches.map(m => `<div style="padding:1rem">${m[1]}</div>`).join(''));
+    dispatchPreview(html);
+    return true;
+  }
+
   return false;
+}
+
+/**
+ * Render arbitrary text as a formatted Task Output report inside the Preview tab.
+ * Used for plan/automation results that have no code but need to be surfaced live.
+ */
+export function previewTaskOutput(title: string, body: string): void {
+  const md = `# ${title}\n\n${body}`;
+  dispatchPreview(wrapMarkdownInHtml(md));
+}
+
+function wrapMarkdownInHtml(md: string): string {
+  const escaped = md.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TIVO Task Output</title>
+  <script src="https://cdn.tailwindcss.com"><\/script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"><\/script>
+  <style>
+    body { font-family: -apple-system, system-ui, sans-serif; padding: 1.5rem; max-width: 820px; margin: 0 auto; line-height: 1.6; }
+    h1,h2,h3 { font-weight: 700; margin-top: 1.2em; }
+    h1 { font-size: 1.6rem; border-bottom: 1px solid #e5e7eb; padding-bottom: .4rem; }
+    h2 { font-size: 1.25rem; }
+    pre { background: #0f172a; color: #e2e8f0; padding: .75rem; border-radius: .5rem; overflow-x: auto; font-size: .8rem; }
+    code { background: #f1f5f9; padding: .1em .3em; border-radius: .25em; font-size: .85em; }
+    pre code { background: transparent; padding: 0; }
+    table { border-collapse: collapse; width: 100%; margin: .75rem 0; }
+    th, td { border: 1px solid #e5e7eb; padding: .4rem .6rem; text-align: left; font-size: .85rem; }
+    blockquote { border-left: 3px solid #cbd5e1; padding-left: .75rem; color: #475569; }
+  </style>
+</head>
+<body>
+  <article id="content"></article>
+  <script>
+    const src = ${JSON.stringify(escaped)};
+    document.getElementById('content').innerHTML = marked.parse(src.replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>'));
+  <\/script>
+</body>
+</html>`;
 }
 
 function getCssFromContent(content: string): string {

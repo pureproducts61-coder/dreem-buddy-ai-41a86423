@@ -25,6 +25,8 @@ import { AdminMonitoringTab } from '@/components/admin/AdminMonitoringTab';
 import { AdminMessagesTab } from '@/components/admin/AdminMessagesTab';
 import { AdminNotificationsTab } from '@/components/admin/AdminNotificationsTab';
 import { CustomDbTab } from '@/components/admin/CustomDbTab';
+import { KillSwitchPanel } from '@/components/admin/KillSwitchPanel';
+import { AutomationApprovalsTab } from '@/components/admin/AutomationApprovalsTab';
 
 const STORAGE_KEY = 'dreem-settings';
 
@@ -214,11 +216,13 @@ const AdminPanel = () => {
 
           {/* System Status Tab — secrets + capabilities */}
           <TabsContent value="status" className="space-y-6">
+            <KillSwitchPanel />
             <SystemStatusPanel settings={settings} dbAvailable={dbAvailable} />
           </TabsContent>
 
           {/* Monitoring */}
           <TabsContent value="monitor" className="space-y-6">
+            <AutomationApprovalsTab />
             <AdminMonitoringTab />
           </TabsContent>
 
