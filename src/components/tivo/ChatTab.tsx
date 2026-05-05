@@ -19,6 +19,7 @@ import { SendToAdminDialog } from './SendToAdminDialog';
 import { enqueueDeploy, updateDeploy } from '@/services/deployQueueService';
 import { githubService } from '@/services/githubService';
 import { BuildDeliveryDialog } from './BuildDeliveryDialog';
+import { getKillSwitch, refreshKillSwitch } from '@/services/killSwitchService';
 
 export interface Message {
   id: string;
@@ -116,6 +117,20 @@ export function ChatTab({ initialSessionId, initialMode }: ChatTabProps) {
 
   const handleSendMessage = useCallback(async (content: string, files?: File[]) => {
     setSuggestions([]);
+
+    // Honor admin-issued kill switch (regular users blocked; admin can still operate)
+    if (!isAdmin) {
+      await refreshKillSwitch();
+      const ks = getKillSwitch();
+      if (ks.kill_switch) {
+        toast({
+          title: '🛑 System paused by admin',
+          description: ks.reason || 'Autonomous tasks are temporarily halted.',
+          variant: 'destructive',
+        });
+        return;
+      }
+    }
 
     // Deduct credits BEFORE making the AI call (admins are bypassed server-side)
     try {
