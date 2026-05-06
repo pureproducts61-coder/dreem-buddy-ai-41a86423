@@ -6,6 +6,15 @@ import { supabase } from '@/integrations/supabase/client';
 
 let started = false;
 let channel: ReturnType<typeof supabase.channel> | null = null;
+const PREF_KEY = 'tivo-push-enabled';
+
+export function isPushEnabledPref(): boolean {
+  return localStorage.getItem(PREF_KEY) !== 'false';
+}
+export function setPushEnabledPref(on: boolean): void {
+  localStorage.setItem(PREF_KEY, on ? 'true' : 'false');
+  if (!on) stopAdminPushListener();
+}
 
 export async function ensureNotificationPermission(): Promise<NotificationPermission> {
   if (!('Notification' in window)) return 'denied';
@@ -29,6 +38,7 @@ function notify(title: string, body: string, tag?: string) {
 
 export async function startAdminPushListener(): Promise<void> {
   if (started) return;
+  if (!isPushEnabledPref()) return;
   started = true;
   await ensureNotificationPermission();
 
@@ -53,4 +63,23 @@ export function stopAdminPushListener(): void {
   if (channel) supabase.removeChannel(channel);
   channel = null;
   started = false;
+}
+
+/** Lightweight listener for regular users — fires when admin replies to their messages. */
+let userChannel: ReturnType<typeof supabase.channel> | null = null;
+export async function startUserPushListener(userId: string): Promise<void> {
+  if (userChannel || !isPushEnabledPref()) return;
+  await ensureNotificationPermission();
+  userChannel = supabase.channel(`user-push-${userId}`)
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'admin_messages', filter: `user_id=eq.${userId}` }, (payload) => {
+      const row = payload.new as { admin_reply?: string; subject?: string };
+      if (row.admin_reply) {
+        notify('💬 Admin replied', `${row.subject || ''}: ${(row.admin_reply || '').slice(0, 120)}`, `reply-${(payload.new as any).id}`);
+      }
+    })
+    .subscribe();
+}
+export function stopUserPushListener(): void {
+  if (userChannel) supabase.removeChannel(userChannel);
+  userChannel = null;
 }

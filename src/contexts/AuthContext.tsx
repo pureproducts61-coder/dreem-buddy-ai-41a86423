@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { startAdminPushListener, stopAdminPushListener } from '@/services/pushNotificationService';
+import { startAdminPushListener, stopAdminPushListener, startUserPushListener, stopUserPushListener } from '@/services/pushNotificationService';
 
 interface User {
   email: string;
@@ -47,6 +47,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           startAdminPushListener().catch(() => {});
         } else {
           stopAdminPushListener();
+          // Regular users get notified when admin replies
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) startUserPushListener(user.id).catch(() => {});
         }
       } else {
         setIsAdmin(false);
@@ -107,6 +110,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     await supabase.auth.signOut();
     setUser(null);
     setIsAdmin(false);
+    stopUserPushListener();
+    stopAdminPushListener();
   };
 
   return (

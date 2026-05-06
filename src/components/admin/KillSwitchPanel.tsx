@@ -6,7 +6,7 @@ import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { getKillSwitch, setKillSwitch, subscribeKillSwitch, type KillSwitchState } from '@/services/killSwitchService';
-import { ensureNotificationPermission, startAdminPushListener } from '@/services/pushNotificationService';
+import { ensureNotificationPermission, startAdminPushListener, stopAdminPushListener, isPushEnabledPref, setPushEnabledPref } from '@/services/pushNotificationService';
 
 export function KillSwitchPanel() {
   const { toast } = useToast();
@@ -14,6 +14,7 @@ export function KillSwitchPanel() {
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [pushPerm, setPushPerm] = useState<NotificationPermission>('default');
+  const [pushPref, setPushPref] = useState<boolean>(isPushEnabledPref());
 
   useEffect(() => {
     const unsub = subscribeKillSwitch(setState);
@@ -38,6 +39,10 @@ export function KillSwitchPanel() {
   };
 
   const enablePush = async () => {
+    if (!pushPref) {
+      setPushEnabledPref(true);
+      setPushPref(true);
+    }
     const perm = await ensureNotificationPermission();
     setPushPerm(perm);
     if (perm === 'granted') {
@@ -45,6 +50,18 @@ export function KillSwitchPanel() {
       toast({ title: '🔔 Push notifications enabled' });
     } else {
       toast({ title: 'Permission denied', variant: 'destructive' });
+    }
+  };
+
+  const togglePref = (on: boolean) => {
+    setPushEnabledPref(on);
+    setPushPref(on);
+    if (!on) {
+      stopAdminPushListener();
+      toast({ title: '🔕 Notifications muted' });
+    } else if (pushPerm === 'granted') {
+      startAdminPushListener();
+      toast({ title: '🔔 Notifications resumed' });
     }
   };
 
@@ -88,13 +105,16 @@ export function KillSwitchPanel() {
             <div>
               <p className="text-sm font-semibold">Desktop push notifications</p>
               <p className="text-[11px] text-muted-foreground">
-                Permission: <span className="font-mono">{pushPerm}</span>
+                Permission: <span className="font-mono">{pushPerm}</span> · Pref: <span className="font-mono">{pushPref ? 'on' : 'muted'}</span>
               </p>
             </div>
           </div>
-          <Button size="sm" variant={pushPerm === 'granted' ? 'outline' : 'default'} onClick={enablePush}>
-            {pushPerm === 'granted' ? 'Re-arm' : 'Enable'}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Switch checked={pushPref} onCheckedChange={togglePref} />
+            <Button size="sm" variant={pushPerm === 'granted' ? 'outline' : 'default'} onClick={enablePush}>
+              {pushPerm === 'granted' ? 'Re-arm' : 'Enable'}
+            </Button>
+          </div>
         </div>
 
         {state.kill_switch && (

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X, Settings, LogOut, Shield, User, Mail, Coins, Activity, Sparkles, ChevronRight, MessageSquarePlus } from 'lucide-react';
+import { X, Settings, LogOut, Shield, User, Mail, Coins, Activity, Sparkles, ChevronRight, MessageSquarePlus, Inbox } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
@@ -9,6 +9,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { SendToAdminDialog } from './SendToAdminDialog';
+import { UserInbox } from './UserInbox';
 
 interface ControlPanelProps {
   open: boolean;
@@ -19,6 +20,7 @@ export function ControlPanel({ open, onClose }: ControlPanelProps) {
   const { logout, user, isAdmin } = useAuth();
   const navigate = useNavigate();
   const [sendOpen, setSendOpen] = useState(false);
+  const [inboxOpen, setInboxOpen] = useState(false);
 
   const initials = (user?.email || 'U').slice(0, 2).toUpperCase();
   const role = isAdmin ? 'Admin' : 'User';
@@ -147,6 +149,14 @@ export function ControlPanel({ open, onClose }: ControlPanelProps) {
                     onClick={() => { setSendOpen(true); }}
                   />
                 )}
+                {!isAdmin && (
+                  <ActionRow
+                    icon={Inbox}
+                    label="My Inbox"
+                    hint="See admin replies to your messages"
+                    onClick={() => { setInboxOpen(true); }}
+                  />
+                )}
                 <ActionRow
                   icon={LogOut}
                   label="Sign out"
@@ -162,6 +172,7 @@ export function ControlPanel({ open, onClose }: ControlPanelProps) {
         </>
       )}
       <SendToAdminDialog open={sendOpen} onClose={() => setSendOpen(false)} />
+      <UserInbox open={inboxOpen} onClose={() => setInboxOpen(false)} />
     </AnimatePresence>
   );
 }
