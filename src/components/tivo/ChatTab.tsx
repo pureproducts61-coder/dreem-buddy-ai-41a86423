@@ -208,10 +208,10 @@ export function ChatTab({ initialSessionId, initialMode }: ChatTabProps) {
     const aiMessages = currentMsgs.map(m => ({ role: m.role, content: m.content }));
 
     const modeContext = mode === 'build'
-      ? 'You are in BUILD mode. Generate code, components, and project files. Always provide working code. After completing work, suggest 2-3 next steps as bullet points.'
+      ? 'You are in BUILD mode (project workspace). Generate code, components and files. Wait for explicit asks before scaffolding — do not dump a full plan for greetings.'
       : mode === 'automation'
-      ? 'You are in AUTOMATION mode. Help with CI/CD, testing, deployment automation.'
-      : 'You are in PLAN mode. Help plan projects, discuss architecture, and create roadmaps. Be conversational and detailed. After each response, suggest 2-3 follow-up questions or next steps as bullet points.';
+      ? 'You are in AUTOMATION mode. Focus exclusively on workflows, schedules, triggers, CI/CD, deployment, scraping, integrations, and recurring tasks. Never offer generic chat advice or discuss app design here. If the user only greets, reply with 1 short line and ask which automation they want to build.'
+      : 'You are in CHAT mode. Be a calm, terse senior partner. If the user only greets ("hi", "hello", "salam", "as-salamu alaikum"), reply with ONE short greeting line and stop — do not propose plans, architectures, suggestions, or bullet lists. Only expand when the user asks a real question.';
 
     const messagesForAI = [
       { role: 'user' as const, content: `[System: ${modeContext}]` },
@@ -273,15 +273,11 @@ export function ChatTab({ initialSessionId, initialMode }: ChatTabProps) {
         const extracted = extractSuggestions(assistantContent);
         setSuggestions(extracted);
         
-        // Surface to Preview tab live: code in build mode, formatted report otherwise.
-        if (assistantContent) {
-          const renderedCode = mode === 'build' ? extractAndPreviewCode(assistantContent) : false;
-          if (!renderedCode && assistantContent.length > 200) {
-            const title = mode === 'automation' ? 'Automation Output'
-              : mode === 'plan' ? 'Plan / Report'
-              : 'Task Output';
-            previewTaskOutput(title, assistantContent);
-          }
+        // Only auto-surface to Preview tab when the AI actually produced renderable
+        // code/SVG/markdown blocks. Plain conversational answers stay in chat so the
+        // Preview tab does not pop open on greetings or short replies.
+        if (assistantContent && mode === 'build') {
+          extractAndPreviewCode(assistantContent);
         }
         
         setIsLoading(false);

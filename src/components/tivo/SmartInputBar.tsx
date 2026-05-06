@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { Send, Mic, MicOff, Paperclip, X, Hammer, Zap, MessageSquare, Coins, Sparkles, MoreHorizontal, RefreshCw, Rocket, Github, Download, History, Pencil, Trash2, MessagesSquare } from 'lucide-react';
+import { Send, Mic, MicOff, Paperclip, X, Workflow, Compass, Coins, Sparkles, MoreHorizontal, RefreshCw, Rocket, Github, Download, History, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -32,11 +32,13 @@ interface SmartInputBarProps {
   };
 }
 
+// Build mode is launched from the Vault; the input bar exposes only Chat + Automation.
 const modeConfig = {
-  build: { icon: Hammer, label: 'Build', color: 'text-primary' },
-  automation: { icon: Zap, label: 'Auto', color: 'text-amber-500' },
-  plan: { icon: MessageSquare, label: 'Plan', color: 'text-emerald-500' },
+  build: { icon: Compass, label: 'Chat', color: 'text-primary' },
+  automation: { icon: Workflow, label: 'Automation', color: 'text-amber-500' },
+  plan: { icon: Compass, label: 'Chat', color: 'text-primary' },
 };
+const SELECTABLE_MODES: TivoMode[] = ['plan', 'automation'];
 
 export function SmartInputBar({ mode, onModeChange, onSendMessage, isLoading, className, externalDraft, onRequestMoreCredits, onMessageAdmin, sessionActions }: SmartInputBarProps) {
   const { t } = useLanguage();
@@ -221,35 +223,29 @@ export function SmartInputBar({ mode, onModeChange, onSendMessage, isLoading, cl
       <div className="flex items-center justify-between px-3 pb-3 pt-1 gap-2">
         <div className="flex items-center gap-1.5">
           {/* Mode Popover */}
-          <Popover open={modeOpen} onOpenChange={setModeOpen}>
-            <PopoverTrigger asChild>
-              <button className={cn('pill-btn relative', modeConfig[mode].color)} title={`Mode: ${mode}`}>
-                <ActiveIcon className="h-[18px] w-[18px]" strokeWidth={2.2} />
-                <Sparkles className="h-2.5 w-2.5 absolute -top-0.5 -right-0.5 text-primary opacity-80" />
-              </button>
-            </PopoverTrigger>
-            <PopoverContent className="w-44 p-1.5" side="top" align="start">
-              {(['build', 'automation', 'plan'] as TivoMode[]).map((m) => {
-                const { icon: Icon, label, color } = modeConfig[m];
-                const isActive = mode === m;
-                return (
-                  <button
-                    key={m}
-                    onClick={() => { onModeChange(m); setModeOpen(false); }}
-                    className={cn(
-                      'flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-xs font-medium transition-all',
-                      isActive
-                        ? 'bg-primary/10 text-primary'
-                        : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
-                    )}
-                  >
-                    <Icon className={cn('h-4 w-4', isActive && color)} />
-                    {t(`mode.${m}`)}
-                  </button>
-                );
-              })}
-            </PopoverContent>
-          </Popover>
+          {/* Premium mode toggle — Chat ⇆ Automation only */}
+          <div className="flex items-center gap-1 p-1 rounded-full bg-secondary/50 border border-border/50 backdrop-blur-md shadow-inner">
+            {SELECTABLE_MODES.map((m) => {
+              const { icon: Icon, label, color } = modeConfig[m];
+              const isActive = mode === m || (m === 'plan' && mode === 'build');
+              return (
+                <button
+                  key={m}
+                  onClick={() => onModeChange(m)}
+                  title={`Mode: ${label}`}
+                  className={cn(
+                    'flex items-center gap-1.5 h-9 px-3 rounded-full text-[12px] font-semibold transition-all',
+                    isActive
+                      ? 'bg-gradient-to-br from-card to-secondary text-foreground shadow-md ring-1 ring-primary/20'
+                      : 'text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  <Icon className={cn('h-4 w-4', isActive && color)} strokeWidth={2.2} />
+                  <span className="hidden xs:inline sm:inline">{label}</span>
+                </button>
+              );
+            })}
+          </div>
 
           {/* Voice */}
           <button
@@ -272,18 +268,6 @@ export function SmartInputBar({ mode, onModeChange, onSendMessage, isLoading, cl
             className="hidden"
             onChange={handleFileChange}
           />
-
-          {/* Message admin (regular users only) — icon-only smart button */}
-          {!isAdminUser && onMessageAdmin && (
-            <button
-              className="pill-btn"
-              onClick={onMessageAdmin}
-              title="Message admin"
-              aria-label="Message admin"
-            >
-              <MessagesSquare className="h-[18px] w-[18px]" strokeWidth={2.2} />
-            </button>
-          )}
 
           {/* Session action menu (mirror of vault ⋮) */}
           {sessionActions && (
