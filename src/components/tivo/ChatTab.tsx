@@ -11,7 +11,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { streamChat, hasAnyAIConfig, type ToolEvent } from '@/services/aiChatService';
 import { hybridChatPersistence } from '@/services/hybridStorageService';
 import { useToast } from '@/hooks/use-toast';
-import { extractAndPreviewCode, previewTaskOutput } from '@/services/previewBridge';
+import { extractAndPreviewCode } from '@/services/previewBridge';
 import { Plus } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { deductCredits, CREDIT_COST_PER_MESSAGE } from '@/services/creditsService';
