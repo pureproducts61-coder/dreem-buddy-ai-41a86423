@@ -29,6 +29,32 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
+    // Require a valid Supabase session — this function is a privileged GitHub proxy.
+    const authHeader = req.headers.get("Authorization") || "";
+    const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
+    const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") || "";
+    if (!authHeader || !SUPABASE_URL || !ANON_KEY) {
+      return new Response(JSON.stringify({ error: "unauthorized" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    try {
+      const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2.45.0");
+      const userClient = createClient(SUPABASE_URL, ANON_KEY, {
+        global: { headers: { Authorization: authHeader } },
+      });
+      const { data: { user }, error } = await userClient.auth.getUser();
+      if (error || !user) {
+        return new Response(JSON.stringify({ error: "unauthorized" }), {
+          status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    } catch {
+      return new Response(JSON.stringify({ error: "unauthorized" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const { action, token, ...params } = await req.json();
 
     if (!token) {
