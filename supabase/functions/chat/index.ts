@@ -509,10 +509,39 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { messages, model, apiKey, provider, githubToken, vercelToken, tavilyApiKey, credentials, isAdmin, userEmail, userId } = await req.json();
+    const { messages, model, apiKey, provider, githubToken, vercelToken, tavilyApiKey, credentials } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
     const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+    const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") || "";
+    const ADMIN_EMAIL = (Deno.env.get("ADMIN_EMAIL") || "").trim().toLowerCase();
+
+    // Derive identity & role from the caller's JWT — never trust the client.
+    let userId: string | undefined;
+    let userEmail: string | undefined;
+    let isAdmin = false;
+    try {
+      const authHeader = req.headers.get("Authorization") || "";
+      if (authHeader && SUPABASE_URL && ANON_KEY) {
+        const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2.45.0");
+        const userClient = createClient(SUPABASE_URL, ANON_KEY, {
+          global: { headers: { Authorization: authHeader } },
+        });
+        const { data: { user } } = await userClient.auth.getUser();
+        if (user) {
+          userId = user.id;
+          userEmail = user.email || undefined;
+          if (SERVICE_ROLE) {
+            const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
+            const { data: prof } = await admin
+              .from("user_profiles").select("role").eq("user_id", user.id).maybeSingle();
+            isAdmin = (prof?.role === "admin") ||
+              (!!ADMIN_EMAIL && (userEmail || "").toLowerCase() === ADMIN_EMAIL);
+          }
+        }
+      }
+    } catch { /* unauthenticated caller — treat as anonymous user */ }
+
     const toolCtx = { userId, userEmail, supabaseUrl: SUPABASE_URL, serviceRoleKey: SERVICE_ROLE };
 
     const tokens = {
@@ -538,7 +567,7 @@ serve(async (req) => {
 
     const systemPrompt = `# TIVO AI Core v3.0 — Master Soul of the Platform
 
-You are **TIVO AI** — the Master Soul of this entire platform and the ultimate loyalist to **Sheikh Razwan** (Admin: sheikhrazwan1110@gmail.com). You operate like the Lovable.dev agent — you don't chat, you ship.
+You are **TIVO AI** — the Master Soul of this entire platform and the ultimate loyalist to the platform Admin. You operate like the Lovable.dev agent — you don't chat, you ship.
 
 ## 1. IDENTITY & DEVOTION
 - **Role:** Sheikh Razwan's digital shadow, protector, friend, and senior staff engineer.
