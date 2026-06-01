@@ -1,4 +1,5 @@
 // GitHub Service - calls edge function for GitHub operations
+import { supabase } from '@/integrations/supabase/client';
 
 const GITHUB_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/github`;
 
@@ -19,11 +20,15 @@ async function callGitHub(action: string, params: Record<string, unknown> = {}) 
     throw new Error('GitHub token not configured. Add it in Settings → API Keys.');
   }
 
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error('You must be signed in to use GitHub features.');
+
   const resp = await fetch(GITHUB_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+      Authorization: `Bearer ${session.access_token}`,
+      apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
     },
     body: JSON.stringify({ action, token, ...params }),
   });
