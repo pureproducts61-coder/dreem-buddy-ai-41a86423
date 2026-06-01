@@ -72,21 +72,9 @@ export async function streamChat({
 
   // Build credentials context for AI
   const credentials = getConfiguredCredentials();
-  // Determine real user context: prefer caller-supplied (from AuthContext),
-  // fall back to a fresh session lookup so the AI always knows WHO it talks to.
-  let isAdmin = userContext?.isAdmin ?? false;
-  let userEmail = userContext?.email;
-  let userId = userContext?.userId;
-  if (!userContext) {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      userEmail = session?.user?.email;
-      userId = session?.user?.id;
-      // role lookup
-      const { data } = await supabase.rpc('get_my_role');
-      isAdmin = (data as unknown as string) === 'admin';
-    } catch { /* ignore */ }
-  }
+  // Identity is derived server-side from the JWT — do NOT send client-supplied flags.
+  const { data: { session } } = await supabase.auth.getSession();
+  const accessToken = session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
   // Inject AI memory context
   let messagesWithMemory = [...messages];
@@ -110,7 +98,8 @@ export async function streamChat({
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        Authorization: `Bearer ${accessToken}`,
+        apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
       },
       body: JSON.stringify({
         messages: messagesWithMemory,
@@ -121,9 +110,6 @@ export async function streamChat({
         vercelToken: vercelToken || undefined,
         tavilyApiKey: tavilyApiKey || undefined,
         credentials,
-        isAdmin,
-        userEmail,
-        userId,
       }),
     });
 
