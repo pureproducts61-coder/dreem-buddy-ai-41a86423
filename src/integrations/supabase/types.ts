@@ -297,6 +297,11 @@ export type Database = {
       }
       user_profiles: {
         Row: {
+          approval_note: string | null
+          approval_status: string
+          approved: boolean
+          approved_at: string | null
+          approved_by: string | null
           created_at: string
           credits: number
           display_name: string | null
@@ -309,6 +314,11 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          approval_note?: string | null
+          approval_status?: string
+          approved?: boolean
+          approved_at?: string | null
+          approved_by?: string | null
           created_at?: string
           credits?: number
           display_name?: string | null
@@ -321,6 +331,11 @@ export type Database = {
           user_id: string
         }
         Update: {
+          approval_note?: string | null
+          approval_status?: string
+          approved?: boolean
+          approved_at?: string | null
+          approved_by?: string | null
           created_at?: string
           credits?: number
           display_name?: string | null
@@ -434,6 +449,11 @@ export type Database = {
       admin_list_profiles: {
         Args: never
         Returns: {
+          approval_note: string | null
+          approval_status: string
+          approved: boolean
+          approved_at: string | null
+          approved_by: string | null
           created_at: string
           credits: number
           display_name: string | null
@@ -474,6 +494,40 @@ export type Database = {
       admin_update_credits: {
         Args: { new_credits: number; target_user_id: string }
         Returns: undefined
+      }
+      admin_update_user_access: {
+        Args: {
+          admin_note?: string
+          block_reason?: string
+          block_user?: boolean
+          new_approval_status?: string
+          new_approved?: boolean
+          new_credits?: number
+          target_user_id: string
+        }
+        Returns: {
+          approval_note: string | null
+          approval_status: string
+          approved: boolean
+          approved_at: string | null
+          approved_by: string | null
+          created_at: string
+          credits: number
+          display_name: string | null
+          email: string | null
+          github_token: string | null
+          id: string
+          last_active: string | null
+          role: string
+          updated_at: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "user_profiles"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       deduct_credits: {
         Args: { amount: number; reason?: string }

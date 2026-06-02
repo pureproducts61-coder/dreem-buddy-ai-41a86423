@@ -14,7 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import { extractAndPreviewCode } from '@/services/previewBridge';
 import { Plus } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { deductCredits, CREDIT_COST_PER_MESSAGE } from '@/services/creditsService';
+import { CREDIT_COST_PER_MESSAGE } from '@/services/creditsService';
 import { SendToAdminDialog } from './SendToAdminDialog';
 import { enqueueDeploy, updateDeploy } from '@/services/deployQueueService';
 import { githubService } from '@/services/githubService';
@@ -132,22 +132,7 @@ export function ChatTab({ initialSessionId, initialMode }: ChatTabProps) {
       }
     }
 
-    // Deduct credits BEFORE making the AI call (admins are bypassed server-side)
-    try {
-      await deductCredits();
-    } catch (e) {
-      if (String(e).includes('INSUFFICIENT_CREDITS')) {
-        toast({
-          title: 'Out of credits',
-          description: 'Request more credits from the admin to continue.',
-          variant: 'destructive',
-        });
-        setCreditDialogOpen(true);
-        return;
-      }
-      // soft-fail other errors
-      console.warn('credit deduct failed', e);
-    }
+    // Credits are enforced inside the chat backend function so direct callers cannot bypass limits.
     
     // Read file contents if any
     let messageContent = content;
@@ -285,10 +270,15 @@ export function ChatTab({ initialSessionId, initialMode }: ChatTabProps) {
       },
       onError: (error) => {
         toast({
-          title: 'AI Error',
-          description: error,
+          title: error === 'INSUFFICIENT_CREDITS' ? 'Out of credits' : error === 'approval_required' ? 'Approval required' : 'AI Error',
+          description: error === 'INSUFFICIENT_CREDITS'
+            ? 'Request more credits from the admin to continue.'
+            : error === 'approval_required'
+              ? 'Your account needs admin approval before AI services unlock.'
+              : error,
           variant: 'destructive',
         });
+        if (error === 'INSUFFICIENT_CREDITS' || error === 'approval_required') setCreditDialogOpen(true);
         setIsLoading(false);
       },
     });

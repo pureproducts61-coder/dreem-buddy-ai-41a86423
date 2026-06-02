@@ -34,6 +34,15 @@ export interface UserProjectRow {
   blocked: boolean;
 }
 
+export interface AdminUserAccessUpdate {
+  newCredits?: number;
+  approved?: boolean;
+  approvalStatus?: 'pending' | 'approved' | 'rejected' | 'suspended';
+  blockUser?: boolean;
+  blockReason?: string;
+  adminNote?: string;
+}
+
 export interface AdminStats {
   total_users: number;
   active_24h: number;
@@ -105,7 +114,21 @@ export async function markMessageHandled(id: string, reply?: string): Promise<vo
   await db.from('admin_messages').update({
     status: 'handled',
     admin_reply: reply || null,
+    updated_at: new Date().toISOString(),
   }).eq('id', id);
+}
+
+export async function updateUserAccess(targetUserId: string, update: AdminUserAccessUpdate): Promise<void> {
+  const { error } = await db.rpc('admin_update_user_access', {
+    target_user_id: targetUserId,
+    new_credits: update.newCredits ?? null,
+    new_approved: update.approved ?? null,
+    new_approval_status: update.approvalStatus ?? null,
+    block_user: update.blockUser ?? null,
+    block_reason: update.blockReason ?? null,
+    admin_note: update.adminNote ?? null,
+  });
+  if (error) throw error;
 }
 
 export async function getAllProjects(): Promise<UserProjectRow[]> {

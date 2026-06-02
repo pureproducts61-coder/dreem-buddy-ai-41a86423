@@ -74,7 +74,12 @@ export async function streamChat({
   const credentials = getConfiguredCredentials();
   // Identity is derived server-side from the JWT — do NOT send client-supplied flags.
   const { data: { session } } = await supabase.auth.getSession();
-  const accessToken = session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+  const accessToken = session?.access_token;
+
+  if (!accessToken) {
+    onError?.('Please sign in to use TIVO AI.');
+    return;
+  }
 
   // Inject AI memory context
   let messagesWithMemory = [...messages];
@@ -117,7 +122,6 @@ export async function streamChat({
       const errData = await resp.json().catch(() => ({ error: 'Unknown error' }));
       const errMsg = errData.error || `Error ${resp.status}`;
       if (onError) onError(errMsg);
-      await mockStreamResponse(messages, onDelta, onDone);
       return;
     }
 
