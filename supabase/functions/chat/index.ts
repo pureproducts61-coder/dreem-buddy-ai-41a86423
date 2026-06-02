@@ -521,8 +521,8 @@ serve(async (req) => {
     let userId: string | undefined;
     let userEmail: string | undefined;
     let isAdmin = false;
-    const authHeader = req.headers.get("Authorization") || "";
-    if (!authHeader.startsWith("Bearer ") || !SUPABASE_URL || !ANON_KEY) {
+    const callerAuthHeader = req.headers.get("Authorization") || "";
+    if (!callerAuthHeader.startsWith("Bearer ") || !SUPABASE_URL || !ANON_KEY) {
       return new Response(JSON.stringify({ error: "unauthorized" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -531,7 +531,7 @@ serve(async (req) => {
 
     const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2.45.0");
     const userClient = createClient(SUPABASE_URL, ANON_KEY, {
-      global: { headers: { Authorization: authHeader } },
+      global: { headers: { Authorization: callerAuthHeader } },
     });
     const { data: { user }, error: userError } = await userClient.auth.getUser();
     if (userError || !user) {
