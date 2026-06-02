@@ -252,7 +252,7 @@ async function executeTool(
   name: string,
   args: Record<string, unknown>,
   tokens: { github: string; vercel: string; tavily: string },
-  ctx: { userId?: string; userEmail?: string; supabaseUrl: string; serviceRoleKey: string }
+  ctx: { userId?: string; userEmail?: string; supabaseUrl: string; serviceRoleKey: string; isAdmin: boolean }
 ): Promise<string> {
   try {
     switch (name) {
@@ -280,6 +280,7 @@ async function executeTool(
       }
 
       case "create_admin_notification": {
+        if (!ctx.isAdmin) return JSON.stringify({ error: "Admin only." });
         const { title, body, type } = args as Record<string, string>;
         const res = await fetch(`${ctx.supabaseUrl}/rest/v1/ai_notifications`, {
           method: "POST",
