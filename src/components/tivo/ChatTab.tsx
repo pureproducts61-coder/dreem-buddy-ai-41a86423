@@ -14,7 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import { extractAndPreviewCode } from '@/services/previewBridge';
 import { Plus } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { deductCredits, CREDIT_COST_PER_MESSAGE } from '@/services/creditsService';
+import { CREDIT_COST_PER_MESSAGE } from '@/services/creditsService';
 import { SendToAdminDialog } from './SendToAdminDialog';
 import { enqueueDeploy, updateDeploy } from '@/services/deployQueueService';
 import { githubService } from '@/services/githubService';
