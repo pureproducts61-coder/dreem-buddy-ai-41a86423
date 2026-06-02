@@ -521,29 +521,78 @@ serve(async (req) => {
     let userId: string | undefined;
     let userEmail: string | undefined;
     let isAdmin = false;
-    try {
-      const authHeader = req.headers.get("Authorization") || "";
-      if (authHeader && SUPABASE_URL && ANON_KEY) {
-        const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2.45.0");
-        const userClient = createClient(SUPABASE_URL, ANON_KEY, {
-          global: { headers: { Authorization: authHeader } },
+    const authHeader = req.headers.get("Authorization") || "";
+    if (!authHeader.startsWith("Bearer ") || !SUPABASE_URL || !ANON_KEY) {
+      return new Response(JSON.stringify({ error: "unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2.45.0");
+    const userClient = createClient(SUPABASE_URL, ANON_KEY, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const { data: { user }, error: userError } = await userClient.auth.getUser();
+    if (userError || !user) {
+      return new Response(JSON.stringify({ error: "unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    userId = user.id;
+    userEmail = user.email || undefined;
+
+    if (SERVICE_ROLE) {
+      const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
+      const { data: prof } = await admin
+        .from("user_profiles")
+        .select("role, approved, approval_status")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      isAdmin = (prof?.role === "admin") || (!!ADMIN_EMAIL && (userEmail || "").toLowerCase() === ADMIN_EMAIL);
+
+      if (isAdmin && prof?.role !== "admin") {
+        await admin.from("user_profiles").upsert({
+          user_id: user.id,
+          email: userEmail || null,
+          role: "admin",
+          approved: true,
+          approval_status: "approved",
+          approved_at: new Date().toISOString(),
+          last_active: new Date().toISOString(),
+        }, { onConflict: "user_id" });
+      }
+
+      if (!isAdmin && (!prof?.approved || prof?.approval_status !== "approved")) {
+        return new Response(JSON.stringify({
+          error: "approval_required",
+          message: "Your account is waiting for admin approval. Please message the admin or complete payment/approval steps.",
+        }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
-        const { data: { user } } = await userClient.auth.getUser();
-        if (user) {
-          userId = user.id;
-          userEmail = user.email || undefined;
-          if (SERVICE_ROLE) {
-            const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
-            const { data: prof } = await admin
-              .from("user_profiles").select("role").eq("user_id", user.id).maybeSingle();
-            isAdmin = (prof?.role === "admin") ||
-              (!!ADMIN_EMAIL && (userEmail || "").toLowerCase() === ADMIN_EMAIL);
-          }
+      }
+
+      if (!isAdmin) {
+        const { error: creditError } = await userClient.rpc("deduct_credits", {
+          amount: 1,
+          reason: "ai_message",
+        });
+        if (creditError) {
+          const msg = creditError.message || "Credit check failed";
+          return new Response(JSON.stringify({
+            error: msg.includes("INSUFFICIENT_CREDITS") ? "INSUFFICIENT_CREDITS" : msg,
+          }), {
+            status: msg.includes("INSUFFICIENT_CREDITS") ? 402 : 403,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
         }
       }
-    } catch { /* unauthenticated caller — treat as anonymous user */ }
+    }
 
-    const toolCtx = { userId, userEmail, supabaseUrl: SUPABASE_URL, serviceRoleKey: SERVICE_ROLE };
+    const toolCtx = { userId, userEmail, supabaseUrl: SUPABASE_URL, serviceRoleKey: SERVICE_ROLE, isAdmin };
 
     const tokens = {
       github: githubToken || "",
