@@ -624,6 +624,7 @@ serve(async (req) => {
   try {
     const { messages, model, apiKey, provider, githubToken, vercelToken, tavilyApiKey, credentials } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    const SERVER_GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || "";
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
     const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
     const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") || "";
@@ -659,9 +660,10 @@ serve(async (req) => {
     userId = user.id;
     userEmail = user.email || undefined;
 
+    let adminClient: any = null;
     if (SERVICE_ROLE) {
-      const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
-      const { data: prof } = await admin
+      adminClient = createClient(SUPABASE_URL, SERVICE_ROLE);
+      const { data: prof } = await adminClient
         .from("user_profiles")
         .select("role, approved, approval_status")
         .eq("user_id", user.id)
@@ -670,7 +672,7 @@ serve(async (req) => {
       isAdmin = (prof?.role === "admin") || ADMIN_EMAILS.has(lowerEmail);
 
       if (isAdmin && prof?.role !== "admin") {
-        await admin.from("user_profiles").upsert({
+        await adminClient.from("user_profiles").upsert({
           user_id: user.id,
           email: userEmail || null,
           role: "admin",
@@ -683,7 +685,7 @@ serve(async (req) => {
 
       // Auto-approve regular users on first contact so the system is usable out-of-the-box.
       if (!isAdmin && (!prof?.approved || prof?.approval_status !== "approved")) {
-        await admin.from("user_profiles").upsert({
+        await adminClient.from("user_profiles").upsert({
           user_id: user.id,
           email: userEmail || null,
           approved: true,
@@ -700,6 +702,7 @@ serve(async (req) => {
         });
         if (creditError) {
           const msg = creditError.message || "Credit check failed";
+          console.error("credit deduction failed:", msg);
           return new Response(JSON.stringify({
             error: msg.includes("INSUFFICIENT_CREDITS") ? "INSUFFICIENT_CREDITS" : msg,
           }), {
