@@ -28,6 +28,7 @@ import { CustomDbTab } from '@/components/admin/CustomDbTab';
 import { KillSwitchPanel } from '@/components/admin/KillSwitchPanel';
 import { AutomationApprovalsTab } from '@/components/admin/AutomationApprovalsTab';
 import { AdminAuditLogTab } from '@/components/admin/AdminAuditLogTab';
+import { EmergencyContactsTab } from '@/components/admin/EmergencyContactsTab';
 
 const STORAGE_KEY = 'dreem-settings';
 
@@ -223,6 +224,7 @@ const AdminPanel = () => {
 
           {/* Monitoring */}
           <TabsContent value="monitor" className="space-y-6">
+            <EmergencyContactsTab />
             <AutomationApprovalsTab />
             <AdminAuditLogTab />
             <AdminMonitoringTab />
