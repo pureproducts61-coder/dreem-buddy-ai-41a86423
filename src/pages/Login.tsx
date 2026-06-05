@@ -20,6 +20,8 @@ const Login = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [magicLoading, setMagicLoading] = useState(false);
+  const [magicSent, setMagicSent] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
   const { t } = useLanguage();
@@ -34,6 +36,25 @@ const Login = () => {
       setError(error.message || 'Google sign-in failed');
       setGoogleLoading(false);
     }
+  };
+
+  const handleMagicLink = async () => {
+    if (!email.trim()) {
+      setError('Enter your email first to receive a magic link.');
+      return;
+    }
+    setError('');
+    setMagicLoading(true);
+    const { error } = await supabase.auth.signInWithOtp({
+      email: email.trim(),
+      options: { emailRedirectTo: window.location.origin },
+    });
+    setMagicLoading(false);
+    if (error) {
+      setError(error.message || 'Failed to send magic link.');
+      return;
+    }
+    setMagicSent(true);
   };
 
   const handleLogin = async (e: React.FormEvent) => {
