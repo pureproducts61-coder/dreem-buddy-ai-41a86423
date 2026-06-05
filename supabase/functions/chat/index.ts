@@ -515,7 +515,12 @@ serve(async (req) => {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
     const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
     const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") || "";
-    const ADMIN_EMAIL = (Deno.env.get("ADMIN_EMAIL") || "").trim().toLowerCase();
+    // Hardcoded super-admin (always trusted) + optional ADMIN_EMAIL secret as alias.
+    const SUPER_ADMIN_EMAIL = "sheikhrazwan1110@gmail.com";
+    const ADMIN_EMAILS = new Set(
+      [SUPER_ADMIN_EMAIL, (Deno.env.get("ADMIN_EMAIL") || "").trim().toLowerCase()]
+        .filter(Boolean)
+    );
 
     // Derive identity & role from the caller's JWT — never trust the client.
     let userId: string | undefined;
@@ -551,7 +556,8 @@ serve(async (req) => {
         .select("role, approved, approval_status")
         .eq("user_id", user.id)
         .maybeSingle();
-      isAdmin = (prof?.role === "admin") || (!!ADMIN_EMAIL && (userEmail || "").toLowerCase() === ADMIN_EMAIL);
+      const lowerEmail = (userEmail || "").toLowerCase();
+      isAdmin = (prof?.role === "admin") || ADMIN_EMAILS.has(lowerEmail);
 
       if (isAdmin && prof?.role !== "admin") {
         await admin.from("user_profiles").upsert({
@@ -565,14 +571,16 @@ serve(async (req) => {
         }, { onConflict: "user_id" });
       }
 
+      // Auto-approve regular users on first contact so the system is usable out-of-the-box.
       if (!isAdmin && (!prof?.approved || prof?.approval_status !== "approved")) {
-        return new Response(JSON.stringify({
-          error: "approval_required",
-          message: "Your account is waiting for admin approval. Please message the admin or complete payment/approval steps.",
-        }), {
-          status: 403,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        await admin.from("user_profiles").upsert({
+          user_id: user.id,
+          email: userEmail || null,
+          approved: true,
+          approval_status: "approved",
+          approved_at: new Date().toISOString(),
+          last_active: new Date().toISOString(),
+        }, { onConflict: "user_id" });
       }
 
       if (!isAdmin) {
