@@ -31,6 +31,24 @@ const Login = () => {
   const navigate = useNavigate();
   const { t } = useLanguage();
 
+  const submitEmergencyRequest = async (message: string, subject = 'Login or AI access problem') => {
+    if (!email.trim()) return false;
+    const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/emergency-contact`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+      },
+      body: JSON.stringify({
+        email: email.trim(),
+        subject,
+        message,
+        source: 'login_screen',
+      }),
+    });
+    return res.ok;
+  };
+
   const handleGoogleLogin = async () => {
     setGoogleLoading(true);
     setError('');
@@ -57,6 +75,7 @@ const Login = () => {
     setMagicLoading(false);
     if (error) {
       setError(error.message || 'Failed to send magic link.');
+      await submitEmergencyRequest(`Magic-link login failed for ${email.trim()}: ${error.message || 'unknown error'}`, 'Magic-link login failed');
       return;
     }
     setMagicSent(true);
@@ -73,21 +92,9 @@ const Login = () => {
     }
     setError('');
     setEmergencyLoading(true);
-    const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/emergency-contact`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-      },
-      body: JSON.stringify({
-        email: email.trim(),
-        subject: 'Login or AI access problem',
-        message: emergencyMessage.trim(),
-        source: 'login_screen',
-      }),
-    });
+    const ok = await submitEmergencyRequest(emergencyMessage.trim());
     setEmergencyLoading(false);
-    if (!res.ok) {
+    if (!ok) {
       setError('Could not send emergency request. Try again after a moment.');
       return;
     }
@@ -111,6 +118,7 @@ const Login = () => {
       navigate('/');
     } else {
       setError(t('login.invalidCredentials'));
+      await submitEmergencyRequest(`Password login failed for ${email.trim()}. User may need account, password, credit, or AI-access help.`, 'Password login failed');
     }
   };
 
