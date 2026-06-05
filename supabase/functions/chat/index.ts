@@ -515,11 +515,9 @@ serve(async (req) => {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
     const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
     const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") || "";
-    // Hardcoded super-admin (always trusted) + optional ADMIN_EMAIL secret as alias.
-    const SUPER_ADMIN_EMAIL = "sheikhrazwan1110@gmail.com";
+    // Admin identity is derived from user_profiles.role; ADMIN_EMAIL secret is an optional alias.
     const ADMIN_EMAILS = new Set(
-      [SUPER_ADMIN_EMAIL, (Deno.env.get("ADMIN_EMAIL") || "").trim().toLowerCase()]
-        .filter(Boolean)
+      [(Deno.env.get("ADMIN_EMAIL") || "").trim().toLowerCase()].filter(Boolean)
     );
 
     // Derive identity & role from the caller's JWT — never trust the client.
