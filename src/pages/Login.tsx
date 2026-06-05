@@ -283,6 +283,40 @@ const Login = () => {
               )}
               {magicSent ? 'Magic link sent — check your email' : 'Email me a magic link'}
             </Button>
+
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full gap-2 bg-secondary/20 border-border/30"
+              disabled={loading || googleLoading || emergencyLoading}
+              onClick={() => setEmergencyOpen((v) => !v)}
+              size="lg"
+            >
+              <LifeBuoy className="h-4 w-4" />
+              Emergency admin contact
+            </Button>
+
+            <AnimatePresence>
+              {emergencyOpen && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="space-y-2 overflow-hidden"
+                >
+                  <Textarea
+                    value={emergencyMessage}
+                    onChange={(e) => setEmergencyMessage(e.target.value)}
+                    placeholder="Describe your login, credit, or AI access problem..."
+                    className="min-h-[86px] bg-secondary/30 border-border/30 text-sm"
+                  />
+                  <Button type="button" className="w-full" onClick={handleEmergencyContact} disabled={emergencyLoading || emergencySent}>
+                    {emergencyLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
+                    {emergencySent ? 'Sent to admin' : 'Send emergency request'}
+                  </Button>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </form>
         </motion.div>
 
