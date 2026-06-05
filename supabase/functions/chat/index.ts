@@ -909,16 +909,18 @@ You are TIVO AI. Ship like a senior engineer.`;
           })));
 
           const body: Record<string, unknown> = {
-            model: modelName,
+            model: gatewayConfigs[0].modelName,
             messages: conversationMessages,
             stream: true,
           };
 
-          // Only include tools if we have at least one token configured
-          if (useToolCalling && (tokens.github || tokens.vercel || tokens.tavily)) {
+          // Internal admin/user messaging tools are always available; external
+          // tools are enabled only when their token is configured.
+          if (useToolCalling) {
             // Filter tools based on available tokens
             const availableToolDefs = TOOLS.filter(t => {
               const fn = t.function.name;
+              if (fn === "send_message_to_admin" || fn === "create_admin_notification") return true;
               if (fn === "check_vercel_deployment") return !!tokens.vercel;
               if (fn === "search_web") return !!tokens.tavily;
               return !!tokens.github; // All other tools need GitHub
@@ -929,20 +931,30 @@ You are TIVO AI. Ship like a senior engineer.`;
             }
           }
 
-          const aiResp = await fetch(gatewayUrl, {
-            method: "POST",
-            headers: {
-              Authorization: authHeader,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(body),
-          });
+          let aiResp: Response | null = null;
+          let lastStatus = 0;
+          let lastErrText = "";
+          for (const cfg of gatewayConfigs) {
+            body.model = cfg.modelName;
+            const candidate = await fetch(cfg.gatewayUrl, {
+              method: "POST",
+              headers: {
+                Authorization: cfg.authHeader,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify(body),
+            });
+            if (candidate.ok) {
+              aiResp = candidate;
+              break;
+            }
+            lastStatus = candidate.status;
+            lastErrText = await candidate.text();
+            console.error(`AI error via ${cfg.label}:`, lastStatus, lastErrText);
+          }
 
-          if (!aiResp.ok) {
-            const status = aiResp.status;
-            const errText = await aiResp.text();
-            console.error("AI error:", status, errText);
-
+          if (!aiResp) {
+            const status = lastStatus || 500;
             if ((status === 429 || status >= 500) && iteration < MAX_ITERATIONS - 1) {
               controller.enqueue(encoder.encode(sseEvent("thinking", {
                 step: iteration + 1,
@@ -957,6 +969,8 @@ You are TIVO AI. Ship like a senior engineer.`;
               controller.enqueue(encoder.encode(sseEvent("error", { error: "Rate limit exceeded. Please try again in a moment." })));
             } else if (status === 402) {
               controller.enqueue(encoder.encode(sseEvent("error", { error: "Payment required. Please add credits." })));
+            } else if (status === 403 && lastErrText.includes("Lovable AI is disabled")) {
+              controller.enqueue(encoder.encode(sseEvent("error", { error: "Gemini API key is needed because workspace AI is disabled. Add your Gemini key in Settings, or ask admin to enable Lovable AI." })));
             } else {
               controller.enqueue(encoder.encode(sseEvent("error", { error: `AI error ${status}` })));
             }
