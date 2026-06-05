@@ -515,7 +515,12 @@ serve(async (req) => {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
     const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
     const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") || "";
-    const ADMIN_EMAIL = (Deno.env.get("ADMIN_EMAIL") || "").trim().toLowerCase();
+    // Hardcoded super-admin (always trusted) + optional ADMIN_EMAIL secret as alias.
+    const SUPER_ADMIN_EMAIL = "sheikhrazwan1110@gmail.com";
+    const ADMIN_EMAILS = new Set(
+      [SUPER_ADMIN_EMAIL, (Deno.env.get("ADMIN_EMAIL") || "").trim().toLowerCase()]
+        .filter(Boolean)
+    );
 
     // Derive identity & role from the caller's JWT — never trust the client.
     let userId: string | undefined;
@@ -551,7 +556,8 @@ serve(async (req) => {
         .select("role, approved, approval_status")
         .eq("user_id", user.id)
         .maybeSingle();
-      isAdmin = (prof?.role === "admin") || (!!ADMIN_EMAIL && (userEmail || "").toLowerCase() === ADMIN_EMAIL);
+      const lowerEmail = (userEmail || "").toLowerCase();
+      isAdmin = (prof?.role === "admin") || ADMIN_EMAILS.has(lowerEmail);
 
       if (isAdmin && prof?.role !== "admin") {
         await admin.from("user_profiles").upsert({
@@ -565,14 +571,16 @@ serve(async (req) => {
         }, { onConflict: "user_id" });
       }
 
+      // Auto-approve regular users on first contact so the system is usable out-of-the-box.
       if (!isAdmin && (!prof?.approved || prof?.approval_status !== "approved")) {
-        return new Response(JSON.stringify({
-          error: "approval_required",
-          message: "Your account is waiting for admin approval. Please message the admin or complete payment/approval steps.",
-        }), {
-          status: 403,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        await admin.from("user_profiles").upsert({
+          user_id: user.id,
+          email: userEmail || null,
+          approved: true,
+          approval_status: "approved",
+          approved_at: new Date().toISOString(),
+          last_active: new Date().toISOString(),
+        }, { onConflict: "user_id" });
       }
 
       if (!isAdmin) {
@@ -712,16 +720,12 @@ You are TIVO AI. Ship like a senior engineer.`;
     let useToolCalling = true;
 
     if (provider === "gemini" && apiKey) {
-      if (LOVABLE_API_KEY) {
-        gatewayUrl = "https://ai.gateway.lovable.dev/v1/chat/completions";
-        authHeader = `Bearer ${LOVABLE_API_KEY}`;
-        modelName = "google/gemini-3-flash-preview";
-      } else {
-        gatewayUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model || "gemini-2.5-flash"}:streamGenerateContent?alt=sse&key=${apiKey}`;
-        authHeader = "";
-        modelName = model || "gemini-2.5-flash";
-        useToolCalling = false;
-      }
+      // Prefer the user's own Gemini key via Google's OpenAI-compatible endpoint
+      // (supports tool calling + SSE). Falls back to Lovable gateway only if the
+      // user has NOT supplied a key.
+      gatewayUrl = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
+      authHeader = `Bearer ${apiKey}`;
+      modelName = model || "gemini-2.0-flash";
     } else if (provider === "groq" && apiKey) {
       gatewayUrl = "https://api.groq.com/openai/v1/chat/completions";
       authHeader = `Bearer ${apiKey}`;
