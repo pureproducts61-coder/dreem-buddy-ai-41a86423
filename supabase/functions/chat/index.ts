@@ -1028,6 +1028,14 @@ You are TIVO AI. Ship like a senior engineer.`;
 
           // If no tool calls, we're done
           if (toolCalls.size === 0) {
+            await storeMemoryEntry(
+              adminClient,
+              userId,
+              latestPrompt,
+              assistantText,
+              apiKey || SERVER_GEMINI_API_KEY,
+              LOVABLE_API_KEY || undefined,
+            );
             controller.enqueue(encoder.encode(sseEvent("thinking", { step: iteration + 1, status: "complete" })));
             controller.enqueue(encoder.encode("data: [DONE]\n\n"));
             controller.close();
