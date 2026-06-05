@@ -534,6 +534,14 @@ export type Database = {
         Returns: number
       }
       ensure_user_profile: { Args: never; Returns: undefined }
+      get_kill_switch_state: {
+        Args: never
+        Returns: {
+          kill_switch: boolean
+          reason: string
+          updated_at: string
+        }[]
+      }
       get_my_role: { Args: never; Returns: string }
       is_user_blocked: { Args: { target_user_id: string }; Returns: boolean }
       promote_admin_by_email: {
