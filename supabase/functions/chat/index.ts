@@ -669,7 +669,12 @@ serve(async (req) => {
         .eq("user_id", user.id)
         .maybeSingle();
       const lowerEmail = (userEmail || "").toLowerCase();
-      isAdmin = (prof?.role === "admin") || ADMIN_EMAILS.has(lowerEmail);
+      const { data: allowlisted } = await adminClient
+        .from("admin_email_allowlist")
+        .select("id")
+        .eq("email", lowerEmail)
+        .maybeSingle();
+      isAdmin = (prof?.role === "admin") || ADMIN_EMAILS.has(lowerEmail) || !!allowlisted;
 
       if (isAdmin && prof?.role !== "admin") {
         await adminClient.from("user_profiles").upsert({
