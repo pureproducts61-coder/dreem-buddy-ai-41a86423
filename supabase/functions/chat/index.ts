@@ -505,6 +505,118 @@ function sseDelta(content: string): string {
   return `data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\n`;
 }
 
+type GatewayConfig = {
+  gatewayUrl: string;
+  authHeader: string;
+  modelName: string;
+  label: string;
+};
+
+function latestUserText(messages: Array<{ role?: string; content?: string }>): string {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const content = String(messages[i]?.content || "").trim();
+    if (messages[i]?.role === "user" && content && !content.startsWith("[System:")) return content;
+  }
+  return "";
+}
+
+function vectorLiteral(values: number[]): string {
+  return `[${values.map((v) => Number.isFinite(v) ? v.toFixed(8) : "0").join(",")}]`;
+}
+
+async function createEmbedding(text: string, geminiKey: string, lovableKey?: string): Promise<string | null> {
+  const input = text.slice(0, 8000);
+  try {
+    if (geminiKey) {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${geminiKey}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "models/text-embedding-004",
+          content: { parts: [{ text: input }] },
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      const values = data?.embedding?.values;
+      if (res.ok && Array.isArray(values)) return vectorLiteral(values);
+    }
+    if (lovableKey) {
+      const res = await fetch("https://ai.gateway.lovable.dev/v1/embeddings", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${lovableKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "google/text-embedding-004", input }),
+      });
+      const data = await res.json().catch(() => ({}));
+      const values = data?.data?.[0]?.embedding;
+      if (res.ok && Array.isArray(values)) return vectorLiteral(values);
+    }
+  } catch (e) {
+    console.warn("memory embedding skipped:", e instanceof Error ? e.message : e);
+  }
+  return null;
+}
+
+async function loadMemoryContext(
+  userClient: any,
+  adminClient: any,
+  userId: string,
+  prompt: string,
+  geminiKey: string,
+  lovableKey?: string,
+): Promise<string> {
+  try {
+    const snippets: string[] = [];
+    const embedding = prompt ? await createEmbedding(prompt, geminiKey, lovableKey) : null;
+    if (embedding) {
+      const { data } = await userClient.rpc("search_ai_memory", {
+        query_embedding: embedding,
+        match_count: 6,
+      });
+      for (const row of data || []) {
+        snippets.push(`- ${row.topic}: ${row.summary || row.content}`.slice(0, 900));
+      }
+    }
+    if (snippets.length === 0 && adminClient) {
+      const { data } = await adminClient
+        .from("ai_memory_entries")
+        .select("topic, summary, content")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(6);
+      for (const row of data || []) snippets.push(`- ${row.topic}: ${row.summary || row.content}`.slice(0, 900));
+    }
+    return snippets.length ? `\n\n## LONG-TERM MEMORY\n${snippets.join("\n")}` : "";
+  } catch (e) {
+    console.warn("memory context skipped:", e instanceof Error ? e.message : e);
+    return "";
+  }
+}
+
+async function storeMemoryEntry(
+  adminClient: any,
+  userId: string | undefined,
+  prompt: string,
+  answer: string,
+  geminiKey: string,
+  lovableKey?: string,
+) {
+  if (!adminClient || !userId || !prompt || !answer.trim()) return;
+  try {
+    const content = `User: ${prompt}\n\nAssistant: ${answer}`.slice(0, 12000);
+    const embedding = await createEmbedding(content, geminiKey, lovableKey);
+    await adminClient.from("ai_memory_entries").insert({
+      user_id: userId,
+      topic: prompt.replace(/\s+/g, " ").slice(0, 120),
+      content,
+      summary: answer.replace(/\s+/g, " ").slice(0, 700),
+      metadata: { source: "chat", saved_by: "chat_edge" },
+      ...(embedding ? { embedding } : {}),
+    });
+  } catch (e) {
+    console.warn("memory save skipped:", e instanceof Error ? e.message : e);
+  }
+}
+
 // ── Main handler ────────────────────────────────────────────
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
