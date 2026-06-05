@@ -53,6 +53,27 @@ export type Database = {
         }
         Relationships: []
       }
+      admin_email_allowlist: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          label: string | null
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          label?: string | null
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          label?: string | null
+        }
+        Relationships: []
+      }
       admin_messages: {
         Row: {
           admin_reply: string | null
