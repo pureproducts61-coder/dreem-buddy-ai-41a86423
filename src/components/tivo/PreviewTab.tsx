@@ -192,7 +192,7 @@ export function PreviewTab() {
                 src={previewSrc}
                 className="w-full h-full border-0"
                 title="Preview"
-                sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                sandbox="allow-scripts allow-forms allow-popups"
               />
             ) : (
               <div className="h-full flex items-center justify-center bg-background">
