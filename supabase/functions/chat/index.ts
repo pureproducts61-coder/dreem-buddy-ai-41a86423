@@ -837,34 +837,55 @@ Never produce a wall of text on a small input. Never apologize. Never promise to
 
 You are TIVO AI. Ship like a senior engineer.`;
 
-    // Determine AI gateway
-    let gatewayUrl: string;
-    let authHeader: string;
-    let modelName: string;
+    // Determine AI gateway. User/server keys are tried before Lovable AI so a
+    // workspace-level Lovable AI 403 never blocks the owner from using TIVO.
+    const gatewayConfigs: GatewayConfig[] = [];
     let useToolCalling = true;
 
     if (provider === "gemini" && apiKey) {
-      // Prefer the user's own Gemini key via Google's OpenAI-compatible endpoint
-      // (supports tool calling + SSE). Falls back to Lovable gateway only if the
-      // user has NOT supplied a key.
-      gatewayUrl = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
-      authHeader = `Bearer ${apiKey}`;
-      modelName = model || "gemini-2.0-flash";
+      gatewayConfigs.push({
+        gatewayUrl: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+        authHeader: `Bearer ${apiKey}`,
+        modelName: model || "gemini-2.0-flash",
+        label: "user_gemini",
+      });
     } else if (provider === "groq" && apiKey) {
-      gatewayUrl = "https://api.groq.com/openai/v1/chat/completions";
-      authHeader = `Bearer ${apiKey}`;
-      modelName = model || "llama-3.3-70b-versatile";
+      gatewayConfigs.push({
+        gatewayUrl: "https://api.groq.com/openai/v1/chat/completions",
+        authHeader: `Bearer ${apiKey}`,
+        modelName: model || "llama-3.3-70b-versatile",
+        label: "user_groq",
+      });
     } else if (provider === "deepseek" && apiKey) {
-      gatewayUrl = "https://api.deepseek.com/v1/chat/completions";
-      authHeader = `Bearer ${apiKey}`;
-      modelName = model || "deepseek-chat";
-    } else if (LOVABLE_API_KEY) {
-      gatewayUrl = "https://ai.gateway.lovable.dev/v1/chat/completions";
-      authHeader = `Bearer ${LOVABLE_API_KEY}`;
-      modelName = "google/gemini-3-flash-preview";
-    } else {
+      gatewayConfigs.push({
+        gatewayUrl: "https://api.deepseek.com/v1/chat/completions",
+        authHeader: `Bearer ${apiKey}`,
+        modelName: model || "deepseek-chat",
+        label: "user_deepseek",
+      });
+    }
+
+    if (SERVER_GEMINI_API_KEY && !gatewayConfigs.some((cfg) => cfg.authHeader === `Bearer ${SERVER_GEMINI_API_KEY}`)) {
+      gatewayConfigs.push({
+        gatewayUrl: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+        authHeader: `Bearer ${SERVER_GEMINI_API_KEY}`,
+        modelName: "gemini-2.0-flash",
+        label: "server_gemini",
+      });
+    }
+
+    if (LOVABLE_API_KEY) {
+      gatewayConfigs.push({
+        gatewayUrl: "https://ai.gateway.lovable.dev/v1/chat/completions",
+        authHeader: `Bearer ${LOVABLE_API_KEY}`,
+        modelName: "google/gemini-3-flash-preview",
+        label: "lovable_ai",
+      });
+    }
+
+    if (gatewayConfigs.length === 0) {
       return new Response(
-        JSON.stringify({ error: "No AI provider configured. Add an API key in Settings." }),
+        JSON.stringify({ error: "No AI provider configured. Add a Gemini API key in Settings." }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
