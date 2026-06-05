@@ -71,11 +71,13 @@ Deno.serve(async (req) => {
         .eq("user_id", user.id);
     }
 
+    const effectiveRole = isAdminEmail ? "admin" : (existing?.role || "user");
+
     return new Response(
       JSON.stringify({
         ok: true,
-        isAdmin: isAdminEmail,
-        role: isAdminEmail ? "admin" : (existing?.role || "user"),
+        isAdmin: effectiveRole === "admin",
+        role: effectiveRole,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
