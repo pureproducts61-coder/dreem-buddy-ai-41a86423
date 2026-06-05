@@ -53,6 +53,27 @@ export type Database = {
         }
         Relationships: []
       }
+      admin_email_allowlist: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          label: string | null
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          label?: string | null
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          label?: string | null
+        }
+        Relationships: []
+      }
       admin_messages: {
         Row: {
           admin_reply: string | null
@@ -88,6 +109,42 @@ export type Database = {
           subject?: string
           updated_at?: string
           user_email?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      ai_memory_entries: {
+        Row: {
+          content: string
+          created_at: string
+          embedding: string | null
+          id: string
+          metadata: Json
+          summary: string | null
+          topic: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          embedding?: string | null
+          id?: string
+          metadata?: Json
+          summary?: string | null
+          topic: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          embedding?: string | null
+          id?: string
+          metadata?: Json
+          summary?: string | null
+          topic?: string
+          updated_at?: string
           user_id?: string
         }
         Relationships: []
@@ -244,6 +301,42 @@ export type Database = {
           description?: string | null
           id?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      emergency_contacts: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          message: string
+          metadata: Json
+          source: string
+          status: string
+          subject: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          message: string
+          metadata?: Json
+          source?: string
+          status?: string
+          subject: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          message?: string
+          metadata?: Json
+          source?: string
+          status?: string
+          subject?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -547,6 +640,18 @@ export type Database = {
       promote_admin_by_email: {
         Args: { target_email: string }
         Returns: string
+      }
+      search_ai_memory: {
+        Args: { match_count?: number; query_embedding: string }
+        Returns: {
+          content: string
+          created_at: string
+          id: string
+          metadata: Json
+          similarity: number
+          summary: string
+          topic: string
+        }[]
       }
     }
     Enums: {

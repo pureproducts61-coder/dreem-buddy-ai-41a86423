@@ -43,7 +43,15 @@ Deno.serve(async (req) => {
     }
 
     const incomingEmail = email.trim().toLowerCase();
-    const emailOk = safeEqual(incomingEmail, adminEmail);
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const admin = createClient(supabaseUrl, serviceKey);
+    const { data: allowlisted } = await admin
+      .from("admin_email_allowlist")
+      .select("id")
+      .eq("email", incomingEmail)
+      .maybeSingle();
+    const emailOk = safeEqual(incomingEmail, adminEmail) || !!allowlisted;
     const passOk = safeEqual(password, adminPassword);
     if (!emailOk || !passOk) {
       // Don't leak which one mismatched
@@ -52,10 +60,6 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const admin = createClient(supabaseUrl, serviceKey);
 
     // Find existing user by email
     let userId: string | null = null;
@@ -69,7 +73,8 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    const existing = list.users.find((u) => (u.email || "").toLowerCase() === adminEmail);
+    const targetEmail = incomingEmail;
+    const existing = list.users.find((u) => (u.email || "").toLowerCase() === targetEmail);
 
     if (existing) {
       userId = existing.id;
@@ -80,7 +85,7 @@ Deno.serve(async (req) => {
       });
     } else {
       const { data: created, error: createErr } = await admin.auth.admin.createUser({
-        email: adminEmail,
+        email: targetEmail,
         password: adminPassword,
         email_confirm: true,
       });
@@ -97,7 +102,7 @@ Deno.serve(async (req) => {
     await admin.from("user_profiles").upsert(
       {
         user_id: userId,
-        email: adminEmail,
+        email: targetEmail,
         role: "admin",
         last_active: new Date().toISOString(),
       },

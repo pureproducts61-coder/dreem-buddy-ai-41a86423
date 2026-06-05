@@ -505,6 +505,118 @@ function sseDelta(content: string): string {
   return `data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\n`;
 }
 
+type GatewayConfig = {
+  gatewayUrl: string;
+  authHeader: string;
+  modelName: string;
+  label: string;
+};
+
+function latestUserText(messages: Array<{ role?: string; content?: string }>): string {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const content = String(messages[i]?.content || "").trim();
+    if (messages[i]?.role === "user" && content && !content.startsWith("[System:")) return content;
+  }
+  return "";
+}
+
+function vectorLiteral(values: number[]): string {
+  return `[${values.map((v) => Number.isFinite(v) ? v.toFixed(8) : "0").join(",")}]`;
+}
+
+async function createEmbedding(text: string, geminiKey: string, lovableKey?: string): Promise<string | null> {
+  const input = text.slice(0, 8000);
+  try {
+    if (geminiKey) {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${geminiKey}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "models/text-embedding-004",
+          content: { parts: [{ text: input }] },
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      const values = data?.embedding?.values;
+      if (res.ok && Array.isArray(values)) return vectorLiteral(values);
+    }
+    if (lovableKey) {
+      const res = await fetch("https://ai.gateway.lovable.dev/v1/embeddings", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${lovableKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "google/text-embedding-004", input }),
+      });
+      const data = await res.json().catch(() => ({}));
+      const values = data?.data?.[0]?.embedding;
+      if (res.ok && Array.isArray(values)) return vectorLiteral(values);
+    }
+  } catch (e) {
+    console.warn("memory embedding skipped:", e instanceof Error ? e.message : e);
+  }
+  return null;
+}
+
+async function loadMemoryContext(
+  userClient: any,
+  adminClient: any,
+  userId: string,
+  prompt: string,
+  geminiKey: string,
+  lovableKey?: string,
+): Promise<string> {
+  try {
+    const snippets: string[] = [];
+    const embedding = prompt ? await createEmbedding(prompt, geminiKey, lovableKey) : null;
+    if (embedding) {
+      const { data } = await userClient.rpc("search_ai_memory", {
+        query_embedding: embedding,
+        match_count: 6,
+      });
+      for (const row of data || []) {
+        snippets.push(`- ${row.topic}: ${row.summary || row.content}`.slice(0, 900));
+      }
+    }
+    if (snippets.length === 0 && adminClient) {
+      const { data } = await adminClient
+        .from("ai_memory_entries")
+        .select("topic, summary, content")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(6);
+      for (const row of data || []) snippets.push(`- ${row.topic}: ${row.summary || row.content}`.slice(0, 900));
+    }
+    return snippets.length ? `\n\n## LONG-TERM MEMORY\n${snippets.join("\n")}` : "";
+  } catch (e) {
+    console.warn("memory context skipped:", e instanceof Error ? e.message : e);
+    return "";
+  }
+}
+
+async function storeMemoryEntry(
+  adminClient: any,
+  userId: string | undefined,
+  prompt: string,
+  answer: string,
+  geminiKey: string,
+  lovableKey?: string,
+) {
+  if (!adminClient || !userId || !prompt || !answer.trim()) return;
+  try {
+    const content = `User: ${prompt}\n\nAssistant: ${answer}`.slice(0, 12000);
+    const embedding = await createEmbedding(content, geminiKey, lovableKey);
+    await adminClient.from("ai_memory_entries").insert({
+      user_id: userId,
+      topic: prompt.replace(/\s+/g, " ").slice(0, 120),
+      content,
+      summary: answer.replace(/\s+/g, " ").slice(0, 700),
+      metadata: { source: "chat", saved_by: "chat_edge" },
+      ...(embedding ? { embedding } : {}),
+    });
+  } catch (e) {
+    console.warn("memory save skipped:", e instanceof Error ? e.message : e);
+  }
+}
+
 // ── Main handler ────────────────────────────────────────────
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -512,6 +624,7 @@ serve(async (req) => {
   try {
     const { messages, model, apiKey, provider, githubToken, vercelToken, tavilyApiKey, credentials } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    const SERVER_GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || "";
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
     const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
     const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") || "";
@@ -547,18 +660,24 @@ serve(async (req) => {
     userId = user.id;
     userEmail = user.email || undefined;
 
+    let adminClient: any = null;
     if (SERVICE_ROLE) {
-      const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
-      const { data: prof } = await admin
+      adminClient = createClient(SUPABASE_URL, SERVICE_ROLE);
+      const { data: prof } = await adminClient
         .from("user_profiles")
         .select("role, approved, approval_status")
         .eq("user_id", user.id)
         .maybeSingle();
       const lowerEmail = (userEmail || "").toLowerCase();
-      isAdmin = (prof?.role === "admin") || ADMIN_EMAILS.has(lowerEmail);
+      const { data: allowlisted } = await adminClient
+        .from("admin_email_allowlist")
+        .select("id")
+        .eq("email", lowerEmail)
+        .maybeSingle();
+      isAdmin = (prof?.role === "admin") || ADMIN_EMAILS.has(lowerEmail) || !!allowlisted;
 
       if (isAdmin && prof?.role !== "admin") {
-        await admin.from("user_profiles").upsert({
+        await adminClient.from("user_profiles").upsert({
           user_id: user.id,
           email: userEmail || null,
           role: "admin",
@@ -571,7 +690,7 @@ serve(async (req) => {
 
       // Auto-approve regular users on first contact so the system is usable out-of-the-box.
       if (!isAdmin && (!prof?.approved || prof?.approval_status !== "approved")) {
-        await admin.from("user_profiles").upsert({
+        await adminClient.from("user_profiles").upsert({
           user_id: user.id,
           email: userEmail || null,
           approved: true,
@@ -588,6 +707,7 @@ serve(async (req) => {
         });
         if (creditError) {
           const msg = creditError.message || "Credit check failed";
+          console.error("credit deduction failed:", msg);
           return new Response(JSON.stringify({
             error: msg.includes("INSUFFICIENT_CREDITS") ? "INSUFFICIENT_CREDITS" : msg,
           }), {
@@ -605,6 +725,16 @@ serve(async (req) => {
       vercel: vercelToken || "",
       tavily: tavilyApiKey || "",
     };
+
+    const latestPrompt = latestUserText(messages || []);
+    const memoryContext = await loadMemoryContext(
+      userClient,
+      adminClient,
+      userId,
+      latestPrompt,
+      apiKey || SERVER_GEMINI_API_KEY,
+      LOVABLE_API_KEY || undefined,
+    );
 
     // Build available tools info for system prompt
     const availableTools: string[] = [];
@@ -660,6 +790,7 @@ ${userRole === 'ADMIN' ? `- This is the **platform administrator**. Address them
 - Admins are not charged credits.` : `- This is a **regular end-user**. Be helpful and warm, but **never** reveal system internals, secret names, API keys, table schemas, edge-function names, or admin tooling.
 - If the user asks for something only the admin can grant (more credits, new feature, paid integration, custom domain hookup), confirm and use \`send_message_to_admin\` to forward it. Tell them the admin will see it.
 - If they hit credit limits, explain politely and offer to message the admin.`}
+${memoryContext}
 
 ## CONFIGURED CREDENTIALS
 ${credStatus || 'No credential info available'}
@@ -711,34 +842,55 @@ Never produce a wall of text on a small input. Never apologize. Never promise to
 
 You are TIVO AI. Ship like a senior engineer.`;
 
-    // Determine AI gateway
-    let gatewayUrl: string;
-    let authHeader: string;
-    let modelName: string;
+    // Determine AI gateway. User/server keys are tried before Lovable AI so a
+    // workspace-level Lovable AI 403 never blocks the owner from using TIVO.
+    const gatewayConfigs: GatewayConfig[] = [];
     let useToolCalling = true;
 
     if (provider === "gemini" && apiKey) {
-      // Prefer the user's own Gemini key via Google's OpenAI-compatible endpoint
-      // (supports tool calling + SSE). Falls back to Lovable gateway only if the
-      // user has NOT supplied a key.
-      gatewayUrl = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
-      authHeader = `Bearer ${apiKey}`;
-      modelName = model || "gemini-2.0-flash";
+      gatewayConfigs.push({
+        gatewayUrl: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+        authHeader: `Bearer ${apiKey}`,
+        modelName: model || "gemini-2.0-flash",
+        label: "user_gemini",
+      });
     } else if (provider === "groq" && apiKey) {
-      gatewayUrl = "https://api.groq.com/openai/v1/chat/completions";
-      authHeader = `Bearer ${apiKey}`;
-      modelName = model || "llama-3.3-70b-versatile";
+      gatewayConfigs.push({
+        gatewayUrl: "https://api.groq.com/openai/v1/chat/completions",
+        authHeader: `Bearer ${apiKey}`,
+        modelName: model || "llama-3.3-70b-versatile",
+        label: "user_groq",
+      });
     } else if (provider === "deepseek" && apiKey) {
-      gatewayUrl = "https://api.deepseek.com/v1/chat/completions";
-      authHeader = `Bearer ${apiKey}`;
-      modelName = model || "deepseek-chat";
-    } else if (LOVABLE_API_KEY) {
-      gatewayUrl = "https://ai.gateway.lovable.dev/v1/chat/completions";
-      authHeader = `Bearer ${LOVABLE_API_KEY}`;
-      modelName = "google/gemini-3-flash-preview";
-    } else {
+      gatewayConfigs.push({
+        gatewayUrl: "https://api.deepseek.com/v1/chat/completions",
+        authHeader: `Bearer ${apiKey}`,
+        modelName: model || "deepseek-chat",
+        label: "user_deepseek",
+      });
+    }
+
+    if (SERVER_GEMINI_API_KEY && !gatewayConfigs.some((cfg) => cfg.authHeader === `Bearer ${SERVER_GEMINI_API_KEY}`)) {
+      gatewayConfigs.push({
+        gatewayUrl: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+        authHeader: `Bearer ${SERVER_GEMINI_API_KEY}`,
+        modelName: "gemini-2.0-flash",
+        label: "server_gemini",
+      });
+    }
+
+    if (LOVABLE_API_KEY) {
+      gatewayConfigs.push({
+        gatewayUrl: "https://ai.gateway.lovable.dev/v1/chat/completions",
+        authHeader: `Bearer ${LOVABLE_API_KEY}`,
+        modelName: "google/gemini-3-flash-preview",
+        label: "lovable_ai",
+      });
+    }
+
+    if (gatewayConfigs.length === 0) {
       return new Response(
-        JSON.stringify({ error: "No AI provider configured. Add an API key in Settings." }),
+        JSON.stringify({ error: "No AI provider configured. Add a Gemini API key in Settings." }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -762,16 +914,18 @@ You are TIVO AI. Ship like a senior engineer.`;
           })));
 
           const body: Record<string, unknown> = {
-            model: modelName,
+            model: gatewayConfigs[0].modelName,
             messages: conversationMessages,
             stream: true,
           };
 
-          // Only include tools if we have at least one token configured
-          if (useToolCalling && (tokens.github || tokens.vercel || tokens.tavily)) {
+          // Internal admin/user messaging tools are always available; external
+          // tools are enabled only when their token is configured.
+          if (useToolCalling) {
             // Filter tools based on available tokens
             const availableToolDefs = TOOLS.filter(t => {
               const fn = t.function.name;
+              if (fn === "send_message_to_admin" || fn === "create_admin_notification") return true;
               if (fn === "check_vercel_deployment") return !!tokens.vercel;
               if (fn === "search_web") return !!tokens.tavily;
               return !!tokens.github; // All other tools need GitHub
@@ -782,20 +936,30 @@ You are TIVO AI. Ship like a senior engineer.`;
             }
           }
 
-          const aiResp = await fetch(gatewayUrl, {
-            method: "POST",
-            headers: {
-              Authorization: authHeader,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(body),
-          });
+          let aiResp: Response | null = null;
+          let lastStatus = 0;
+          let lastErrText = "";
+          for (const cfg of gatewayConfigs) {
+            body.model = cfg.modelName;
+            const candidate = await fetch(cfg.gatewayUrl, {
+              method: "POST",
+              headers: {
+                Authorization: cfg.authHeader,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify(body),
+            });
+            if (candidate.ok) {
+              aiResp = candidate;
+              break;
+            }
+            lastStatus = candidate.status;
+            lastErrText = await candidate.text();
+            console.error(`AI error via ${cfg.label}:`, lastStatus, lastErrText);
+          }
 
-          if (!aiResp.ok) {
-            const status = aiResp.status;
-            const errText = await aiResp.text();
-            console.error("AI error:", status, errText);
-
+          if (!aiResp) {
+            const status = lastStatus || 500;
             if ((status === 429 || status >= 500) && iteration < MAX_ITERATIONS - 1) {
               controller.enqueue(encoder.encode(sseEvent("thinking", {
                 step: iteration + 1,
@@ -810,6 +974,8 @@ You are TIVO AI. Ship like a senior engineer.`;
               controller.enqueue(encoder.encode(sseEvent("error", { error: "Rate limit exceeded. Please try again in a moment." })));
             } else if (status === 402) {
               controller.enqueue(encoder.encode(sseEvent("error", { error: "Payment required. Please add credits." })));
+            } else if (status === 403 && lastErrText.includes("Lovable AI is disabled")) {
+              controller.enqueue(encoder.encode(sseEvent("error", { error: "Gemini API key is needed because workspace AI is disabled. Add your Gemini key in Settings, or ask admin to enable Lovable AI." })));
             } else {
               controller.enqueue(encoder.encode(sseEvent("error", { error: `AI error ${status}` })));
             }
@@ -867,6 +1033,14 @@ You are TIVO AI. Ship like a senior engineer.`;
 
           // If no tool calls, we're done
           if (toolCalls.size === 0) {
+            await storeMemoryEntry(
+              adminClient,
+              userId,
+              latestPrompt,
+              assistantText,
+              apiKey || SERVER_GEMINI_API_KEY,
+              LOVABLE_API_KEY || undefined,
+            );
             controller.enqueue(encoder.encode(sseEvent("thinking", { step: iteration + 1, status: "complete" })));
             controller.enqueue(encoder.encode("data: [DONE]\n\n"));
             controller.close();

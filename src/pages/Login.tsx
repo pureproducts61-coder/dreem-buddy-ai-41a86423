@@ -6,7 +6,8 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, Shield, ArrowRight, Lock, Mail } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
+import { Loader2, Shield, ArrowRight, Lock, Mail, LifeBuoy } from 'lucide-react';
 import { ThemeToggle, LanguageToggle } from '@/components/ThemeLanguageToggle';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -22,9 +23,31 @@ const Login = () => {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [magicLoading, setMagicLoading] = useState(false);
   const [magicSent, setMagicSent] = useState(false);
+  const [emergencyOpen, setEmergencyOpen] = useState(false);
+  const [emergencyMessage, setEmergencyMessage] = useState('');
+  const [emergencyLoading, setEmergencyLoading] = useState(false);
+  const [emergencySent, setEmergencySent] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
   const { t } = useLanguage();
+
+  const submitEmergencyRequest = async (message: string, subject = 'Login or AI access problem') => {
+    if (!email.trim()) return false;
+    const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/emergency-contact`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+      },
+      body: JSON.stringify({
+        email: email.trim(),
+        subject,
+        message,
+        source: 'login_screen',
+      }),
+    });
+    return res.ok;
+  };
 
   const handleGoogleLogin = async () => {
     setGoogleLoading(true);
@@ -52,9 +75,31 @@ const Login = () => {
     setMagicLoading(false);
     if (error) {
       setError(error.message || 'Failed to send magic link.');
+      await submitEmergencyRequest(`Magic-link login failed for ${email.trim()}: ${error.message || 'unknown error'}`, 'Magic-link login failed');
       return;
     }
     setMagicSent(true);
+  };
+
+  const handleEmergencyContact = async () => {
+    if (!email.trim()) {
+      setError('Enter your email first so admin can identify your account.');
+      return;
+    }
+    if (emergencyMessage.trim().length < 10) {
+      setError('Write a short message about the access problem.');
+      return;
+    }
+    setError('');
+    setEmergencyLoading(true);
+    const ok = await submitEmergencyRequest(emergencyMessage.trim());
+    setEmergencyLoading(false);
+    if (!ok) {
+      setError('Could not send emergency request. Try again after a moment.');
+      return;
+    }
+    setEmergencySent(true);
+    setEmergencyMessage('');
   };
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -73,6 +118,7 @@ const Login = () => {
       navigate('/');
     } else {
       setError(t('login.invalidCredentials'));
+      await submitEmergencyRequest(`Password login failed for ${email.trim()}. User may need account, password, credit, or AI-access help.`, 'Password login failed');
     }
   };
 
@@ -245,6 +291,40 @@ const Login = () => {
               )}
               {magicSent ? 'Magic link sent — check your email' : 'Email me a magic link'}
             </Button>
+
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full gap-2 bg-secondary/20 border-border/30"
+              disabled={loading || googleLoading || emergencyLoading}
+              onClick={() => setEmergencyOpen((v) => !v)}
+              size="lg"
+            >
+              <LifeBuoy className="h-4 w-4" />
+              Emergency admin contact
+            </Button>
+
+            <AnimatePresence>
+              {emergencyOpen && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="space-y-2 overflow-hidden"
+                >
+                  <Textarea
+                    value={emergencyMessage}
+                    onChange={(e) => setEmergencyMessage(e.target.value)}
+                    placeholder="Describe your login, credit, or AI access problem..."
+                    className="min-h-[86px] bg-secondary/30 border-border/30 text-sm"
+                  />
+                  <Button type="button" className="w-full" onClick={handleEmergencyContact} disabled={emergencyLoading || emergencySent}>
+                    {emergencyLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
+                    {emergencySent ? 'Sent to admin' : 'Send emergency request'}
+                  </Button>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </form>
         </motion.div>
 

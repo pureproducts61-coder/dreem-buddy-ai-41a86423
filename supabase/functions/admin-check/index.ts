@@ -40,11 +40,15 @@ Deno.serve(async (req) => {
       });
     }
 
-    const userEmail = (user.email || "").trim().toLowerCase();
-    const isAdminEmail = !!adminEmail && userEmail === adminEmail;
-
     // Use service role to upsert profile and promote if needed
     const adminClient = createClient(supabaseUrl, serviceKey);
+    const userEmail = (user.email || "").trim().toLowerCase();
+    const { data: allowlisted } = await adminClient
+      .from("admin_email_allowlist")
+      .select("id")
+      .eq("email", userEmail)
+      .maybeSingle();
+    const isAdminEmail = (!!adminEmail && userEmail === adminEmail) || !!allowlisted;
 
     // Ensure profile exists
     const { data: existing } = await adminClient
@@ -71,11 +75,13 @@ Deno.serve(async (req) => {
         .eq("user_id", user.id);
     }
 
+    const effectiveRole = isAdminEmail ? "admin" : (existing?.role || "user");
+
     return new Response(
       JSON.stringify({
         ok: true,
-        isAdmin: isAdminEmail,
-        role: isAdminEmail ? "admin" : (existing?.role || "user"),
+        isAdmin: effectiveRole === "admin",
+        role: effectiveRole,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
