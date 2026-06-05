@@ -1,6 +1,6 @@
 import { supabase } from '@/integrations/supabase/client';
 
-const db = supabase as unknown as { from: (t: string) => any };
+const db = supabase as unknown as { from: (t: string) => any; rpc: (n: string, a?: any) => any };
 
 export interface KillSwitchState {
   kill_switch: boolean;
@@ -15,9 +15,10 @@ export function getKillSwitch(): KillSwitchState { return cached; }
 
 export async function refreshKillSwitch(): Promise<KillSwitchState> {
   try {
-    const { data } = await db.from('system_controls').select('*').eq('id', 'global').maybeSingle();
-    if (data) {
-      cached = { kill_switch: !!data.kill_switch, reason: data.reason, updated_at: data.updated_at };
+    const { data } = await db.rpc('get_kill_switch_state');
+    const row = Array.isArray(data) ? data[0] : data;
+    if (row) {
+      cached = { kill_switch: !!row.kill_switch, reason: row.reason ?? null, updated_at: row.updated_at };
       listeners.forEach(l => l(cached));
     }
   } catch { /* ignore */ }
