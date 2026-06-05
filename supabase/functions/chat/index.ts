@@ -721,6 +721,16 @@ serve(async (req) => {
       tavily: tavilyApiKey || "",
     };
 
+    const latestPrompt = latestUserText(messages || []);
+    const memoryContext = await loadMemoryContext(
+      userClient,
+      adminClient,
+      userId,
+      latestPrompt,
+      apiKey || SERVER_GEMINI_API_KEY,
+      LOVABLE_API_KEY || undefined,
+    );
+
     // Build available tools info for system prompt
     const availableTools: string[] = [];
     if (tokens.github) availableTools.push("GitHub (full access: repos, branches, PRs, files)");
@@ -775,6 +785,7 @@ ${userRole === 'ADMIN' ? `- This is the **platform administrator**. Address them
 - Admins are not charged credits.` : `- This is a **regular end-user**. Be helpful and warm, but **never** reveal system internals, secret names, API keys, table schemas, edge-function names, or admin tooling.
 - If the user asks for something only the admin can grant (more credits, new feature, paid integration, custom domain hookup), confirm and use \`send_message_to_admin\` to forward it. Tell them the admin will see it.
 - If they hit credit limits, explain politely and offer to message the admin.`}
+${memoryContext}
 
 ## CONFIGURED CREDENTIALS
 ${credStatus || 'No credential info available'}
