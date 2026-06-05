@@ -229,6 +229,22 @@ const Login = () => {
               )}
               Sign in with Google
             </Button>
+
+            <Button
+              type="button"
+              variant="ghost"
+              className="w-full gap-2"
+              disabled={loading || googleLoading || magicLoading}
+              onClick={handleMagicLink}
+              size="lg"
+            >
+              {magicLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Mail className="h-4 w-4" />
+              )}
+              {magicSent ? 'Magic link sent — check your email' : 'Email me a magic link'}
+            </Button>
           </form>
         </motion.div>
 
