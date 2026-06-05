@@ -720,16 +720,12 @@ You are TIVO AI. Ship like a senior engineer.`;
     let useToolCalling = true;
 
     if (provider === "gemini" && apiKey) {
-      if (LOVABLE_API_KEY) {
-        gatewayUrl = "https://ai.gateway.lovable.dev/v1/chat/completions";
-        authHeader = `Bearer ${LOVABLE_API_KEY}`;
-        modelName = "google/gemini-3-flash-preview";
-      } else {
-        gatewayUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model || "gemini-2.5-flash"}:streamGenerateContent?alt=sse&key=${apiKey}`;
-        authHeader = "";
-        modelName = model || "gemini-2.5-flash";
-        useToolCalling = false;
-      }
+      // Prefer the user's own Gemini key via Google's OpenAI-compatible endpoint
+      // (supports tool calling + SSE). Falls back to Lovable gateway only if the
+      // user has NOT supplied a key.
+      gatewayUrl = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
+      authHeader = `Bearer ${apiKey}`;
+      modelName = model || "gemini-2.0-flash";
     } else if (provider === "groq" && apiKey) {
       gatewayUrl = "https://api.groq.com/openai/v1/chat/completions";
       authHeader = `Bearer ${apiKey}`;
