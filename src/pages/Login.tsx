@@ -6,7 +6,8 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, Shield, ArrowRight, Lock, Mail } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
+import { Loader2, Shield, ArrowRight, Lock, Mail, LifeBuoy } from 'lucide-react';
 import { ThemeToggle, LanguageToggle } from '@/components/ThemeLanguageToggle';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -22,6 +23,10 @@ const Login = () => {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [magicLoading, setMagicLoading] = useState(false);
   const [magicSent, setMagicSent] = useState(false);
+  const [emergencyOpen, setEmergencyOpen] = useState(false);
+  const [emergencyMessage, setEmergencyMessage] = useState('');
+  const [emergencyLoading, setEmergencyLoading] = useState(false);
+  const [emergencySent, setEmergencySent] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
   const { t } = useLanguage();
@@ -55,6 +60,39 @@ const Login = () => {
       return;
     }
     setMagicSent(true);
+  };
+
+  const handleEmergencyContact = async () => {
+    if (!email.trim()) {
+      setError('Enter your email first so admin can identify your account.');
+      return;
+    }
+    if (emergencyMessage.trim().length < 10) {
+      setError('Write a short message about the access problem.');
+      return;
+    }
+    setError('');
+    setEmergencyLoading(true);
+    const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/emergency-contact`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+      },
+      body: JSON.stringify({
+        email: email.trim(),
+        subject: 'Login or AI access problem',
+        message: emergencyMessage.trim(),
+        source: 'login_screen',
+      }),
+    });
+    setEmergencyLoading(false);
+    if (!res.ok) {
+      setError('Could not send emergency request. Try again after a moment.');
+      return;
+    }
+    setEmergencySent(true);
+    setEmergencyMessage('');
   };
 
   const handleLogin = async (e: React.FormEvent) => {
