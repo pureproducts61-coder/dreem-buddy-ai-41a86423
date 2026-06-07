@@ -42,6 +42,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (res.ok) {
         const data = await res.json();
         setIsAdmin(!!data.isAdmin);
+        // Fire-and-forget audit-log of the login event.
+        try {
+          await (supabase as any).rpc('log_auth_event', {
+            event: data.isAdmin ? 'admin_login' : 'user_login',
+            detail: { provider: session.user.app_metadata?.provider || 'unknown' },
+          });
+        } catch { /* non-fatal */ }
         if (data.isAdmin) {
           // Auto-start desktop notification listener for admin sessions
           startAdminPushListener().catch(() => {});
@@ -107,6 +114,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const logout = async () => {
+    try {
+      await (supabase as any).rpc('log_auth_event', { event: 'logout', detail: {} });
+    } catch { /* non-fatal */ }
     await supabase.auth.signOut();
     setUser(null);
     setIsAdmin(false);

@@ -1,3 +1,9 @@
+// Strict CSP injected into every wrapper. Only the CDNs we actually load are
+// whitelisted. 'unsafe-inline'/'unsafe-eval' are required for Tailwind CDN +
+// Babel-standalone (preview-only). Combined with iframe sandbox (no
+// allow-same-origin) this confines AI-generated code to an opaque origin.
+const PREVIEW_CSP_META = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://unpkg.com; style-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://unpkg.com https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https:; frame-ancestors 'self'; base-uri 'none'; form-action 'self'; object-src 'none'">`;
+
 // Preview Bridge — extracts renderable code from AI responses and sends to PreviewTab
 
 /**
@@ -76,6 +82,7 @@ function wrapMarkdownInHtml(md: string): string {
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  ${PREVIEW_CSP_META}
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>TIVO Task Output</title>
   <script src="https://cdn.tailwindcss.com"><\/script>
@@ -120,6 +127,7 @@ function wrapInHtml(body: string, css: string = ''): string {
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  ${PREVIEW_CSP_META}
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>TIVO Preview</title>
   <script src="https://cdn.tailwindcss.com"><\/script>
@@ -151,6 +159,7 @@ function wrapReactInHtml(jsxCode: string): string {
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  ${PREVIEW_CSP_META}
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>TIVO Preview</title>
   <script src="https://cdn.tailwindcss.com"><\/script>

@@ -34,10 +34,23 @@ export function PreviewTab() {
   const [consoleLogs, setConsoleLogs] = useState<ConsoleEntry[]>([]);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
-  // Generate blob URL from HTML content for hot-reload
+  // Generate blob URL from HTML content for hot-reload.
+  // Inject a strict Content Security Policy <meta> tag if the document doesn't
+  // already declare one — defence-in-depth on top of the iframe sandbox.
   const loadFromHtml = useCallback((html: string) => {
     if (blobUrl) URL.revokeObjectURL(blobUrl);
-    const blob = new Blob([html], { type: 'text/html' });
+    const cspMeta = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://unpkg.com; style-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://unpkg.com https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https:; frame-ancestors 'self'; base-uri 'none'; form-action 'self'; object-src 'none'">`;
+    let hardened = html;
+    if (!/http-equiv=["']Content-Security-Policy["']/i.test(hardened)) {
+      if (/<head[^>]*>/i.test(hardened)) {
+        hardened = hardened.replace(/<head[^>]*>/i, (m) => `${m}\n${cspMeta}`);
+      } else if (/<html[^>]*>/i.test(hardened)) {
+        hardened = hardened.replace(/<html[^>]*>/i, (m) => `${m}<head>${cspMeta}</head>`);
+      } else {
+        hardened = `<!DOCTYPE html><html><head>${cspMeta}</head><body>${hardened}</body></html>`;
+      }
+    }
+    const blob = new Blob([hardened], { type: 'text/html' });
     const newUrl = URL.createObjectURL(blob);
     setBlobUrl(newUrl);
     setUrl('');
@@ -193,6 +206,9 @@ export function PreviewTab() {
                 className="w-full h-full border-0"
                 title="Preview"
                 sandbox="allow-scripts allow-forms allow-popups"
+                referrerPolicy="no-referrer"
+                allow=""
+                loading="lazy"
               />
             ) : (
               <div className="h-full flex items-center justify-center bg-background">
