@@ -80,6 +80,7 @@ function wrapMarkdownInHtml(md: string): string {
   <title>TIVO Task Output</title>
   <script src="https://cdn.tailwindcss.com"><\/script>
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"><\/script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"><\/script>
   <style>
     body { font-family: -apple-system, system-ui, sans-serif; padding: 1.5rem; max-width: 820px; margin: 0 auto; line-height: 1.6; }
     h1,h2,h3 { font-weight: 700; margin-top: 1.2em; }
@@ -97,7 +98,12 @@ function wrapMarkdownInHtml(md: string): string {
   <article id="content"></article>
   <script>
     const src = ${JSON.stringify(escaped)};
-    document.getElementById('content').innerHTML = marked.parse(src.replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>'));
+    const raw = src.replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>');
+    const html = marked.parse(raw);
+    // Sanitize to strip <script>, event handlers, javascript: URLs, etc.
+    document.getElementById('content').innerHTML = window.DOMPurify
+      ? window.DOMPurify.sanitize(html, { USE_PROFILES: { html: true } })
+      : html.replace(/<script[\s\S]*?<\/script>/gi, '');
   <\/script>
 </body>
 </html>`;
