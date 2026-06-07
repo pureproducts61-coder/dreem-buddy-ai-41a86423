@@ -29,11 +29,10 @@ export function subscribeKillSwitch(cb: (s: KillSwitchState) => void): () => voi
   listeners.add(cb);
   cb(cached);
   refreshKillSwitch();
-  const channel = supabase
-    .channel('system-controls')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'system_controls' }, () => { refreshKillSwitch(); })
-    .subscribe();
-  return () => { listeners.delete(cb); supabase.removeChannel(channel); };
+  // Realtime is intentionally disabled on system_controls to avoid leaking the
+  // admin-only `reason` field to non-admin subscribers. Poll periodically instead.
+  const interval = setInterval(() => { refreshKillSwitch(); }, 30000);
+  return () => { listeners.delete(cb); clearInterval(interval); };
 }
 
 export async function setKillSwitch(on: boolean, reason?: string): Promise<void> {
