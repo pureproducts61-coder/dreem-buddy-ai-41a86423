@@ -57,9 +57,17 @@ describe('RLS enforcement (migration audit)', () => {
   it('sensitive tables only expose admin-scoped policies', () => {
     const sensitive = ['system_controls', 'emergency_contacts', 'admin_audit_log', 'admin_email_allowlist'];
     for (const table of sensitive) {
-      const policies = [...allSql.matchAll(new RegExp(`create\\s+policy[^;]+on\\s+public\\.${table}[^;]+;`, 'gi'))]
-        .map((m) => m[0].toLowerCase());
-      for (const pol of policies) {
+      const rawPolicies = [...allSql.matchAll(new RegExp(`create\\s+policy\\s+"([^"]+)"[^;]+on\\s+public\\.${table}[^;]+;`, 'gi'))];
+      const droppedNames = new Set(
+        [...allSql.matchAll(new RegExp(`drop\\s+policy\\s+(?:if\\s+exists\\s+)?"([^"]+)"\\s+on\\s+public\\.${table}`, 'gi'))]
+          .map((m) => m[1].toLowerCase()),
+      );
+      // Keep only the LAST definition of each policy name (later migrations override earlier ones)
+      // and drop anything explicitly dropped later.
+      const latest = new Map<string, string>();
+      for (const m of rawPolicies) latest.set(m[1].toLowerCase(), m[0].toLowerCase());
+      for (const name of droppedNames) latest.delete(name);
+      for (const pol of latest.values()) {
         const hasGuard = /get_my_role\(\)\s*=\s*'admin'/.test(pol)
           || /user_id\s*=\s*auth\.uid\(\)/.test(pol);
         expect(hasGuard, `policy without admin/owner guard on ${table}: ${pol.slice(0, 120)}`).toBe(true);
