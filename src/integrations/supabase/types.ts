@@ -637,6 +637,14 @@ export type Database = {
       }
       get_my_role: { Args: never; Returns: string }
       is_user_blocked: { Args: { target_user_id: string }; Returns: boolean }
+      log_auth_event: {
+        Args: { detail?: Json; event: string }
+        Returns: undefined
+      }
+      log_emergency_contact_view: {
+        Args: { target_ids: string[] }
+        Returns: undefined
+      }
       promote_admin_by_email: {
         Args: { target_email: string }
         Returns: string
