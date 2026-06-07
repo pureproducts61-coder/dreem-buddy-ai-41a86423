@@ -31,8 +31,17 @@ export function EmergencyContactsTab() {
   const load = async () => {
     setLoading(true);
     const { data } = await db.from('emergency_contacts').select('*').order('created_at', { ascending: false }).limit(100);
-    setRows((data || []) as EmergencyContactRow[]);
+    const list = (data || []) as EmergencyContactRow[];
+    setRows(list);
     setLoading(false);
+    // Audit-log this admin read so we know who viewed which emergency contacts and when.
+    if (list.length > 0) {
+      try {
+        await (supabase as any).rpc('log_emergency_contact_view', {
+          target_ids: list.map((r) => r.id),
+        });
+      } catch { /* non-fatal */ }
+    }
   };
 
   useEffect(() => {
