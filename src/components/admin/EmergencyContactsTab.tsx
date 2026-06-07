@@ -37,11 +37,10 @@ export function EmergencyContactsTab() {
 
   useEffect(() => {
     load();
-    const channel = supabase
-      .channel('emergency-contacts-admin')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'emergency_contacts' }, () => load())
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    // Realtime publication intentionally excludes emergency_contacts (contains
+    // user email + message). Poll every 20s instead of subscribing.
+    const interval = setInterval(load, 20000);
+    return () => { clearInterval(interval); };
   }, []);
 
   const closeRequest = async (id: string) => {
