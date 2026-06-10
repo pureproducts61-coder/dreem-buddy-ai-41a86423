@@ -101,13 +101,15 @@ const AdminPanel = () => {
   useEffect(() => {
     setDbAvailable(isDbConnected());
     if (isDbConnected()) loadUsers();
-    loadMergedSystemSettings(defaultAdminSettings).then((merged) => setSettings(merged));
+    loadMergedSystemSettings(defaultAdminSettings as unknown as Record<string, string | number | boolean>)
+      .then((merged) => setSettings(merged as unknown as AdminSettings));
   }, []);
 
   useEffect(() => {
     const ch = supabase.channel('system-settings-sync')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'system_settings' }, () => {
-        loadMergedSystemSettings(defaultAdminSettings).then((merged) => setSettings(merged));
+        loadMergedSystemSettings(defaultAdminSettings as unknown as Record<string, string | number | boolean>)
+          .then((merged) => setSettings(merged as unknown as AdminSettings));
       })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
