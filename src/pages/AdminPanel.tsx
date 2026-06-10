@@ -30,6 +30,7 @@ import { AutomationApprovalsTab } from '@/components/admin/AutomationApprovalsTa
 import { AdminAuditLogTab } from '@/components/admin/AdminAuditLogTab';
 import { EmergencyContactsTab } from '@/components/admin/EmergencyContactsTab';
 import { loadMergedSystemSettings, saveLocalSystemSettings, saveSystemSettingsToDb } from '@/services/systemSettingsService';
+import { AdminWeeklyReportsTab } from '@/components/admin/AdminWeeklyReportsTab';
 
 const STORAGE_KEY = 'dreem-settings';
 
@@ -240,6 +241,7 @@ const AdminPanel = () => {
           {/* Monitoring */}
           <TabsContent value="monitor" className="space-y-6">
             <EmergencyContactsTab />
+            <AdminWeeklyReportsTab />
             <AutomationApprovalsTab />
             <AdminAuditLogTab />
             <AdminMonitoringTab />
