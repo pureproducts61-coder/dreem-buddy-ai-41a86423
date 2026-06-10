@@ -19,10 +19,19 @@ Deno.serve(async (req) => {
   const authHeader = req.headers.get("Authorization") || "";
   const admin = createClient(supabaseUrl, serviceKey);
 
-  if (cronSecret && incomingSecret !== cronSecret) {
+  const { data: dbSecret } = await admin
+    .from("system_settings")
+    .select("value")
+    .eq("key", "admin_weekly_report_schedule_secret")
+    .maybeSingle();
+  const expectedSecret = cronSecret || dbSecret?.value || "";
+
+  if (expectedSecret && incomingSecret !== expectedSecret) {
     if (!authHeader.startsWith("Bearer ")) {
       return new Response(JSON.stringify({ error: "unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
+  } else if (!expectedSecret) {
+    return new Response(JSON.stringify({ error: "schedule_secret_missing" }), { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 
   const now = new Date();
