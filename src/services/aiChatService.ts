@@ -2,6 +2,9 @@
 import { getConfiguredCredentials } from './hybridStorageService';
 import { getMemoryContext, addMemoryEntry } from './githubMemoryService';
 import { supabase } from '@/integrations/supabase/client';
+import { loadLocalSystemSettings, loadSystemSettingsFromDb } from './systemSettingsService';
+import { listUserSecrets } from './userSecretsService';
+import { logRecoveryEvent, notifyAdminOfIssue } from './recoveryService';
 const STORAGE_KEY = 'dreem-settings';
 
 interface ChatMessage {
@@ -26,6 +29,23 @@ function getSettings() {
   }
 }
 
+async function getRuntimeSettings() {
+  const local = { ...loadLocalSystemSettings(), ...getSettings() } as Record<string, string>;
+  const remote = await loadSystemSettingsFromDb().catch(() => ({})) as Record<string, string>;
+  const secrets = await listUserSecrets().catch(() => []);
+  const secretMap = Object.fromEntries(secrets.map((s) => [s.name, s.value]));
+  return {
+    ...local,
+    ...remote,
+    geminiApiKey: remote.geminiApiKey || local.geminiApiKey || secretMap.GEMINI_API_KEY || secretMap.GEMINI || '',
+    groqApiKey: remote.groqApiKey || local.groqApiKey || secretMap.GROQ_API_KEY || secretMap.GROQ || '',
+    deepseekApiKey: remote.deepseekApiKey || local.deepseekApiKey || secretMap.DEEPSEEK_API_KEY || secretMap.DEEPSEEK || '',
+    githubToken: local.githubToken || secretMap.GITHUB_TOKEN || '',
+    vercelToken: remote.vercelToken || local.vercelToken || secretMap.VERCEL_TOKEN || '',
+    tavilyApiKey: remote.tavilyApiKey || local.tavilyApiKey || secretMap.TAVILY_API_KEY || '',
+  } as Record<string, string>;
+}
+
 function getApiKeyForProvider(provider: string): string {
   const settings = getSettings();
   switch (provider) {
@@ -42,8 +62,7 @@ export function getActiveProvider(): string {
 }
 
 export function hasAnyAIConfig(): boolean {
-  const settings = getSettings();
-  return !!(settings.geminiApiKey || settings.groqApiKey || settings.deepseekApiKey);
+  return true;
 }
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`;
@@ -63,9 +82,12 @@ export async function streamChat({
   onToolEvent?: (event: ToolEvent) => void;
   userContext?: { isAdmin: boolean; email?: string; userId?: string };
 }) {
-  const provider = getActiveProvider();
-  const apiKey = getApiKeyForProvider(provider);
-  const settings = getSettings();
+  const settings = await getRuntimeSettings();
+  const provider = String(settings.aiModel || getActiveProvider() || 'gemini');
+  const apiKey = provider === 'gemini' ? settings.geminiApiKey || ''
+    : provider === 'groq' ? settings.groqApiKey || ''
+    : provider === 'deepseek' ? settings.deepseekApiKey || ''
+    : '';
   const githubToken = settings.githubToken || '';
   const vercelToken = settings.vercelToken || '';
   const tavilyApiKey = settings.tavilyApiKey || '';
@@ -121,6 +143,8 @@ export async function streamChat({
     if (!resp.ok) {
       const errData = await resp.json().catch(() => ({ error: 'Unknown error' }));
       const errMsg = errData.error || `Error ${resp.status}`;
+      await logRecoveryEvent('ai_http_error', { status: resp.status, error: errMsg, provider });
+      await notifyAdminOfIssue('AI runtime error', `Provider: ${provider}\nStatus: ${resp.status}\nError: ${errMsg}`);
       if (onError) onError(errMsg);
       return;
     }
@@ -160,16 +184,18 @@ export async function streamChat({
           textBuffer = textBuffer.slice(nextNewline + 1);
           if (dataLine.endsWith('\r')) dataLine = dataLine.slice(0, -1);
 
-          if (dataLine.startsWith('data: ') && onToolEvent) {
+          if (dataLine.startsWith('data: ')) {
             try {
               const payload = JSON.parse(dataLine.slice(6).trim());
               if (eventType === 'tool_start') {
-                onToolEvent({ type: 'tool_start', tool: payload.tool, args: payload.args });
+                onToolEvent?.({ type: 'tool_start', tool: payload.tool, args: payload.args });
               } else if (eventType === 'tool_result') {
-                onToolEvent({ type: 'tool_result', tool: payload.tool, result: payload.result });
+                onToolEvent?.({ type: 'tool_result', tool: payload.tool, result: payload.result });
               } else if (eventType === 'thinking') {
-                onToolEvent({ type: 'thinking', tool: '', thinking: payload });
+                onToolEvent?.({ type: 'thinking', tool: '', thinking: payload });
               } else if (eventType === 'error' && onError) {
+                await logRecoveryEvent('ai_stream_error', { error: payload.error, provider });
+                await notifyAdminOfIssue('AI stream error', `Provider: ${provider}\nError: ${payload.error}`);
                 onError(payload.error);
               }
             } catch { /* skip */ }

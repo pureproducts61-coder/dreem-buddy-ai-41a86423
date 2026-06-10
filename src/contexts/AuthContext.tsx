@@ -37,6 +37,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         headers: {
           'Authorization': `Bearer ${session.access_token}`,
           'Content-Type': 'application/json',
+          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
         },
       });
       if (res.ok) {
@@ -70,20 +71,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     // Set up listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user?.email) {
+        setIsLoading(true);
         setUser({ email: session.user.email, id: session.user.id });
         // Defer role sync to avoid blocking the auth callback
-        setTimeout(() => { syncRole(); }, 0);
+        setTimeout(() => { syncRole().finally(() => setIsLoading(false)); }, 0);
       } else {
         setUser(null);
         setIsAdmin(false);
+        setIsLoading(false);
       }
     });
 
     // Then check existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session?.user?.email) {
         setUser({ email: session.user.email, id: session.user.id });
-        syncRole();
+        await syncRole();
       }
       setIsLoading(false);
     });

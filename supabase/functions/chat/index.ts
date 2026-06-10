@@ -617,12 +617,96 @@ async function storeMemoryEntry(
   }
 }
 
+async function logAudit(adminClient: any, input: {
+  actorId?: string;
+  actorEmail?: string;
+  eventType: string;
+  targetTable?: string;
+  targetId?: string;
+  after?: Record<string, unknown>;
+  note?: string;
+}) {
+  if (!adminClient) return;
+  try {
+    await adminClient.from("admin_audit_log").insert({
+      actor_id: input.actorId || null,
+      actor_email: input.actorEmail || null,
+      event_type: input.eventType,
+      target_table: input.targetTable || "system",
+      target_id: input.targetId || null,
+      after: input.after || {},
+      note: input.note || null,
+    });
+  } catch (e) {
+    console.warn("audit skipped:", e instanceof Error ? e.message : e);
+  }
+}
+
+async function loadRuntimeSecrets(adminClient: any, userId: string) {
+  const settings: Record<string, string> = {};
+  try {
+    const { data } = await adminClient.from("system_settings").select("key,value");
+    for (const row of data || []) settings[row.key] = row.value || "";
+  } catch { /* optional */ }
+  try {
+    const { data } = await adminClient.from("user_secrets").select("name,value").eq("user_id", userId);
+    for (const row of data || []) settings[row.name] = row.value || "";
+  } catch { /* optional */ }
+  return settings;
+}
+
+const CRITICAL_TOOLS = new Set([
+  "create_github_repo", "write_file_to_github", "push_multiple_files",
+  "delete_github_repo", "create_branch", "create_pull_request",
+]);
+
+async function requireApprovalForTool(adminClient: any, ctx: { userId?: string; userEmail?: string; isAdmin: boolean }, tool: string, args: Record<string, unknown>) {
+  if (!adminClient || ctx.isAdmin || !ctx.userId || !CRITICAL_TOOLS.has(tool)) return { ok: true };
+  const title = `AI tool approval: ${tool}`;
+  const { data: existing } = await adminClient
+    .from("automation_approvals")
+    .select("id,status")
+    .eq("user_id", ctx.userId)
+    .eq("action_type", tool)
+    .eq("title", title)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (existing?.status === "approved") return { ok: true, approvalId: existing.id };
+  if (existing?.status === "pending") return { ok: false, approvalId: existing.id };
+
+  const { data: approval } = await adminClient.from("automation_approvals").insert({
+    user_id: ctx.userId,
+    user_email: ctx.userEmail || null,
+    action_type: tool,
+    title,
+    details: sanitizeArgs(args),
+  }).select("id").single();
+  await adminClient.from("admin_messages").insert({
+    user_id: ctx.userId,
+    user_email: ctx.userEmail || null,
+    category: "approval",
+    subject: `🔐 Approval needed: ${tool}`,
+    message: `TIVO AI paused a critical action until admin approval.\n\nTool: ${tool}\n\nDetails:\n${JSON.stringify(sanitizeArgs(args), null, 2)}`,
+  });
+  await logAudit(adminClient, {
+    actorId: ctx.userId,
+    actorEmail: ctx.userEmail,
+    eventType: "approval.required",
+    targetTable: "automation_approvals",
+    targetId: approval?.id,
+    after: { tool, args: sanitizeArgs(args) },
+    note: tool,
+  });
+  return { ok: false, approvalId: approval?.id };
+}
+
 // ── Main handler ────────────────────────────────────────────
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { messages, model, apiKey, provider, githubToken, vercelToken, tavilyApiKey, credentials } = await req.json();
+    let { messages, model, apiKey, provider, githubToken, vercelToken, tavilyApiKey, credentials } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     const SERVER_GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || "";
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
@@ -708,6 +792,13 @@ serve(async (req) => {
         if (creditError) {
           const msg = creditError.message || "Credit check failed";
           console.error("credit deduction failed:", msg);
+          await logAudit(adminClient, {
+            actorId: userId,
+            actorEmail: userEmail,
+            eventType: "recovery.credit_or_rls_error",
+            after: { message: msg },
+            note: "AI access blocked before provider call",
+          });
           return new Response(JSON.stringify({
             error: msg.includes("INSUFFICIENT_CREDITS") ? "INSUFFICIENT_CREDITS" : msg,
           }), {
@@ -717,6 +808,32 @@ serve(async (req) => {
         }
       }
     }
+    // Resolve secrets from user_secrets table if not provided
+    if (adminClient && userId) {
+      const runtimeSettings = await loadRuntimeSecrets(adminClient, userId);
+      if (!provider && runtimeSettings.aiModel) provider = runtimeSettings.aiModel;
+      if (!apiKey) {
+        const selectedProvider = provider || runtimeSettings.aiModel || "gemini";
+        if (selectedProvider === "gemini") apiKey = runtimeSettings.geminiApiKey || runtimeSettings.GEMINI_API_KEY;
+        if (selectedProvider === "groq") apiKey = runtimeSettings.groqApiKey || runtimeSettings.GROQ_API_KEY;
+        if (selectedProvider === "deepseek") apiKey = runtimeSettings.deepseekApiKey || runtimeSettings.DEEPSEEK_API_KEY;
+      }
+      if (!vercelToken) vercelToken = runtimeSettings.vercelToken || runtimeSettings.VERCEL_TOKEN;
+      if (!tavilyApiKey) tavilyApiKey = runtimeSettings.tavilyApiKey || runtimeSettings.TAVILY_API_KEY;
+      const { data: dbSecrets } = await adminClient
+        .from("user_secrets")
+        .select("name, value")
+        .eq("user_id", userId);
+
+      if (dbSecrets) {
+        const secretMap = Object.fromEntries(dbSecrets.map((s: any) => [s.name, s.value]));
+        if (!apiKey) apiKey = secretMap.GEMINI_API_KEY || secretMap.GOOGLE_API_KEY || secretMap.OPENAI_API_KEY;
+        if (!githubToken) githubToken = secretMap.GITHUB_TOKEN || secretMap.GITHUB_API_KEY;
+        if (!vercelToken) vercelToken = secretMap.VERCEL_TOKEN || secretMap.VERCEL_API_KEY;
+        if (!tavilyApiKey) tavilyApiKey = secretMap.TAVILY_API_KEY;
+      }
+    }
+
 
     const toolCtx = { userId, userEmail, supabaseUrl: SUPABASE_URL, serviceRoleKey: SERVICE_ROLE, isAdmin };
 
@@ -960,6 +1077,13 @@ You are TIVO AI. Ship like a senior engineer.`;
 
           if (!aiResp) {
             const status = lastStatus || 500;
+            await logAudit(adminClient, {
+              actorId: userId,
+              actorEmail: userEmail,
+              eventType: `recovery.ai_provider_${status}`,
+              after: { status, provider: provider || "gemini", tried: gatewayConfigs.map((cfg) => cfg.label), error: lastErrText.slice(0, 500) },
+              note: "AI provider fallback exhausted",
+            });
             if ((status === 429 || status >= 500) && iteration < MAX_ITERATIONS - 1) {
               controller.enqueue(encoder.encode(sseEvent("thinking", {
                 step: iteration + 1,
@@ -1071,8 +1195,32 @@ You are TIVO AI. Ship like a senior engineer.`;
               args: sanitizeArgs(args),
             })));
 
+            const approval = await requireApprovalForTool(adminClient, toolCtx, tc.name, args);
+            if (!approval.ok) {
+              const blocked = { error: "approval_required", approval_id: approval.approvalId, message: "Admin approval is required before this critical action can run." };
+              controller.enqueue(encoder.encode(sseEvent("tool_result", {
+                tool: tc.name,
+                result: blocked,
+              })));
+              conversationMessages.push({
+                role: "tool",
+                tool_call_id: tc.id,
+                content: JSON.stringify(blocked),
+              });
+              continue;
+            }
+
             let result = await executeTool(tc.name, args, tokens, toolCtx);
             let parsedResult = JSON.parse(result);
+            if (parsedResult.error) {
+              await logAudit(adminClient, {
+                actorId: userId,
+                actorEmail: userEmail,
+                eventType: "recovery.tool_error",
+                after: { tool: tc.name, error: parsedResult.error, args: sanitizeArgs(args) },
+                note: tc.name,
+              });
+            }
 
             // Auto-retry on SHA conflict (up to 2 retries)
             if (parsedResult.error && parsedResult.error.includes("422") &&

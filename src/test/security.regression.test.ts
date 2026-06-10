@@ -55,7 +55,7 @@ describe('RLS enforcement (migration audit)', () => {
   });
 
   it('sensitive tables only expose admin-scoped policies', () => {
-    const sensitive = ['system_controls', 'emergency_contacts', 'admin_audit_log', 'admin_email_allowlist'];
+    const sensitive = ['system_controls', 'emergency_contacts', 'admin_audit_log', 'admin_email_allowlist', 'system_settings', 'admin_weekly_reports'];
     for (const table of sensitive) {
       const rawPolicies = [...allSql.matchAll(new RegExp(`create\\s+policy\\s+"([^"]+)"[^;]+on\\s+public\\.${table}[^;]+;`, 'gi'))];
       const droppedNames = new Set(
@@ -82,6 +82,8 @@ describe('RLS enforcement (migration audit)', () => {
       'log_admin_message_reply',
       'log_emergency_contact_change',
       'log_user_profile_sensitive',
+      'log_system_recovery_event',
+      'log_system_settings_change',
     ];
     for (const fn of expected) {
       expect(allSql.toLowerCase()).toContain(fn.toLowerCase());

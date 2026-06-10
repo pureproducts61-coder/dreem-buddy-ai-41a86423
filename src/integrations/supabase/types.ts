@@ -113,6 +113,36 @@ export type Database = {
         }
         Relationships: []
       }
+      admin_weekly_reports: {
+        Row: {
+          created_at: string
+          delivered_at: string | null
+          id: string
+          period_end: string
+          period_start: string
+          status: string
+          summary: Json
+        }
+        Insert: {
+          created_at?: string
+          delivered_at?: string | null
+          id?: string
+          period_end: string
+          period_start: string
+          status?: string
+          summary?: Json
+        }
+        Update: {
+          created_at?: string
+          delivered_at?: string | null
+          id?: string
+          period_end?: string
+          period_start?: string
+          status?: string
+          summary?: Json
+        }
+        Relationships: []
+      }
       ai_memory_entries: {
         Row: {
           content: string
@@ -361,6 +391,39 @@ export type Database = {
           reason?: string | null
           updated_at?: string
           updated_by?: string | null
+        }
+        Relationships: []
+      }
+      system_settings: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          is_secret: boolean
+          key: string
+          updated_at: string
+          updated_by: string | null
+          value: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_secret?: boolean
+          key: string
+          updated_at?: string
+          updated_by?: string | null
+          value?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_secret?: boolean
+          key?: string
+          updated_at?: string
+          updated_by?: string | null
+          value?: string
         }
         Relationships: []
       }
@@ -643,6 +706,10 @@ export type Database = {
       }
       log_emergency_contact_view: {
         Args: { target_ids: string[] }
+        Returns: undefined
+      }
+      log_system_recovery_event: {
+        Args: { detail?: Json; event: string }
         Returns: undefined
       }
       promote_admin_by_email: {

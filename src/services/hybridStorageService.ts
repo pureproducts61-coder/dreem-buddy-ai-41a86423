@@ -1,5 +1,6 @@
 // Hybrid Storage: uses Supabase when connected & authenticated, falls back to localStorage
 import { supabase } from '@/integrations/supabase/client';
+import { logRecoveryEvent } from './recoveryService';
 
 const STORAGE_KEY = 'dreem-settings';
 const LOCAL_SESSIONS_KEY = 'tivo-local-sessions';
@@ -131,6 +132,7 @@ export const hybridChatPersistence = {
         return data as unknown as LocalSession;
       } catch (e) {
         console.warn('DB failed, falling back to local:', e);
+        void logRecoveryEvent('db_fallback.session', { mode, reason: e instanceof Error ? e.message : String(e) });
         return this._localGetOrCreateSession(mode, 'local-user');
       }
     }
@@ -169,7 +171,8 @@ export const hybridChatPersistence = {
           .order('created_at', { ascending: true });
         if (error) throw error;
         return (data || []) as unknown as LocalMessage[];
-      } catch {
+      } catch (e) {
+        void logRecoveryEvent('db_fallback.messages', { sessionId, reason: e instanceof Error ? e.message : String(e) });
         return getLocalMessages().filter(m => m.session_id === sessionId).sort((a, b) => a.created_at.localeCompare(b.created_at));
       }
     }
@@ -196,7 +199,8 @@ export const hybridChatPersistence = {
           .eq('id', sessionId);
 
         return data as unknown as LocalMessage;
-      } catch {
+      } catch (e) {
+        void logRecoveryEvent('db_fallback.save_message', { sessionId, role, reason: e instanceof Error ? e.message : String(e) });
         return localMsg;
       }
     }
