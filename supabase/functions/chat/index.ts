@@ -1077,6 +1077,13 @@ You are TIVO AI. Ship like a senior engineer.`;
 
           if (!aiResp) {
             const status = lastStatus || 500;
+            await logAudit(adminClient, {
+              actorId: userId,
+              actorEmail: userEmail,
+              eventType: `recovery.ai_provider_${status}`,
+              after: { status, provider: provider || "gemini", tried: gatewayConfigs.map((cfg) => cfg.label), error: lastErrText.slice(0, 500) },
+              note: "AI provider fallback exhausted",
+            });
             if ((status === 429 || status >= 500) && iteration < MAX_ITERATIONS - 1) {
               controller.enqueue(encoder.encode(sseEvent("thinking", {
                 step: iteration + 1,
@@ -1188,8 +1195,32 @@ You are TIVO AI. Ship like a senior engineer.`;
               args: sanitizeArgs(args),
             })));
 
+            const approval = await requireApprovalForTool(adminClient, toolCtx, tc.name, args);
+            if (!approval.ok) {
+              const blocked = { error: "approval_required", approval_id: approval.approvalId, message: "Admin approval is required before this critical action can run." };
+              controller.enqueue(encoder.encode(sseEvent("tool_result", {
+                tool: tc.name,
+                result: blocked,
+              })));
+              conversationMessages.push({
+                role: "tool",
+                tool_call_id: tc.id,
+                content: JSON.stringify(blocked),
+              });
+              continue;
+            }
+
             let result = await executeTool(tc.name, args, tokens, toolCtx);
             let parsedResult = JSON.parse(result);
+            if (parsedResult.error) {
+              await logAudit(adminClient, {
+                actorId: userId,
+                actorEmail: userEmail,
+                eventType: "recovery.tool_error",
+                after: { tool: tc.name, error: parsedResult.error, args: sanitizeArgs(args) },
+                note: tc.name,
+              });
+            }
 
             // Auto-retry on SHA conflict (up to 2 retries)
             if (parsedResult.error && parsedResult.error.includes("422") &&
