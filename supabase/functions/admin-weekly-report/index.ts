@@ -29,6 +29,21 @@ Deno.serve(async (req) => {
   const periodEnd = now.toISOString();
   const periodStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
+  const weekKey = new Date(now);
+  weekKey.setUTCHours(0, 0, 0, 0);
+  weekKey.setUTCDate(weekKey.getUTCDate() - weekKey.getUTCDay());
+  const { data: existing } = await admin
+    .from("admin_weekly_reports")
+    .select("id")
+    .gte("created_at", weekKey.toISOString())
+    .limit(1)
+    .maybeSingle();
+  if (existing?.id) {
+    return new Response(JSON.stringify({ ok: true, report_id: existing.id, already_generated: true }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
   const [audit, profiles, emergency, approvals] = await Promise.all([
     admin.from("admin_audit_log").select("event_type,actor_email,actor_id,target_table,created_at,note").gte("created_at", periodStart).order("created_at", { ascending: false }).limit(500),
     admin.from("user_profiles").select("email,last_active,role").gte("last_active", periodStart).order("last_active", { ascending: false }).limit(200),
@@ -73,7 +88,7 @@ Deno.serve(async (req) => {
     note: "weekly admin report",
   });
 
-  return new Response(JSON.stringify({ ok: true, report_id: report?.id, summary }), {
+  return new Response(JSON.stringify({ ok: true, report_id: report?.id }), {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 });

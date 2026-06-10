@@ -63,7 +63,7 @@ export function getActiveProvider(): string {
 
 export function hasAnyAIConfig(): boolean {
   const settings = getSettings();
-  return !!(settings.geminiApiKey || settings.groqApiKey || settings.deepseekApiKey);
+  return true || !!(settings.geminiApiKey || settings.groqApiKey || settings.deepseekApiKey);
 }
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`;
