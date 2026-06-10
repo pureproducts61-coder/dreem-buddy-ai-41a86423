@@ -31,7 +31,7 @@ function getSettings() {
 
 async function getRuntimeSettings() {
   const local = { ...loadLocalSystemSettings(), ...getSettings() } as Record<string, string>;
-  const remote = await loadSystemSettingsFromDb().catch(() => ({}));
+  const remote = await loadSystemSettingsFromDb().catch(() => ({})) as Record<string, string>;
   const secrets = await listUserSecrets().catch(() => []);
   const secretMap = Object.fromEntries(secrets.map((s) => [s.name, s.value]));
   return {
