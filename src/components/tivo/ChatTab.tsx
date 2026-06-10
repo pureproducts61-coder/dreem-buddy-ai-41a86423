@@ -20,6 +20,7 @@ import { enqueueDeploy, updateDeploy } from '@/services/deployQueueService';
 import { githubService } from '@/services/githubService';
 import { BuildDeliveryDialog } from './BuildDeliveryDialog';
 import { getKillSwitch, refreshKillSwitch } from '@/services/killSwitchService';
+import { refreshProjectMemoryFromAssistant } from '@/services/projectMemoryRefreshService';
 
 export interface Message {
   id: string;
@@ -263,6 +264,10 @@ export function ChatTab({ initialSessionId, initialMode }: ChatTabProps) {
         // Preview tab does not pop open on greetings or short replies.
         if (assistantContent && mode === 'build') {
           extractAndPreviewCode(assistantContent);
+          const touchedFiles = toolEvents
+            .flatMap((e) => [e.args?.path, e.result?.path])
+            .filter((p): p is string => typeof p === 'string');
+          refreshProjectMemoryFromAssistant(assistantContent, touchedFiles).catch(() => {});
         }
         
         setIsLoading(false);
