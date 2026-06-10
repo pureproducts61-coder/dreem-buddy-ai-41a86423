@@ -622,7 +622,7 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { messages, model, apiKey, provider, githubToken, vercelToken, tavilyApiKey, credentials } = await req.json();
+    let { messages, model, apiKey, provider, githubToken, vercelToken, tavilyApiKey, credentials } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     const SERVER_GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || "";
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
@@ -717,6 +717,22 @@ serve(async (req) => {
         }
       }
     }
+    // Resolve secrets from user_secrets table if not provided
+    if (adminClient && userId) {
+      const { data: dbSecrets } = await adminClient
+        .from("user_secrets")
+        .select("name, value")
+        .eq("user_id", userId);
+
+      if (dbSecrets) {
+        const secretMap = Object.fromEntries(dbSecrets.map((s: any) => [s.name, s.value]));
+        if (!apiKey) apiKey = secretMap.GEMINI_API_KEY || secretMap.GOOGLE_API_KEY || secretMap.OPENAI_API_KEY;
+        if (!githubToken) githubToken = secretMap.GITHUB_TOKEN || secretMap.GITHUB_API_KEY;
+        if (!vercelToken) vercelToken = secretMap.VERCEL_TOKEN || secretMap.VERCEL_API_KEY;
+        if (!tavilyApiKey) tavilyApiKey = secretMap.TAVILY_API_KEY;
+      }
+    }
+
 
     const toolCtx = { userId, userEmail, supabaseUrl: SUPABASE_URL, serviceRoleKey: SERVICE_ROLE, isAdmin };
 
