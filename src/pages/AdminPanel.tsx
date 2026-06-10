@@ -29,6 +29,7 @@ import { KillSwitchPanel } from '@/components/admin/KillSwitchPanel';
 import { AutomationApprovalsTab } from '@/components/admin/AutomationApprovalsTab';
 import { AdminAuditLogTab } from '@/components/admin/AdminAuditLogTab';
 import { EmergencyContactsTab } from '@/components/admin/EmergencyContactsTab';
+import { loadMergedSystemSettings, saveLocalSystemSettings, saveSystemSettingsToDb } from '@/services/systemSettingsService';
 
 const STORAGE_KEY = 'dreem-settings';
 
@@ -100,6 +101,16 @@ const AdminPanel = () => {
   useEffect(() => {
     setDbAvailable(isDbConnected());
     if (isDbConnected()) loadUsers();
+    loadMergedSystemSettings(defaultAdminSettings).then((merged) => setSettings(merged));
+  }, []);
+
+  useEffect(() => {
+    const ch = supabase.channel('system-settings-sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'system_settings' }, () => {
+        loadMergedSystemSettings(defaultAdminSettings).then((merged) => setSettings(merged));
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
   }, []);
 
   const loadUsers = async () => {
@@ -137,14 +148,16 @@ const AdminPanel = () => {
 
   const toggleKey = (k: string) => setShowKeys((p) => ({ ...p, [k]: !p[k] }));
 
-  const handleSave = () => {
-    localStorage.setItem('tivo-hf-url', settings.backendUrl);
-    localStorage.setItem('tivo-master-secret', settings.masterSecret);
-    localStorage.setItem('tivo-default-credits', String(settings.defaultUserCredits));
-    const { backendUrl, masterSecret, defaultUserCredits, ...rest } = settings;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(rest));
-    setHasChanges(false);
-    toast({ title: 'Settings saved', description: 'All configurations updated successfully.' });
+  const handleSave = async () => {
+    try {
+      saveLocalSystemSettings(settings as unknown as Record<string, string | number | boolean>);
+      await saveSystemSettingsToDb(settings as unknown as Record<string, string | number | boolean>);
+      setHasChanges(false);
+      toast({ title: 'Settings saved', description: 'Database synced and AI will use these keys immediately.' });
+    } catch (e) {
+      saveLocalSystemSettings(settings as unknown as Record<string, string | number | boolean>);
+      toast({ title: 'Saved locally', description: String(e), variant: 'destructive' });
+    }
   };
 
   const mask = (v: string) => !v ? '' : v.length <= 8 ? '••••••••' : v.slice(0, 4) + '••••••••' + v.slice(-4);
@@ -163,7 +176,7 @@ const AdminPanel = () => {
         </div>
         {desc && <p className="text-[11px] text-muted-foreground">{desc}</p>}
         <div className="relative">
-          <Input id={id} type={vis ? 'text' : 'password'} value={vis ? val : mask(val)}
+          <Input id={id} type={vis ? 'text' : 'password'} value={val}
             onChange={(e) => update(id, e.target.value)} placeholder={placeholder} className="pr-10 font-mono text-sm" />
           <Button type="button" variant="ghost" size="icon" className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7" onClick={() => toggleKey(id)}>
             {vis ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
