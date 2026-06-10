@@ -792,6 +792,13 @@ serve(async (req) => {
         if (creditError) {
           const msg = creditError.message || "Credit check failed";
           console.error("credit deduction failed:", msg);
+          await logAudit(adminClient, {
+            actorId: userId,
+            actorEmail: userEmail,
+            eventType: "recovery.credit_or_rls_error",
+            after: { message: msg },
+            note: "AI access blocked before provider call",
+          });
           return new Response(JSON.stringify({
             error: msg.includes("INSUFFICIENT_CREDITS") ? "INSUFFICIENT_CREDITS" : msg,
           }), {
@@ -803,6 +810,16 @@ serve(async (req) => {
     }
     // Resolve secrets from user_secrets table if not provided
     if (adminClient && userId) {
+      const runtimeSettings = await loadRuntimeSecrets(adminClient, userId);
+      if (!provider && runtimeSettings.aiModel) provider = runtimeSettings.aiModel;
+      if (!apiKey) {
+        const selectedProvider = provider || runtimeSettings.aiModel || "gemini";
+        if (selectedProvider === "gemini") apiKey = runtimeSettings.geminiApiKey || runtimeSettings.GEMINI_API_KEY;
+        if (selectedProvider === "groq") apiKey = runtimeSettings.groqApiKey || runtimeSettings.GROQ_API_KEY;
+        if (selectedProvider === "deepseek") apiKey = runtimeSettings.deepseekApiKey || runtimeSettings.DEEPSEEK_API_KEY;
+      }
+      if (!vercelToken) vercelToken = runtimeSettings.vercelToken || runtimeSettings.VERCEL_TOKEN;
+      if (!tavilyApiKey) tavilyApiKey = runtimeSettings.tavilyApiKey || runtimeSettings.TAVILY_API_KEY;
       const { data: dbSecrets } = await adminClient
         .from("user_secrets")
         .select("name, value")
