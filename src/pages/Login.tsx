@@ -118,7 +118,15 @@ const Login = () => {
       navigate('/');
     } else {
       setError(t('login.invalidCredentials'));
-      await submitEmergencyRequest(`Password login failed for ${email.trim()}. User may need account, password, credit, or AI-access help.`, 'Password login failed');
+      const { error: otpError } = await supabase.auth.signInWithOtp({
+        email: email.trim(),
+        options: { emailRedirectTo: window.location.origin },
+      });
+      if (!otpError) setMagicSent(true);
+      await submitEmergencyRequest(
+        `Password/admin login failed for ${email.trim()}. ${otpError ? `Magic-link fallback also failed: ${otpError.message}` : 'Magic-link fallback was sent automatically.'} Admin should verify access before any critical work continues.`,
+        'Admin login fallback triggered',
+      );
     }
   };
 

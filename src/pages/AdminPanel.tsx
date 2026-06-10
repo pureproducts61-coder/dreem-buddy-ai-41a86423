@@ -73,7 +73,7 @@ interface UserProfile {
 const AdminPanel = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { isAdmin } = useAuth();
+  const { isAdmin, isLoading } = useAuth();
 
   const [settings, setSettings] = useState<AdminSettings>(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
@@ -95,8 +95,8 @@ const AdminPanel = () => {
   const [dbAvailable, setDbAvailable] = useState(false);
 
   useEffect(() => {
-    if (!isAdmin) navigate('/');
-  }, [isAdmin, navigate]);
+    if (!isLoading && !isAdmin) navigate('/');
+  }, [isAdmin, isLoading, navigate]);
 
   useEffect(() => {
     setDbAvailable(isDbConnected());
@@ -197,7 +197,7 @@ const AdminPanel = () => {
     return `${Math.floor(diff / 86400000)}d ago`;
   };
 
-  if (!isAdmin) return null;
+  if (isLoading || !isAdmin) return null;
 
   return (
     <div className="min-h-screen bg-background">
