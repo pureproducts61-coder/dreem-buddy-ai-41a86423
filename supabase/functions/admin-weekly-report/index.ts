@@ -27,8 +27,23 @@ Deno.serve(async (req) => {
   const expectedSecret = cronSecret || dbSecret?.value || "";
 
   if (expectedSecret && incomingSecret !== expectedSecret) {
+    // Fallback: require a valid admin JWT
     if (!authHeader.startsWith("Bearer ")) {
       return new Response(JSON.stringify({ error: "unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+    const token = authHeader.replace(/^Bearer\s+/i, "");
+    const { data: { user }, error: userErr } = await admin.auth.getUser(token);
+    if (userErr || !user) {
+      return new Response(JSON.stringify({ error: "unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+    const adminEmail = (Deno.env.get("ADMIN_EMAIL") || "").toLowerCase().trim();
+    let isAdmin = !!user.email && user.email.toLowerCase() === adminEmail;
+    if (!isAdmin) {
+      const { data: profile } = await admin.from("user_profiles").select("role").eq("user_id", user.id).maybeSingle();
+      isAdmin = profile?.role === "admin";
+    }
+    if (!isAdmin) {
+      return new Response(JSON.stringify({ error: "forbidden" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
   } else if (!expectedSecret) {
     return new Response(JSON.stringify({ error: "schedule_secret_missing" }), { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } });
