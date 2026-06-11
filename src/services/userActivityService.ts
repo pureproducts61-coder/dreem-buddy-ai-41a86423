@@ -166,3 +166,13 @@ export async function createNotification(title: string, body: string, type: stri
 export async function markNotificationRead(id: string): Promise<void> {
   await db.from('ai_notifications').update({ read: true }).eq('id', id);
 }
+
+export async function deleteNotification(id: string): Promise<void> {
+  const { error } = await db.from('ai_notifications').delete().eq('id', id);
+  if (error) throw error;
+}
+
+export async function deleteMessage(id: string): Promise<void> {
+  const { error } = await db.from('admin_messages').delete().eq('id', id);
+  if (error) throw error;
+}

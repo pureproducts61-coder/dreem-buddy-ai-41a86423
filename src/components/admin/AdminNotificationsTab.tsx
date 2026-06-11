@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Bell, RefreshCw, AlertTriangle, Info, CheckCircle2, Sparkles, Plus } from 'lucide-react';
+import { Bell, RefreshCw, AlertTriangle, Info, CheckCircle2, Sparkles, Trash2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import {
   getNotifications, markNotificationRead, createNotification,
-  getAdminStats, type AINotification,
+  getAdminStats, deleteNotification, type AINotification,
 } from '@/services/userActivityService';
 
 export function AdminNotificationsTab() {
@@ -60,6 +60,16 @@ export function AdminNotificationsTab() {
     setItems(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
   };
 
+  const handleDelete = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await deleteNotification(id);
+      setItems(prev => prev.filter(n => n.id !== id));
+    } catch (err) {
+      toast({ title: 'Delete failed', description: String(err), variant: 'destructive' });
+    }
+  };
+
   const unread = items.filter(n => !n.read).length;
 
   return (
@@ -111,6 +121,9 @@ export function AdminNotificationsTab() {
                         <div className="flex items-center gap-2">
                           <p className="text-sm font-semibold flex-1 truncate">{n.title}</p>
                           {!n.read && <span className="h-1.5 w-1.5 rounded-full bg-primary" />}
+                          <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive" onClick={(e) => handleDelete(n.id, e)} title="Delete">
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
                         </div>
                         {n.body && <p className="text-xs text-muted-foreground mt-1 whitespace-pre-wrap">{n.body}</p>}
                         <p className="text-[10px] text-muted-foreground/70 mt-1.5 font-mono">
