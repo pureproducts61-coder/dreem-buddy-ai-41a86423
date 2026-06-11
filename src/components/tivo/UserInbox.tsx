@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Inbox, Mail, MailOpen, RefreshCw, MessageSquare } from 'lucide-react';
+import { Inbox, Mail, MailOpen, RefreshCw, MessageSquare, Trash2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
-import { getMyMessages, type AdminMessage } from '@/services/userActivityService';
+import { getMyMessages, deleteMessage, type AdminMessage } from '@/services/userActivityService';
+import { useToast } from '@/hooks/use-toast';
 
 interface Props {
   open: boolean;
@@ -15,6 +16,18 @@ export function UserInbox({ open, onClose }: Props) {
   const [messages, setMessages] = useState<AdminMessage[]>([]);
   const [loading, setLoading] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
+  const { toast } = useToast();
+
+  const handleDelete = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await deleteMessage(id);
+      setMessages(prev => prev.filter(m => m.id !== id));
+      if (openId === id) setOpenId(null);
+    } catch (err) {
+      toast({ title: 'Delete failed', description: String(err), variant: 'destructive' });
+    }
+  };
 
   const load = async () => {
     setLoading(true);
@@ -61,6 +74,9 @@ export function UserInbox({ open, onClose }: Props) {
                     <p className="text-sm font-semibold flex-1 truncate">{m.subject}</p>
                     <Badge variant="outline" className="text-[9px]">{m.category}</Badge>
                     {m.admin_reply && <Badge className="text-[9px]">replied</Badge>}
+                    <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive" onClick={(e) => handleDelete(m.id, e)} title="Delete">
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
                   </div>
                   <p className="text-[11px] text-muted-foreground mt-0.5">{new Date(m.created_at).toLocaleString()}</p>
                 </button>
