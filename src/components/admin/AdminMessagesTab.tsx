@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Mail, MailOpen, RefreshCw, CheckCircle2, Inbox } from 'lucide-react';
+import { Mail, MailOpen, RefreshCw, CheckCircle2, Inbox, Trash2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { getAllMessages, markMessageHandled, type AdminMessage } from '@/services/userActivityService';
+import { getAllMessages, markMessageHandled, deleteMessage, type AdminMessage } from '@/services/userActivityService';
 import { supabase } from '@/integrations/supabase/client';
 
 export function AdminMessagesTab() {
@@ -54,6 +54,17 @@ export function AdminMessagesTab() {
     }
   };
 
+  const handleDelete = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await deleteMessage(id);
+      setMessages(prev => prev.filter(m => m.id !== id));
+      if (openId === id) setOpenId(null);
+    } catch (err) {
+      toast({ title: 'Delete failed', description: String(err), variant: 'destructive' });
+    }
+  };
+
   const unread = messages.filter(m => m.status === 'unread').length;
 
   return (
@@ -98,6 +109,9 @@ export function AdminMessagesTab() {
                         <p className="text-sm font-semibold flex-1 truncate">{m.subject}</p>
                         <Badge variant="outline" className="text-[9px]">{m.category}</Badge>
                         <Badge variant={isHandled ? 'secondary' : 'default'} className="text-[9px]">{m.status}</Badge>
+                        <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive" onClick={(e) => handleDelete(m.id, e)} title="Delete">
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
                       </div>
                       <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
                         <span className="font-mono truncate">{m.user_email || m.user_id.slice(0, 8)}</span>
