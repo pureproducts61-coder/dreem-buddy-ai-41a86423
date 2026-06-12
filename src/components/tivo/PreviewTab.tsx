@@ -73,6 +73,10 @@ export function PreviewTab() {
   // Listen for console messages from iframe
   useEffect(() => {
     const handler = (e: MessageEvent) => {
+      // Only accept messages from our own preview iframe. Blob/data URL iframes report
+      // a "null" origin, so we additionally verify the source window matches our ref.
+      if (e.source !== iframeRef.current?.contentWindow) return;
+      if (e.origin !== 'null' && e.origin !== window.location.origin) return;
       if (e.data?.type === 'tivo-console') {
         setConsoleLogs(prev => [...prev.slice(-99), {
           type: e.data.level || 'log',
