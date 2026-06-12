@@ -462,7 +462,6 @@ export type Database = {
           credits: number
           display_name: string | null
           email: string | null
-          github_token: string | null
           id: string
           last_active: string | null
           role: string
@@ -479,7 +478,6 @@ export type Database = {
           credits?: number
           display_name?: string | null
           email?: string | null
-          github_token?: string | null
           id?: string
           last_active?: string | null
           role?: string
@@ -496,7 +494,6 @@ export type Database = {
           credits?: number
           display_name?: string | null
           email?: string | null
-          github_token?: string | null
           id?: string
           last_active?: string | null
           role?: string
@@ -614,7 +611,6 @@ export type Database = {
           credits: number
           display_name: string | null
           email: string | null
-          github_token: string | null
           id: string
           last_active: string | null
           role: string
@@ -671,7 +667,6 @@ export type Database = {
           credits: number
           display_name: string | null
           email: string | null
-          github_token: string | null
           id: string
           last_active: string | null
           role: string
