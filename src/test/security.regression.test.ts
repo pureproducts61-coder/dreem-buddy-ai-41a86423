@@ -105,3 +105,87 @@ describe('Realtime channel permissions', () => {
     }
   });
 });
+
+describe('Audit logging integration (migration audit)', () => {
+  const migDir = resolve(ROOT, 'supabase/migrations');
+  const files = readdirSync(migDir).filter((f) => f.endsWith('.sql'));
+  const allSql = files.map((f) => readFileSync(resolve(migDir, f), 'utf8')).join('\n\n');
+  const lower = allSql.toLowerCase();
+
+  it('approval gate writes to admin_audit_log on every state change', () => {
+    expect(lower).toMatch(/create\s+or\s+replace\s+function\s+public\.log_approval_change/);
+    // Trigger must be attached to automation_approvals
+    expect(lower).toMatch(/create\s+trigger[\s\S]*?on\s+public\.automation_approvals[\s\S]*?execute\s+function\s+public\.log_approval_change/);
+  });
+
+  it('emergency contact creation, status change, and admin view are all audited', () => {
+    expect(lower).toMatch(/create\s+or\s+replace\s+function\s+public\.log_emergency_contact_change/);
+    expect(lower).toMatch(/create\s+or\s+replace\s+function\s+public\.log_emergency_contact_view/);
+    expect(lower).toMatch(/emergency_contact\.viewed/);
+    expect(lower).toMatch(/emergency_contact\.created/);
+  });
+
+  it('kill-switch toggles are recorded with before/after snapshots', () => {
+    expect(lower).toMatch(/kill_switch\.toggle/);
+    expect(lower).toMatch(/to_jsonb\(old\)[\s\S]*?to_jsonb\(new\)/);
+  });
+
+  it('admin → user direct notifications go through the audited RPC', () => {
+    expect(lower).toMatch(/create\s+or\s+replace\s+function\s+public\.admin_send_user_notification/);
+    expect(lower).toMatch(/admin\.notify_user/);
+    // RPC must check admin role before inserting
+    expect(lower).toMatch(/admin_send_user_notification[\s\S]*?get_my_role\(\)\s*<>\s*'admin'/);
+  });
+
+  it('auth event logger is authenticated-only and rejects oversized events', () => {
+    expect(lower).toMatch(/create\s+or\s+replace\s+function\s+public\.log_auth_event/);
+    expect(lower).toMatch(/authenticated_only/);
+    expect(lower).toMatch(/invalid_event/);
+  });
+});
+
+describe('RLS coverage for user-owned tables', () => {
+  const migDir = resolve(ROOT, 'supabase/migrations');
+  const files = readdirSync(migDir).filter((f) => f.endsWith('.sql'));
+  const allSql = files.map((f) => readFileSync(resolve(migDir, f), 'utf8')).join('\n\n').toLowerCase();
+
+  it('user_secrets restricts every CRUD action to the owner', () => {
+    // SELECT, INSERT, UPDATE, DELETE policies must all scope to auth.uid()
+    for (const verb of ['select', 'insert', 'update', 'delete']) {
+      const pattern = new RegExp(
+        `create\\s+policy\\s+"[^"]+"\\s+on\\s+public\\.user_secrets\\s+for\\s+${verb}[\\s\\S]*?(using|with\\s+check)[\\s\\S]*?user_id\\s*=\\s*auth\\.uid\\(\\)`,
+        'i',
+      );
+      expect(pattern.test(allSql), `user_secrets missing owner-only ${verb.toUpperCase()} policy`).toBe(true);
+    }
+  });
+
+  it('admin_messages insert is restricted to messages owned by the sender', () => {
+    expect(allSql).toMatch(
+      /create\s+policy\s+"[^"]+"\s+on\s+public\.admin_messages\s+for\s+insert[\s\S]*?with\s+check[\s\S]*?user_id\s*=\s*auth\.uid\(\)/i,
+    );
+  });
+
+  it('credit_usage is readable only by the owner', () => {
+    expect(allSql).toMatch(
+      /create\s+policy\s+"[^"]+"\s+on\s+public\.credit_usage\s+for\s+select[\s\S]*?using[\s\S]*?user_id\s*=\s*auth\.uid\(\)/i,
+    );
+  });
+
+  it('admin-only RPCs guard with get_my_role() = admin before any mutation', () => {
+    const guarded = [
+      'admin_send_user_notification',
+      'admin_list_user_activity',
+      'admin_update_user_access',
+      'admin_block_user',
+      'admin_unblock_user',
+      'admin_list_messages',
+      'admin_list_user_projects',
+      'log_emergency_contact_view',
+    ];
+    for (const fn of guarded) {
+      const re = new RegExp(`create\\s+or\\s+replace\\s+function\\s+public\\.${fn}[\\s\\S]*?get_my_role\\(\\)\\s*<>\\s*'admin'`, 'i');
+      expect(re.test(allSql), `${fn} missing admin guard`).toBe(true);
+    }
+  });
+});
