@@ -31,6 +31,7 @@ import { AdminAuditLogTab } from '@/components/admin/AdminAuditLogTab';
 import { EmergencyContactsTab } from '@/components/admin/EmergencyContactsTab';
 import { loadMergedSystemSettings, saveLocalSystemSettings, saveSystemSettingsToDb } from '@/services/systemSettingsService';
 import { AdminWeeklyReportsTab } from '@/components/admin/AdminWeeklyReportsTab';
+import { AdminUserManagementTab } from '@/components/admin/AdminUserManagementTab';
 
 const STORAGE_KEY = 'dreem-settings';
 
