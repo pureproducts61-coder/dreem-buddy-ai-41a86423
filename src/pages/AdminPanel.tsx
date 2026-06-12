@@ -288,107 +288,14 @@ const AdminPanel = () => {
 
           {/* Users Tab */}
           <TabsContent value="users" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="flex items-center gap-2"><Users className="h-5 w-5" />User Management</CardTitle>
-                    <CardDescription>
-                      {dbAvailable ? `${users.length} registered user(s)` : 'Database not connected'}
-                    </CardDescription>
-                  </div>
-                  {dbAvailable && (
-                    <Button variant="outline" size="sm" onClick={loadUsers} disabled={usersLoading}>
-                      <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${usersLoading ? 'animate-spin' : ''}`} />
-                      Refresh
-                    </Button>
-                  )}
-                </div>
-              </CardHeader>
-              <CardContent>
-                {!dbAvailable ? (
-                  <div className="rounded-lg border border-dashed border-border/50 p-8 text-center">
-                    <Users className="h-10 w-10 mx-auto text-muted-foreground/40 mb-3" />
-                    <p className="text-sm text-muted-foreground mb-1">No database connected</p>
-                    <p className="text-xs text-muted-foreground/60">
-                      Configure Supabase in the System tab to enable user management
-                    </p>
-                  </div>
-                ) : usersLoading ? (
-                  <div className="flex items-center justify-center py-8">
-                    <RefreshCw className="h-5 w-5 animate-spin text-muted-foreground" />
-                  </div>
-                ) : users.length === 0 ? (
-                  <div className="rounded-lg border border-dashed border-border/50 p-8 text-center">
-                    <UserX className="h-10 w-10 mx-auto text-muted-foreground/40 mb-3" />
-                    <p className="text-sm text-muted-foreground">No users registered yet</p>
-                  </div>
-                ) : (
-                  <div className="rounded-md border">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Email</TableHead>
-                          <TableHead>Role</TableHead>
-                          <TableHead>Credits</TableHead>
-                          <TableHead>GitHub</TableHead>
-                          <TableHead>Last Active</TableHead>
-                          <TableHead className="text-right">Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {users.map((u) => (
-                          <TableRow key={u.id}>
-                            <TableCell className="font-mono text-xs">{u.email || '—'}</TableCell>
-                            <TableCell>
-                              <Badge variant={u.role === 'admin' ? 'default' : 'secondary'} className="text-[10px]">
-                                {u.role}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-1">
-                                <Button variant="ghost" size="icon" className="h-6 w-6"
-                                  onClick={() => updateUserCredits(u.user_id, Math.max(0, u.credits - 10))}>
-                                  <Minus className="h-3 w-3" />
-                                </Button>
-                                <span className="font-mono text-sm w-10 text-center">{u.credits}</span>
-                                <Button variant="ghost" size="icon" className="h-6 w-6"
-                                  onClick={() => updateUserCredits(u.user_id, u.credits + 10)}>
-                                  <Plus className="h-3 w-3" />
-                                </Button>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              {u.github_token ? (
-                                <UserCheck className="h-4 w-4 text-primary" />
-                              ) : (
-                                <XCircle className="h-4 w-4 text-muted-foreground/40" />
-                              )}
-                            </TableCell>
-                            <TableCell className="text-xs text-muted-foreground">{formatDate(u.last_active)}</TableCell>
-                            <TableCell className="text-right">
-                              <Input
-                                type="number"
-                                min={0}
-                                className="w-20 h-7 text-xs inline-block"
-                                placeholder="Set"
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') {
-                                    const val = parseInt((e.target as HTMLInputElement).value, 10);
-                                    if (!isNaN(val)) updateUserCredits(u.user_id, val);
-                                    (e.target as HTMLInputElement).value = '';
-                                  }
-                                }}
-                              />
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+            {!dbAvailable ? (
+              <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">
+                <Users className="h-10 w-10 mx-auto opacity-30 mb-2" />
+                Database not connected — configure Supabase in the System tab to enable user management.
+              </CardContent></Card>
+            ) : (
+              <AdminUserManagementTab />
+            )}
           </TabsContent>
 
           {/* Credits Tab */}
