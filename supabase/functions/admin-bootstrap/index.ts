@@ -68,7 +68,8 @@ Deno.serve(async (req) => {
       perPage: 200,
     });
     if (listErr) {
-      return new Response(JSON.stringify({ error: "list_failed", detail: listErr.message }), {
+      console.error("admin-bootstrap listUsers failed:", listErr.message);
+      return new Response(JSON.stringify({ error: "internal_error" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -90,10 +91,11 @@ Deno.serve(async (req) => {
         email_confirm: true,
       });
       if (createErr || !created.user) {
-        return new Response(
-          JSON.stringify({ error: "create_failed", detail: createErr?.message || "unknown" }),
-          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        console.error("admin-bootstrap createUser failed:", createErr?.message);
+        return new Response(JSON.stringify({ error: "internal_error" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
       userId = created.user.id;
     }
@@ -113,9 +115,10 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
-    return new Response(
-      JSON.stringify({ error: String(e instanceof Error ? e.message : e) }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    console.error("admin-bootstrap unhandled error:", e instanceof Error ? e.message : e);
+    return new Response(JSON.stringify({ error: "internal_error" }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });
