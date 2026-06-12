@@ -624,6 +624,16 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      admin_list_user_activity: {
+        Args: { max_rows?: number; target_user_id: string }
+        Returns: {
+          detail: string
+          kind: string
+          metadata: Json
+          occurred_at: string
+          title: string
+        }[]
+      }
       admin_list_user_projects: {
         Args: never
         Returns: {
@@ -638,6 +648,15 @@ export type Database = {
           user_email: string
           user_id: string
         }[]
+      }
+      admin_send_user_notification: {
+        Args: {
+          notif_body: string
+          notif_title: string
+          notif_type?: string
+          target_user_id: string
+        }
+        Returns: string
       }
       admin_unblock_user: {
         Args: { target_user_id: string }
