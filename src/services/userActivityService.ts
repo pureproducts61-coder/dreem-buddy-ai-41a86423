@@ -176,3 +176,37 @@ export async function deleteMessage(id: string): Promise<void> {
   const { error } = await db.from('admin_messages').delete().eq('id', id);
   if (error) throw error;
 }
+
+/* ===== ADMIN → USER DIRECT NOTIFICATION ===== */
+export async function sendNotificationToUser(
+  targetUserId: string,
+  title: string,
+  body: string,
+  type: 'info' | 'success' | 'warning' | 'error' = 'info',
+): Promise<string | null> {
+  const { data, error } = await db.rpc('admin_send_user_notification', {
+    target_user_id: targetUserId,
+    notif_title: title,
+    notif_body: body,
+    notif_type: type,
+  });
+  if (error) throw error;
+  return (data as string) || null;
+}
+
+/* ===== ADMIN: PER-USER ACTIVITY FEED ===== */
+export interface UserActivityRow {
+  kind: 'project' | 'credit' | 'audit' | 'message';
+  occurred_at: string;
+  title: string;
+  detail: string;
+  metadata: Record<string, unknown> | null;
+}
+export async function getUserActivity(targetUserId: string, max = 80): Promise<UserActivityRow[]> {
+  const { data, error } = await db.rpc('admin_list_user_activity', {
+    target_user_id: targetUserId,
+    max_rows: max,
+  });
+  if (error) return [];
+  return (data || []) as UserActivityRow[];
+}
