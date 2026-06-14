@@ -188,6 +188,7 @@ export type Database = {
           read: boolean
           title: string
           type: string
+          user_id: string | null
         }
         Insert: {
           body?: string | null
@@ -197,6 +198,7 @@ export type Database = {
           read?: boolean
           title: string
           type?: string
+          user_id?: string | null
         }
         Update: {
           body?: string | null
@@ -206,6 +208,7 @@ export type Database = {
           read?: boolean
           title?: string
           type?: string
+          user_id?: string | null
         }
         Relationships: []
       }
