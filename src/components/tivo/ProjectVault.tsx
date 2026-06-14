@@ -26,6 +26,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { githubService } from '@/services/githubService';
+import { getLocalProjectFiles } from '@/services/projectExportService';
 import { Badge } from '@/components/ui/badge';
 import { enqueueDeploy, updateDeploy } from '@/services/deployQueueService';
 import { DeployStatusList } from './DeployStatusList';
@@ -392,7 +393,8 @@ export function ProjectVault({ onOpenSession }: ProjectVaultProps) {
         open={!!buildSession}
         onClose={() => setBuildSession(null)}
         projectName={buildSession?.title || 'tivo-project'}
-        files={[]}
+        projectId={buildSession?.id || 'unknown'}
+        files={buildSession ? (getLocalProjectFiles(buildSession.id) || []) : []}
       />
 
       {/* Edit name & domain dialog */}

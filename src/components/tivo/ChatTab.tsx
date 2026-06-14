@@ -409,6 +409,7 @@ export function ChatTab({ initialSessionId, initialMode }: ChatTabProps) {
         open={downloadOpen}
         onClose={() => setDownloadOpen(false)}
         projectName="tivo-session"
+        projectId={sessionIds[mode] || 'unknown'}
         files={[]}
       />
     </div>
