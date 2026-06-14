@@ -86,8 +86,9 @@ Deno.serve(async (req) => {
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (e) {
+    console.error("admin-check error:", e);
     return new Response(
-      JSON.stringify({ error: String(e instanceof Error ? e.message : e) }),
+      JSON.stringify({ error: "internal_error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
