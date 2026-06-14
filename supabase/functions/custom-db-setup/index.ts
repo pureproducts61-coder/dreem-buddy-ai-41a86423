@@ -245,8 +245,9 @@ Deno.serve(async (req: Request) => {
           message: "Custom DB schema created successfully.",
         }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
       } catch (e) {
+        console.error("custom-db-setup setup error:", e);
         return new Response(JSON.stringify({
-          error: e instanceof Error ? e.message : "Setup failed",
+          error: "setup_failed",
           manual_sql: SETUP_SQL,
         }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
@@ -264,7 +265,8 @@ Deno.serve(async (req: Request) => {
         try {
           stats[t] = await migrateTable(source, target, t);
         } catch (e) {
-          errors.push(`${t}: ${e instanceof Error ? e.message : String(e)}`);
+          console.error("custom-db-setup migrate error:", t, e);
+          errors.push(`${t}: migration_failed`);
           stats[t] = 0;
         }
       }
@@ -307,7 +309,8 @@ Deno.serve(async (req: Request) => {
       status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
-    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Internal error" }), {
+    console.error("custom-db-setup error:", e);
+    return new Response(JSON.stringify({ error: "internal_error" }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
