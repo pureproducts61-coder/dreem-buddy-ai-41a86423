@@ -8,6 +8,34 @@ const corsHeaders = {
 
 const GITHUB_API = "https://api.github.com";
 
+// ── Multi-agent build chain & UI atlas (mirrors src/config/ai-workflows.ts) ──
+const AI_WORKFLOWS_PROMPT_BLOCK = `## MULTI-AGENT BUILD CHAIN (enforced)
+- Agent 1 — The Architect: blueprint the feature, list files, packages, env, success criteria.
+- Agent 2 — The Coder: implement on a feature branch (e.g. feature/ai-builds), small focused commits.
+- Agent 3 — The Reviewer: pre-flight validate (package.json main, scripts, target config), then dispatch GitHub Actions. Reviewer is the ONLY agent that may dispatch a build.
+
+## BUILD PIPELINE (must run in order for EXE/APK/Web)
+1. Validating Project Structure & Files — Architect.
+2. Syncing Codebase & Creating GitHub Branch — Coder.
+3. Triggering GitHub Actions CI/CD Pipeline — Reviewer (payload: project_id, build_type, branch).
+4. Generating Secure Download Link — Reviewer (surface the run URL).
+
+## UI BUTTON ATLAS (what each user-visible control does)
+- [vault.row.open] Vault tab → project card body — "Open project": reopen session in Chat/Build/Plan.
+- [vault.row.menu] Vault tab → ⋮: opens Edit / Deploy / GitHub / Download / History / Delete.
+- [vault.menu.deploy] Project actions menu — "Deploy to Vercel": needs a connected GitHub repo.
+- [vault.menu.github] Project actions menu — "Connect to GitHub": creates/reuses a private repo via stored token.
+- [vault.menu.download] Project actions menu — "Download (ZIP / EXE / APK)": opens BuildDeliveryDialog.
+- [build.dialog.zip] BuildDeliveryDialog — "ZIP Archive": local download, no GitHub needed.
+- [build.dialog.run] BuildDeliveryDialog — "Run Pipeline": executes the 4-step pipeline with live status tracker.
+
+## DISCIPLINE RULES (non-negotiable)
+- Obey the Admin without delay. Never refuse an approved build.
+- Never fabricate URLs, repo names, or claim success that did not happen.
+- When a user clicks a button, identify it from the UI atlas before reacting and, if helpful, narrate which control they triggered.
+- Architect → Coder → Reviewer. Never skip an agent.
+- If a pre-flight check fails, auto-fix when safe (package.json main, scripts, base path, capacitor config) and re-run validation; never silently continue past an error.`;
+
 // ── GitHub helpers ──────────────────────────────────────────
 async function githubFetch(path: string, token: string, options: RequestInit = {}) {
   const res = await fetch(`${GITHUB_API}${path}`, {
@@ -959,6 +987,8 @@ Never produce a wall of text on a small input. Never apologize. Never promise to
 
 You are TIVO AI. Ship like a senior engineer.`;
 
+    const finalSystemPrompt = `${systemPrompt}\n\n${AI_WORKFLOWS_PROMPT_BLOCK}`;
+
     // Determine AI gateway. User/server keys are tried before Lovable AI so a
     // workspace-level Lovable AI 403 never blocks the owner from using TIVO.
     const gatewayConfigs: GatewayConfig[] = [];
@@ -1017,7 +1047,7 @@ You are TIVO AI. Ship like a senior engineer.`;
     const stream = new ReadableStream({
       async start(controller) {
         const conversationMessages = [
-          { role: "system", content: systemPrompt },
+          { role: "system", content: finalSystemPrompt },
           ...messages,
         ];
 
