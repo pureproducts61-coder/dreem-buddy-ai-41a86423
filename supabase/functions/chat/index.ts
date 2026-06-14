@@ -1047,7 +1047,7 @@ You are TIVO AI. Ship like a senior engineer.`;
     const stream = new ReadableStream({
       async start(controller) {
         const conversationMessages = [
-          { role: "system", content: systemPrompt },
+          { role: "system", content: finalSystemPrompt },
           ...messages,
         ];
 
