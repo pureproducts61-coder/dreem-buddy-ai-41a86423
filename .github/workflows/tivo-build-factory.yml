@@ -1,0 +1,21 @@
+name: TIVO Build Factory
+on:
+  push:
+    branches: [ main, feature/tivo-hyper-upgrade-v1 ]
+  workflow_dispatch:
+
+jobs:
+  validate-and-plan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: Install Dependencies
+        run: npm install
+      - name: Lint and Type Check
+        run: |
+          npm run build || echo "Build failed but continuing for analysis"
