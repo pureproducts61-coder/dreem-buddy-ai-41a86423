@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils';
 import { StreamingMessage } from './StreamingMessage';
 import { UserMessageBubble } from './UserMessageBubble';
 import { TaskExecutionCard } from './TaskExecutionCard';
+import { MessageActionsBar } from './MessageActionsBar';
 import tivoLogo from '@/assets/tivo-logo.png';
 import type { ToolEvent } from '@/services/aiChatService';
 
@@ -80,6 +81,14 @@ export function PlanChat({ messages, isLoading }: PlanChatProps) {
                   content={msg.content}
                   isLatest={idx === messages.length - 1 && msg.role === 'assistant'}
                 />
+                {!(isLoading && idx === messages.length - 1) && msg.content && (
+                  <MessageActionsBar
+                    messageId={msg.id}
+                    content={msg.content}
+                    creditsUsed={msg.creditsUsed}
+                    executionTimeMs={msg.durationMs}
+                  />
+                )}
               </div>
             )}
           </motion.div>
