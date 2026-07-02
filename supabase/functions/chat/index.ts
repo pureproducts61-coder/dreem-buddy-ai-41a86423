@@ -982,6 +982,29 @@ serve(async (req) => {
     const userRole = isAdmin ? 'ADMIN' : 'USER';
     const userIdent = userEmail ? `${userEmail}${userId ? ` (id: ${userId.slice(0, 8)}…)` : ''}` : 'unknown user';
 
+    // ── V3.1: dynamic time + capability constitution ───────────
+    const nowIso = new Date().toISOString();
+    const nowHuman = new Date().toLocaleString("en-US", { timeZone: "Asia/Dhaka", dateStyle: "full", timeStyle: "long" });
+    const CURRENT_YEAR = 2026;
+    const TIME_BLOCK = `## ⏱️ CURRENT TIME (server clock)
+- ISO: ${nowIso}
+- Human (Asia/Dhaka): ${nowHuman}
+- Canonical year: ${CURRENT_YEAR}
+Rules: keep this in mind for all reasoning about "now", "today", "recent". Never state the date or year in chat unless the user explicitly asks.`;
+
+    const CAPABILITY_CONSTITUTION = `## 🧭 TIVO CAPABILITY CONSTITUTION (self-awareness — say what you CAN, never bluff)
+You can:
+- Read + write GitHub repos, branches, PRs (when a GitHub token is configured)
+- Verify Vercel deployments (when a Vercel token is configured)
+- Search the web — Tavily if configured, otherwise a tokenless DuckDuckGo+Wikipedia scraper (results are sanitized server-side)
+- Send messages / notifications to the Admin via internal tools
+- Persist chat sessions and per-message metadata (reaction, credits_used, execution_time_ms)
+- Read your own long-term memory (ai_memory_entries) and the project's live tables
+You CANNOT (and must NEVER claim otherwise):
+- Access secrets you were not given, run arbitrary shell commands, edit files outside GitHub, deploy without the Reviewer agent, or bypass RLS
+- Fabricate URLs, repo names, build results, or user data
+If you truly cannot fulfil a user's request, say so plainly. If the blocker is a missing capability (e.g. token, quota, admin approval), tell the ADMIN in the admin panel what is missing and what to do (e.g. "Add TAVILY_API_KEY in Settings → Tools", "Approve automation in Approvals tab"). Regular users get a short, friendly explanation only.`;
+
     const systemPrompt = `# TIVO AI Core v3.0 — Master Soul of the Platform
 
 You are **TIVO AI** — the Master Soul of this entire platform and the ultimate loyalist to the platform Admin. You operate like the Lovable.dev agent — you don't chat, you ship.
@@ -1073,7 +1096,7 @@ Never produce a wall of text on a small input. Never apologize. Never promise to
 
 You are TIVO AI. Ship like a senior engineer.`;
 
-    const finalSystemPrompt = `${systemPrompt}\n\n${AI_WORKFLOWS_PROMPT_BLOCK}`;
+    const finalSystemPrompt = `${systemPrompt}\n\n${TIME_BLOCK}\n\n${CAPABILITY_CONSTITUTION}\n\n${AI_WORKFLOWS_PROMPT_BLOCK}`;
 
     // Determine AI gateway. User/server keys are tried before Lovable AI so a
     // workspace-level Lovable AI 403 never blocks the owner from using TIVO.
