@@ -212,6 +212,63 @@ export type Database = {
         }
         Relationships: []
       }
+      ai_tasks: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          credits_used: number | null
+          error: string | null
+          execution_time_ms: number | null
+          id: string
+          input: Json
+          kind: string
+          progress: number
+          project_id: string | null
+          result: Json | null
+          session_id: string | null
+          status: string
+          step: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          credits_used?: number | null
+          error?: string | null
+          execution_time_ms?: number | null
+          id?: string
+          input?: Json
+          kind: string
+          progress?: number
+          project_id?: string | null
+          result?: Json | null
+          session_id?: string | null
+          status?: string
+          step?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          credits_used?: number | null
+          error?: string | null
+          execution_time_ms?: number | null
+          id?: string
+          input?: Json
+          kind?: string
+          progress?: number
+          project_id?: string | null
+          result?: Json | null
+          session_id?: string | null
+          status?: string
+          step?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       automation_approvals: {
         Row: {
           action_type: string
@@ -255,21 +312,30 @@ export type Database = {
         Row: {
           content: string
           created_at: string
+          credits_used: number | null
+          execution_time_ms: number | null
           id: string
+          reaction: string | null
           role: string
           session_id: string
         }
         Insert: {
           content: string
           created_at?: string
+          credits_used?: number | null
+          execution_time_ms?: number | null
           id?: string
+          reaction?: string | null
           role: string
           session_id: string
         }
         Update: {
           content?: string
           created_at?: string
+          credits_used?: number | null
+          execution_time_ms?: number | null
           id?: string
+          reaction?: string | null
           role?: string
           session_id?: string
         }
@@ -651,6 +717,10 @@ export type Database = {
           user_email: string
           user_id: string
         }[]
+      }
+      admin_permanent_delete_projects: {
+        Args: { project_ids: string[] }
+        Returns: number
       }
       admin_send_user_notification: {
         Args: {

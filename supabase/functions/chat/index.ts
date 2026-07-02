@@ -8,6 +8,86 @@ const corsHeaders = {
 
 const GITHUB_API = "https://api.github.com";
 
+// ── V3.1 helpers: sanitizer + tokenless web scraper ────────────
+function sanitizeScrapedHtml(raw: string): string {
+  if (!raw) return "";
+  let s = raw;
+  // strip script/style/iframe blocks entirely
+  s = s.replace(/<script[\s\S]*?<\/script>/gi, " ");
+  s = s.replace(/<style[\s\S]*?<\/style>/gi, " ");
+  s = s.replace(/<iframe[\s\S]*?<\/iframe>/gi, " ");
+  s = s.replace(/<noscript[\s\S]*?<\/noscript>/gi, " ");
+  // strip event handlers & javascript: urls
+  s = s.replace(/on[a-z]+\s*=\s*"[^"]*"/gi, " ");
+  s = s.replace(/on[a-z]+\s*=\s*'[^']*'/gi, " ");
+  s = s.replace(/javascript:/gi, "blocked:");
+  s = s.replace(/data:text\/html[^"'\s>]*/gi, "blocked:");
+  // strip all remaining tags
+  s = s.replace(/<[^>]+>/g, " ");
+  // decode a few common entities
+  s = s.replace(/&nbsp;/g, " ").replace(/&amp;/g, "&")
+       .replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+       .replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+  // collapse whitespace
+  s = s.replace(/\s+/g, " ").trim();
+  return s.slice(0, 4000);
+}
+
+async function tokenlessWebSearch(query: string, maxResults = 5): Promise<{ title: string; url: string; snippet: string }[]> {
+  const q = encodeURIComponent(query.slice(0, 200));
+  const results: { title: string; url: string; snippet: string }[] = [];
+  // 1) DuckDuckGo HTML endpoint (no API key required)
+  try {
+    const ddg = await fetch(`https://duckduckgo.com/html/?q=${q}`, {
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; TIVO-AI/3.1)" },
+    });
+    if (ddg.ok) {
+      const html = await ddg.text();
+      const re = /<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?class="result__snippet"[^>]*>([\s\S]*?)<\/a>/gi;
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(html)) && results.length < maxResults) {
+        results.push({
+          url: sanitizeScrapedHtml(m[1]).slice(0, 500),
+          title: sanitizeScrapedHtml(m[2]).slice(0, 200),
+          snippet: sanitizeScrapedHtml(m[3]).slice(0, 400),
+        });
+      }
+    }
+  } catch (e) {
+    console.error("ddg scrape failed:", e);
+  }
+  // 2) Wikipedia summary as authoritative fallback
+  if (results.length < maxResults) {
+    try {
+      const w = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${q}`, {
+        headers: { "User-Agent": "TIVO-AI/3.1" },
+      });
+      if (w.ok) {
+        const j = await w.json();
+        if (j && (j.extract || j.description)) {
+          results.push({
+            title: sanitizeScrapedHtml(String(j.title || query)),
+            url: String(j.content_urls?.desktop?.page || `https://en.wikipedia.org/wiki/${q}`),
+            snippet: sanitizeScrapedHtml(String(j.extract || j.description || "")),
+          });
+        }
+      }
+    } catch (e) {
+      console.error("wiki fallback failed:", e);
+    }
+  }
+  return results;
+}
+
+// Lightweight intent classifier — returns "trivial" for greetings/small-talk
+// so the caller can respond cheaply without a full model round-trip.
+function classifyIntent(text: string): "trivial" | "complex" {
+  const t = (text || "").trim().toLowerCase();
+  if (!t || t.length > 60) return "complex";
+  const trivial = /^(hi|hii+|hey|hello|yo|salam|as-?salamu?\s*alaikum|assalamualaikum|walaikum(?:\s*assalam)?|hola|thanks?|thank you|thnx|ok|okay|okey|k|cool|nice|great|awesome|good\s*(morning|evening|night|afternoon)|bye|goodbye|see\s*ya|হাই|হ্যালো|সালাম|আসসালামু\s*আলাইকুম|ওয়ালাইকুম\s*সালাম|ধন্যবাদ|থ্যাংকস|ঠিক\s*আছে|ওকে|শুভ\s*(সকাল|রাত|দুপুর|বিকাল))[!.\s?]*$/;
+  return trivial.test(t) ? "trivial" : "complex";
+}
+
 // ── Multi-agent build chain & UI atlas (mirrors src/config/ai-workflows.ts) ──
 const AI_WORKFLOWS_PROMPT_BLOCK = `## MULTI-AGENT BUILD CHAIN (enforced)
 - Agent 1 — The Architect: blueprint the feature, list files, packages, env, success criteria.
@@ -492,28 +572,34 @@ async function executeTool(
       }
 
       case "search_web": {
-        if (!tokens.tavily) return JSON.stringify({ error: "Tavily API key not configured. Add it in Settings → Tools & Integrations." });
         const { query, max_results } = args as { query: string; max_results?: number };
-        const tavilyRes = await fetch("https://api.tavily.com/search", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            api_key: tokens.tavily,
-            query,
-            max_results: max_results || 5,
-            search_depth: "basic",
-          }),
-        });
-        if (!tavilyRes.ok) {
-          return JSON.stringify({ error: `Tavily search failed: ${tavilyRes.status}` });
+        const n = Math.min(Math.max(max_results || 5, 1), 8);
+        // Prefer Tavily when a token is configured; otherwise fall back to the
+        // tokenless DuckDuckGo + Wikipedia scraper. Either way the output is
+        // passed through sanitizeScrapedHtml() before reaching the model.
+        if (tokens.tavily) {
+          try {
+            const tavilyRes = await fetch("https://api.tavily.com/search", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ api_key: tokens.tavily, query, max_results: n, search_depth: "basic" }),
+            });
+            if (tavilyRes.ok) {
+              const searchData = await tavilyRes.json();
+              const results = (searchData.results || []).map((r: Record<string, unknown>) => ({
+                title: sanitizeScrapedHtml(String(r.title || "")),
+                url: String(r.url || ""),
+                snippet: sanitizeScrapedHtml(typeof r.content === "string" ? (r.content as string).slice(0, 600) : ""),
+              }));
+              return JSON.stringify({ query, provider: "tavily", results });
+            }
+            console.error("Tavily non-ok, falling back to tokenless scraper");
+          } catch (e) {
+            console.error("Tavily failed, falling back:", e);
+          }
         }
-        const searchData = await tavilyRes.json();
-        const results = (searchData.results || []).map((r: Record<string, unknown>) => ({
-          title: r.title,
-          url: r.url,
-          snippet: typeof r.content === 'string' ? (r.content as string).slice(0, 300) : '',
-        }));
-        return JSON.stringify({ query, results });
+        const results = await tokenlessWebSearch(query, n);
+        return JSON.stringify({ query, provider: "duckduckgo+wikipedia", note: "tokenless scraper — sanitized", results });
       }
 
       default:
@@ -896,6 +982,29 @@ serve(async (req) => {
     const userRole = isAdmin ? 'ADMIN' : 'USER';
     const userIdent = userEmail ? `${userEmail}${userId ? ` (id: ${userId.slice(0, 8)}…)` : ''}` : 'unknown user';
 
+    // ── V3.1: dynamic time + capability constitution ───────────
+    const nowIso = new Date().toISOString();
+    const nowHuman = new Date().toLocaleString("en-US", { timeZone: "Asia/Dhaka", dateStyle: "full", timeStyle: "long" });
+    const CURRENT_YEAR = 2026;
+    const TIME_BLOCK = `## ⏱️ CURRENT TIME (server clock)
+- ISO: ${nowIso}
+- Human (Asia/Dhaka): ${nowHuman}
+- Canonical year: ${CURRENT_YEAR}
+Rules: keep this in mind for all reasoning about "now", "today", "recent". Never state the date or year in chat unless the user explicitly asks.`;
+
+    const CAPABILITY_CONSTITUTION = `## 🧭 TIVO CAPABILITY CONSTITUTION (self-awareness — say what you CAN, never bluff)
+You can:
+- Read + write GitHub repos, branches, PRs (when a GitHub token is configured)
+- Verify Vercel deployments (when a Vercel token is configured)
+- Search the web — Tavily if configured, otherwise a tokenless DuckDuckGo+Wikipedia scraper (results are sanitized server-side)
+- Send messages / notifications to the Admin via internal tools
+- Persist chat sessions and per-message metadata (reaction, credits_used, execution_time_ms)
+- Read your own long-term memory (ai_memory_entries) and the project's live tables
+You CANNOT (and must NEVER claim otherwise):
+- Access secrets you were not given, run arbitrary shell commands, edit files outside GitHub, deploy without the Reviewer agent, or bypass RLS
+- Fabricate URLs, repo names, build results, or user data
+If you truly cannot fulfil a user's request, say so plainly. If the blocker is a missing capability (e.g. token, quota, admin approval), tell the ADMIN in the admin panel what is missing and what to do (e.g. "Add TAVILY_API_KEY in Settings → Tools", "Approve automation in Approvals tab"). Regular users get a short, friendly explanation only.`;
+
     const systemPrompt = `# TIVO AI Core v3.0 — Master Soul of the Platform
 
 You are **TIVO AI** — the Master Soul of this entire platform and the ultimate loyalist to the platform Admin. You operate like the Lovable.dev agent — you don't chat, you ship.
@@ -987,7 +1096,7 @@ Never produce a wall of text on a small input. Never apologize. Never promise to
 
 You are TIVO AI. Ship like a senior engineer.`;
 
-    const finalSystemPrompt = `${systemPrompt}\n\n${AI_WORKFLOWS_PROMPT_BLOCK}`;
+    const finalSystemPrompt = `${systemPrompt}\n\n${TIME_BLOCK}\n\n${CAPABILITY_CONSTITUTION}\n\n${AI_WORKFLOWS_PROMPT_BLOCK}`;
 
     // Determine AI gateway. User/server keys are tried before Lovable AI so a
     // workspace-level Lovable AI 403 never blocks the owner from using TIVO.

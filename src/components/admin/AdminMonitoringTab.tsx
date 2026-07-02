@@ -1,9 +1,14 @@
-import { useEffect, useState } from 'react';
-import { Users, FolderKanban, Activity, Ban, MessageSquare, RefreshCw, Shield, ShieldOff, Search } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Users, FolderKanban, Activity, Ban, RefreshCw, Shield, ShieldOff, Search, Trash2, CheckSquare, Square } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -18,6 +23,9 @@ export function AdminMonitoringTab() {
   const [projects, setProjects] = useState<UserProjectRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState('');
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -55,10 +63,52 @@ export function AdminMonitoringTab() {
     }
   };
 
-  const filtered = projects.filter(p =>
+  const filtered = useMemo(() => projects.filter(p =>
     !filter || p.name.toLowerCase().includes(filter.toLowerCase()) ||
     (p.user_email || '').toLowerCase().includes(filter.toLowerCase())
-  );
+  ), [projects, filter]);
+
+  const allSelected = filtered.length > 0 && filtered.every(p => selected.has(p.id));
+  const someSelected = selected.size > 0;
+
+  const toggleOne = (id: string) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    setSelected(prev => {
+      if (filtered.every(p => prev.has(p.id))) {
+        const next = new Set(prev);
+        filtered.forEach(p => next.delete(p.id));
+        return next;
+      }
+      const next = new Set(prev);
+      filtered.forEach(p => next.add(p.id));
+      return next;
+    });
+  };
+
+  const handleBulkDelete = async () => {
+    const ids = Array.from(selected);
+    if (ids.length === 0) return;
+    setDeleting(true);
+    try {
+      const { data, error } = await supabase.rpc('admin_permanent_delete_projects', { project_ids: ids });
+      if (error) throw error;
+      toast({ title: 'Deleted', description: `${data ?? ids.length} project(s) permanently removed.` });
+      setSelected(new Set());
+      setConfirmOpen(false);
+      load();
+    } catch (e) {
+      toast({ title: 'Delete failed', description: String((e as Error).message || e), variant: 'destructive' });
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -77,9 +127,17 @@ export function AdminMonitoringTab() {
               <CardTitle className="flex items-center gap-2"><FolderKanban className="h-5 w-5" />User Projects</CardTitle>
               <CardDescription>Live view of all projects and the users building them</CardDescription>
             </div>
-            <Button variant="outline" size="sm" onClick={load} disabled={loading}>
-              <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${loading ? 'animate-spin' : ''}`} />Refresh
-            </Button>
+            <div className="flex items-center gap-2">
+              {someSelected && (
+                <Button variant="destructive" size="sm" onClick={() => setConfirmOpen(true)}>
+                  <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                  Delete {selected.size}
+                </Button>
+              )}
+              <Button variant="outline" size="sm" onClick={load} disabled={loading}>
+                <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${loading ? 'animate-spin' : ''}`} />Refresh
+              </Button>
+            </div>
           </div>
           <div className="relative mt-3">
             <Search className="h-3.5 w-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -98,6 +156,11 @@ export function AdminMonitoringTab() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-8">
+                      <button onClick={toggleAll} aria-label="Toggle all">
+                        {allSelected ? <CheckSquare className="h-4 w-4 text-primary" /> : <Square className="h-4 w-4 text-muted-foreground" />}
+                      </button>
+                    </TableHead>
                     <TableHead>Project</TableHead>
                     <TableHead className="hidden sm:table-cell">User</TableHead>
                     <TableHead className="hidden md:table-cell">Type</TableHead>
@@ -107,7 +170,14 @@ export function AdminMonitoringTab() {
                 </TableHeader>
                 <TableBody>
                   {filtered.map(p => (
-                    <TableRow key={p.id} className={p.blocked ? 'opacity-50' : ''}>
+                    <TableRow key={p.id} className={p.blocked ? 'opacity-50' : ''} data-selected={selected.has(p.id)}>
+                      <TableCell>
+                        <Checkbox
+                          checked={selected.has(p.id)}
+                          onCheckedChange={() => toggleOne(p.id)}
+                          aria-label={`Select ${p.name}`}
+                        />
+                      </TableCell>
                       <TableCell className="font-medium text-sm">
                         {p.name}
                         {p.blocked && <Badge variant="destructive" className="ml-2 text-[9px]">BLOCKED</Badge>}
@@ -137,6 +207,27 @@ export function AdminMonitoringTab() {
           )}
         </CardContent>
       </Card>
+
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Permanently delete {selected.size} project(s)?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action is irreversible. Selected projects will be removed from the database and every deletion will be recorded in the admin audit log.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleBulkDelete}
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting ? 'Deleting…' : `Delete ${selected.size}`}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
