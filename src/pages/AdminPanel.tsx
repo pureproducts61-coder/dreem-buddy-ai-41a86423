@@ -32,6 +32,7 @@ import { EmergencyContactsTab } from '@/components/admin/EmergencyContactsTab';
 import { loadMergedSystemSettings, saveLocalSystemSettings, saveSystemSettingsToDb } from '@/services/systemSettingsService';
 import { AdminWeeklyReportsTab } from '@/components/admin/AdminWeeklyReportsTab';
 import { AdminUserManagementTab } from '@/components/admin/AdminUserManagementTab';
+import { AdminCapabilityStatusTab } from '@/components/admin/AdminCapabilityStatusTab';
 
 const STORAGE_KEY = 'dreem-settings';
 
@@ -236,6 +237,7 @@ const AdminPanel = () => {
           {/* System Status Tab — secrets + capabilities */}
           <TabsContent value="status" className="space-y-6">
             <KillSwitchPanel />
+            <AdminCapabilityStatusTab />
             <SystemStatusPanel settings={settings} dbAvailable={dbAvailable} />
           </TabsContent>
 

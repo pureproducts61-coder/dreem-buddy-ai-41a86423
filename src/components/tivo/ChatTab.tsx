@@ -21,6 +21,8 @@ import { githubService } from '@/services/githubService';
 import { BuildDeliveryDialog } from './BuildDeliveryDialog';
 import { getKillSwitch, refreshKillSwitch } from '@/services/killSwitchService';
 import { refreshProjectMemoryFromAssistant } from '@/services/projectMemoryRefreshService';
+import { TaskProgressCard } from '@/components/tivo/TaskProgressCard';
+import { createAiTask, updateAiTask, type AiTaskRow } from '@/services/aiTaskService';
 
 export interface Message {
   id: string;
@@ -77,6 +79,7 @@ export function ChatTab({ initialSessionId, initialMode }: ChatTabProps) {
   const [draft, setDraft] = useState<string | undefined>(undefined);
   const [creditDialogOpen, setCreditDialogOpen] = useState(false);
   const [downloadOpen, setDownloadOpen] = useState(false);
+  const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
 
   // Only load messages when user explicitly opens a session from Vault
   useEffect(() => {
@@ -190,6 +193,29 @@ export function ChatTab({ initialSessionId, initialMode }: ChatTabProps) {
     setIsLoading(true);
     setActiveFiles([]);
 
+    // Create an async task row so the UI can show live progress via Supabase Realtime.
+    let taskId: string | null = null;
+    try {
+      const kindGuess = /search|find|latest|docs?|google|research/i.test(content)
+        ? 'web_search'
+        : /build|create|scaffold|component|page|file|deploy/i.test(content)
+          ? 'code_gen'
+          : 'chat';
+      const task = await createAiTask({
+        kind: kindGuess,
+        sessionId: currentSessionId,
+        step: kindGuess === 'web_search' ? 'Searching the web…'
+          : kindGuess === 'code_gen' ? 'Analyzing your request…'
+          : 'Thinking…',
+        payload: { prompt: content.slice(0, 500) },
+      });
+      if (task) {
+        taskId = task.id;
+        setActiveTaskId(task.id);
+        await updateAiTask(task.id, { status: 'running', progress: 15 });
+      }
+    } catch { /* task queue is optional */ }
+
     const currentMsgs = [...messages[mode], userMsg];
     const aiMessages = currentMsgs.map(m => ({ role: m.role, content: m.content }));
 
@@ -232,9 +258,29 @@ export function ChatTab({ initialSessionId, initialMode }: ChatTabProps) {
       onDelta: (chunk) => {
         assistantContent += chunk;
         updateAssistantMsg();
+        if (taskId && assistantContent.length % 200 < 20) {
+          updateAiTask(taskId, {
+            step: 'Generating response…',
+            progress: Math.min(90, 20 + Math.floor(assistantContent.length / 40)),
+          });
+        }
       },
       onToolEvent: (event) => {
         toolEvents.push(event);
+        if (taskId) {
+          const stepMap: Record<string, string> = {
+            search_web: 'Searching the web…',
+            list_repo_files: 'Scanning repository…',
+            read_file_from_github: 'Reading files…',
+            write_file_to_github: 'Writing code…',
+            push_multiple_files: 'Pushing files to GitHub…',
+            check_vercel_deployment: 'Verifying deployment…',
+          };
+          updateAiTask(taskId, {
+            step: stepMap[event.tool] || `Running ${event.tool}…`,
+            progress: Math.min(85, 40 + toolEvents.length * 10),
+          });
+        }
         if (event.args?.path && typeof event.args.path === 'string') {
           setActiveFiles(prev => [...prev, event.args!.path as string]);
         }
@@ -244,6 +290,14 @@ export function ChatTab({ initialSessionId, initialMode }: ChatTabProps) {
         updateAssistantMsg();
       },
       onDone: async () => {
+        if (taskId) {
+          await updateAiTask(taskId, {
+            status: 'completed', step: 'Done', progress: 100,
+            completed_at: new Date().toISOString() as unknown as never,
+            execution_time_ms: Date.now() - startedAt,
+          });
+          setTimeout(() => setActiveTaskId((cur) => (cur === taskId ? null : cur)), 1500);
+        }
         if (currentSessionId && assistantContent) {
           const saved = await hybridChatPersistence.saveMessage(currentSessionId, 'assistant', assistantContent);
           if (saved) {
@@ -274,6 +328,10 @@ export function ChatTab({ initialSessionId, initialMode }: ChatTabProps) {
         setActiveFiles([]);
       },
       onError: (error) => {
+        if (taskId) {
+          updateAiTask(taskId, { status: 'failed', step: 'Failed', error: String(error).slice(0, 300) });
+          setActiveTaskId(null);
+        }
         toast({
           title: error === 'INSUFFICIENT_CREDITS' ? 'Out of credits' : error === 'approval_required' ? 'Approval required' : 'AI Error',
           description: error === 'INSUFFICIENT_CREDITS'
@@ -355,9 +413,24 @@ export function ChatTab({ initialSessionId, initialMode }: ChatTabProps) {
         </AnimatePresence>
       </div>
 
+      {/* Live task progress (Async Task Queue → Supabase Realtime) */}
+      {activeTaskId && (
+        <div className="px-3 pt-2">
+          <TaskProgressCard taskId={activeTaskId} compact />
+        </div>
+      )}
+
       {/* Suggestion Chips */}
       {!isLoading && suggestions.length > 0 && (
-        <SuggestionChips suggestions={suggestions} onSelect={handleSuggestionSelect} />
+        <SuggestionChips
+          suggestions={suggestions}
+          onSelect={handleSuggestionSelect}
+          onSelectMany={(items) => {
+            setSuggestions([]);
+            const combined = items.map((s, i) => `${i + 1}. ${s}`).join('\n');
+            setDraft(`Please handle these together:\n${combined}\n\n`);
+          }}
+        />
       )}
 
       <SmartInputBar

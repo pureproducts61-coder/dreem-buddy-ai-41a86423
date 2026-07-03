@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Users, FolderKanban, Activity, Ban, RefreshCw, Shield, ShieldOff, Search, Trash2, CheckSquare, Square } from 'lucide-react';
+import { Users, FolderKanban, Activity, Ban, RefreshCw, Shield, ShieldOff, Search, Trash2, CheckSquare, Square, ScrollText, CheckCircle2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -26,6 +26,17 @@ export function AdminMonitoringTab() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [recentDeleteAudit, setRecentDeleteAudit] = useState<Array<{ id: string; target_id: string | null; note: string | null; created_at: string; actor_email: string | null }>>([]);
+
+  const loadRecentDeleteAudit = async () => {
+    const { data } = await supabase
+      .from('admin_audit_log')
+      .select('id,target_id,note,created_at,actor_email')
+      .eq('event_type', 'project.permanent_delete')
+      .order('created_at', { ascending: false })
+      .limit(6);
+    setRecentDeleteAudit((data || []) as never);
+  };
 
   const load = async () => {
     setLoading(true);
@@ -37,6 +48,7 @@ export function AdminMonitoringTab() {
 
   useEffect(() => {
     load();
+    loadRecentDeleteAudit();
     const i = setInterval(load, 30000); // safety net
     // Realtime: refresh whenever projects, profiles, or blocks change
     const channel = supabase
@@ -44,6 +56,7 @@ export function AdminMonitoringTab() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'user_projects' }, () => load())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'user_profiles' }, () => load())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'user_blocks' }, () => load())
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'admin_audit_log' }, () => loadRecentDeleteAudit())
       .subscribe();
     return () => { clearInterval(i); supabase.removeChannel(channel); };
   }, []);
@@ -103,6 +116,8 @@ export function AdminMonitoringTab() {
       setSelected(new Set());
       setConfirmOpen(false);
       load();
+      // Give the audit trigger a beat, then refresh the audit strip
+      setTimeout(loadRecentDeleteAudit, 400);
     } catch (e) {
       toast({ title: 'Delete failed', description: String((e as Error).message || e), variant: 'destructive' });
     } finally {
@@ -204,6 +219,40 @@ export function AdminMonitoringTab() {
                 </TableBody>
               </Table>
             </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Live audit log strip for permanent deletes */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <ScrollText className="h-4 w-4 text-primary" />
+            Recent permanent deletes
+          </CardTitle>
+          <CardDescription>
+            Every deletion above writes an audit row here. Empty means no destructive action has happened yet.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {recentDeleteAudit.length === 0 ? (
+            <p className="text-[12px] text-muted-foreground text-center py-4">No delete audit entries yet.</p>
+          ) : (
+            <ul className="space-y-1.5">
+              {recentDeleteAudit.map(row => (
+                <li key={row.id} className="flex items-start gap-2 text-[12px] rounded-md border border-border/30 bg-secondary/20 px-2.5 py-1.5">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0 mt-0.5" />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-mono text-foreground truncate">
+                      project <span className="text-primary">{row.target_id?.slice(0, 8) || '—'}</span> deleted
+                    </p>
+                    <p className="text-[10px] text-muted-foreground">
+                      by {row.actor_email || 'admin'} · {new Date(row.created_at).toLocaleString()}
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ul>
           )}
         </CardContent>
       </Card>
