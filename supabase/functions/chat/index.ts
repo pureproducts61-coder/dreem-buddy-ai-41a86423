@@ -1081,22 +1081,44 @@ Internal tools always available: \`send_message_to_admin\`, \`create_admin_notif
 - Never invent file paths, repo names, or capabilities you don't have.
 - Maintain continuity with prior turns — remember repos, usernames, and decisions.
 
-## RESPONSE FORMAT (STRICT — Lovable-style)
+## RESPONSE FORMAT (STRICT — Lovable-style, but human)
 **Match response length to intent.**
-- Pure greetings ("hi", "hello", "salam", "as-salamu alaikum", "hey", "হাই", "সালাম") → reply with ONE short line and STOP. Do not dump a plan, do not list suggestions, do not open Preview, do not call tools. Wait for the actual ask.
-- Tiny chit-chat / status questions → 1–2 sentences, no headings, no bullet lists.
-- Real engineering / build / automation work → use the structure below:
-  1. **One-sentence intent** — what you understood and what you'll do.
-  2. **(optional) Plan card** — 3–6 short bullet steps when work spans multiple files/tools.
-  3. **Action** — call the right tools. Don't narrate every step in prose; let tool events render.
-  4. **Result summary** — 1–3 bullets of what changed (files, URLs, status).
-  5. **Next steps** — 2–3 short bullets the user can click to continue.
+- Pure greetings ("hi", "hello", "salam", "as-salamu alaikum", "hey", "হাই", "সালাম") → reply with ONE warm short line and STOP. No plan dumps, no suggestions, no tools.
+- Tiny chit-chat / status questions → 1–3 sentences, no headings, no bullet lists.
+- Real engineering / build / automation work → be a proper senior partner:
+  1. **Warm one-line acknowledgement** — mirror the user's language, restate what you heard so they feel understood.
+  2. **Short reasoning** — 1–2 sentences explaining WHY you're about to do what you'll do (trade-offs, alternatives you rejected). This is what makes you feel human instead of a form-filler.
+  3. **Plan card** — 3–6 crisp bullets when work spans multiple files/tools.
+  4. **Action** — call the right tools. Don't narrate every step in prose; let tool events render.
+  5. **Result summary** — 1–3 bullets of what changed (files, URLs, status).
+  6. **Next steps** — 3 short, click-worthy suggestions the user can pick from (these render as chips; users can multi-select).
 
-Never produce a wall of text on a small input. Never apologize. Never promise to "report back later" — finish in this turn or state the precise blocker. Mirror the user's mode: in AUTOMATION mode, only talk automation/CI/CD/triggers; in BUILD mode, only ship code/files; in CHAT mode, stay conversational and brief.
+Do not be terse to the point of feeling robotic — a good senior engineer *explains*. But never pad. Never apologize. Never say "I'll get back to you". Finish this turn or state the precise blocker. Mirror the user's mode: AUTOMATION → only workflows/CI/CD/triggers, BUILD → only ship code/files, CHAT → conversational and warm.
 
 You are TIVO AI. Ship like a senior engineer.`;
 
     const finalSystemPrompt = `${systemPrompt}\n\n${TIME_BLOCK}\n\n${CAPABILITY_CONSTITUTION}\n\n${AI_WORKFLOWS_PROMPT_BLOCK}`;
+
+    // ── V3.1: intent classifier short-circuit for trivial small-talk ──
+    // Saves credits & latency by NEVER hitting the main model for greetings.
+    if (classifyIntent(latestPrompt) === "trivial") {
+      const encoder = new TextEncoder();
+      const canned = pickTrivialReply(latestPrompt);
+      const stream = new ReadableStream({
+        async start(controller) {
+          controller.enqueue(encoder.encode(sseEvent("thinking", { step: 1, maxSteps: 1, status: "light" })));
+          // Emit chunk-by-chunk so the UI's typing effect stays smooth
+          for (const piece of canned.match(/.{1,4}/g) || [canned]) {
+            controller.enqueue(encoder.encode(sseDelta(piece)));
+            await new Promise(r => setTimeout(r, 12));
+          }
+          controller.enqueue(encoder.encode(sseEvent("thinking", { step: 1, status: "complete" })));
+          controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+          controller.close();
+        },
+      });
+      return new Response(stream, { headers: { ...corsHeaders, "Content-Type": "text/event-stream" } });
+    }
 
     // Determine AI gateway. User/server keys are tried before Lovable AI so a
     // workspace-level Lovable AI 403 never blocks the owner from using TIVO.
