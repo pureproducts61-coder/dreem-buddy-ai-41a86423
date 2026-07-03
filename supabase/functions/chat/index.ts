@@ -88,6 +88,26 @@ function classifyIntent(text: string): "trivial" | "complex" {
   return trivial.test(t) ? "trivial" : "complex";
 }
 
+// Lightweight canned reply for trivial intents so we never spend a full-model round-trip on "hi".
+function pickTrivialReply(text: string): string {
+  const t = (text || "").trim().toLowerCase();
+  const isBangla = /[\u0980-\u09FF]/.test(text || "");
+  if (/thank|thnx|ধন্যবাদ|থ্যাংকস/.test(t)) {
+    return isBangla ? "আপনাকে স্বাগতম — পরের কাজে বলবেন। 🙌" : "You're very welcome — ping me whenever.";
+  }
+  if (/bye|goodbye|see\s*ya/.test(t)) {
+    return isBangla ? "ভালো থাকবেন — আবার কথা হবে। 👋" : "Take care — talk soon. 👋";
+  }
+  if (/salam|assalamu|আসসালামু|সালাম/.test(t)) {
+    return isBangla ? "ওয়ালাইকুম আসসালাম 🌙 — আজ কী নিয়ে কাজ করবো?" : "Wa alaikum as-salam 🌙 — what shall we build today?";
+  }
+  if (/good\s*morning|শুভ\s*সকাল/.test(t)) return isBangla ? "শুভ সকাল ☀️ — কোথা থেকে শুরু করবো?" : "Good morning ☀️ — where do we begin?";
+  if (/good\s*(night|evening)|শুভ\s*রাত/.test(t)) return isBangla ? "শুভ রাত 🌙 — কাল আবার কাজে নামবো।" : "Good night 🌙 — back at it tomorrow.";
+  return isBangla
+    ? "হ্যালো 👋 — আমি TIVO। আজ কী তৈরি করবো?"
+    : "Hey 👋 — TIVO here. What do you want to build?";
+}
+
 // ── Multi-agent build chain & UI atlas (mirrors src/config/ai-workflows.ts) ──
 const AI_WORKFLOWS_PROMPT_BLOCK = `## MULTI-AGENT BUILD CHAIN (enforced)
 - Agent 1 — The Architect: blueprint the feature, list files, packages, env, success criteria.
