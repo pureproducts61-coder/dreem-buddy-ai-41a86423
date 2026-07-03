@@ -413,9 +413,24 @@ export function ChatTab({ initialSessionId, initialMode }: ChatTabProps) {
         </AnimatePresence>
       </div>
 
+      {/* Live task progress (Async Task Queue → Supabase Realtime) */}
+      {activeTaskId && (
+        <div className="px-3 pt-2">
+          <TaskProgressCard taskId={activeTaskId} compact />
+        </div>
+      )}
+
       {/* Suggestion Chips */}
       {!isLoading && suggestions.length > 0 && (
-        <SuggestionChips suggestions={suggestions} onSelect={handleSuggestionSelect} />
+        <SuggestionChips
+          suggestions={suggestions}
+          onSelect={handleSuggestionSelect}
+          onSelectMany={(items) => {
+            setSuggestions([]);
+            const combined = items.map((s, i) => `${i + 1}. ${s}`).join('\n');
+            setDraft(`Please handle these together:\n${combined}\n\n`);
+          }}
+        />
       )}
 
       <SmartInputBar
