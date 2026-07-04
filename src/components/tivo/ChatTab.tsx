@@ -253,11 +253,16 @@ export function ChatTab({ initialSessionId, initialMode }: ChatTabProps) {
     const currentMsgs = [...messages[mode], userMsg];
     const aiMessages = currentMsgs.map(m => ({ role: m.role, content: m.content }));
 
-    const modeContext = mode === 'build'
+    const followupRule =
+      '\n\nIMPORTANT: Reply in Bangla (বাংলা) by default because the admin prefers Bangla. Keep code, commands, filenames, and technical identifiers in English inside backticks.' +
+      '\nAt the very end of any substantive reply (not greetings), append 2–4 short next-step suggestions as a bullet list using "- " prefix. Each bullet must be a single actionable phrase under 90 characters. Do NOT add a heading like "Suggestions"; just the bullets on the last lines.';
+
+    const modeContext = (mode === 'build'
       ? 'You are in BUILD mode (project workspace). Generate code, components and files. Wait for explicit asks before scaffolding — do not dump a full plan for greetings.'
       : mode === 'automation'
       ? 'You are in AUTOMATION mode. Focus exclusively on workflows, schedules, triggers, CI/CD, deployment, scraping, integrations, and recurring tasks. Never offer generic chat advice or discuss app design here. If the user only greets, reply with 1 short line and ask which automation they want to build.'
-      : 'You are in CHAT mode. Be a calm, terse senior partner. If the user only greets ("hi", "hello", "salam", "as-salamu alaikum"), reply with ONE short greeting line and stop — do not propose plans, architectures, suggestions, or bullet lists. Only expand when the user asks a real question.';
+      : 'You are in CHAT mode. Be a calm, terse senior partner. If the user only greets ("hi", "hello", "salam", "as-salamu alaikum"), reply with ONE short greeting line and stop — do not propose plans, architectures, suggestions, or bullet lists. Only expand when the user asks a real question.'
+    ) + followupRule;
 
     const messagesForAI = [
       { role: 'user' as const, content: `[System: ${modeContext}]` },
