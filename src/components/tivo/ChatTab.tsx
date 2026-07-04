@@ -39,20 +39,54 @@ interface ChatTabProps {
   initialMode?: TivoMode | null;
 }
 
-// Extract suggestion chips from AI response
+// Extract suggestion chips from AI response.
+// Accepts bullets (- • *), numbered lists (1. 1) ১।), bolded lines, and
+// trailing question lines so Bangla + English replies both surface chips.
 function extractSuggestions(content: string): string[] {
-  // Match lines like: - **suggestion text** or • suggestion text at the end
+  if (!content) return [];
   const suggestions: string[] = [];
-  const lines = content.split('\n');
-  const lastLines = lines.slice(-10);
-  
-  for (const line of lastLines) {
-    const match = line.match(/^[-•]\s*\*{0,2}(.+?)\*{0,2}\s*$/);
-    if (match && match[1].length < 80 && match[1].length > 5) {
-      suggestions.push(match[1].trim());
+  const seen = new Set<string>();
+
+  const push = (raw: string) => {
+    const clean = raw
+      .replace(/^\s*[-•*]+\s*/, '')
+      .replace(/^\s*(?:\d+|[০-৯]+)[.)।:\-]\s*/, '')
+      .replace(/\*\*/g, '')
+      .replace(/`/g, '')
+      .replace(/^["'“”‘’]+|["'“”‘’]+$/g, '')
+      .trim();
+    if (clean.length < 6 || clean.length > 140) return;
+    const key = clean.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    suggestions.push(clean);
+  };
+
+  const lines = content.split('\n').map(l => l.trim()).filter(Boolean);
+  const tail = lines.slice(-14);
+
+  // 1) bullets / numbered lists near the end
+  const listRe = /^(?:[-•*]|\d+[.)]|[০-৯]+[.।)])\s+(.+)$/;
+  for (const line of tail) {
+    const m = line.match(listRe);
+    if (m) push(m[1]);
+  }
+
+  // 2) trailing question lines (great for follow-ups)
+  if (suggestions.length < 2) {
+    for (const line of tail) {
+      if (/[?？]$/.test(line) && !line.startsWith('#')) push(line);
     }
   }
-  
+
+  // 3) bold-only short lines like **Deploy now**
+  if (suggestions.length < 2) {
+    for (const line of tail) {
+      const m = line.match(/^\*\*(.+?)\*\*[.:!?]?$/);
+      if (m) push(m[1]);
+    }
+  }
+
   return suggestions.slice(0, 4);
 }
 
@@ -219,11 +253,16 @@ export function ChatTab({ initialSessionId, initialMode }: ChatTabProps) {
     const currentMsgs = [...messages[mode], userMsg];
     const aiMessages = currentMsgs.map(m => ({ role: m.role, content: m.content }));
 
-    const modeContext = mode === 'build'
+    const followupRule =
+      '\n\nIMPORTANT: Reply in Bangla (বাংলা) by default because the admin prefers Bangla. Keep code, commands, filenames, and technical identifiers in English inside backticks.' +
+      '\nAt the very end of any substantive reply (not greetings), append 2–4 short next-step suggestions as a bullet list using "- " prefix. Each bullet must be a single actionable phrase under 90 characters. Do NOT add a heading like "Suggestions"; just the bullets on the last lines.';
+
+    const modeContext = (mode === 'build'
       ? 'You are in BUILD mode (project workspace). Generate code, components and files. Wait for explicit asks before scaffolding — do not dump a full plan for greetings.'
       : mode === 'automation'
       ? 'You are in AUTOMATION mode. Focus exclusively on workflows, schedules, triggers, CI/CD, deployment, scraping, integrations, and recurring tasks. Never offer generic chat advice or discuss app design here. If the user only greets, reply with 1 short line and ask which automation they want to build.'
-      : 'You are in CHAT mode. Be a calm, terse senior partner. If the user only greets ("hi", "hello", "salam", "as-salamu alaikum"), reply with ONE short greeting line and stop — do not propose plans, architectures, suggestions, or bullet lists. Only expand when the user asks a real question.';
+      : 'You are in CHAT mode. Be a calm, terse senior partner. If the user only greets ("hi", "hello", "salam", "as-salamu alaikum"), reply with ONE short greeting line and stop — do not propose plans, architectures, suggestions, or bullet lists. Only expand when the user asks a real question.'
+    ) + followupRule;
 
     const messagesForAI = [
       { role: 'user' as const, content: `[System: ${modeContext}]` },
