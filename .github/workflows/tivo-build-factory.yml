@@ -1,21 +1,38 @@
-name: TIVO Build Factory
+name: TIVO Build Factory (EXE/APK)
+
 on:
-  push:
-    branches: [ main, feature/tivo-hyper-upgrade-v1 ]
   workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'Type of build'
+        required: true
+        default: 'web'
+        type: choice
+        options:
+          - web
+          - exe
+          - apk
 
 jobs:
-  validate-and-plan:
+  build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
         with:
-          node-version: '20'
-          cache: 'npm'
+          bun-version: latest
+
       - name: Install Dependencies
-        run: npm install
-      - name: Lint and Type Check
-        run: |
-          npm run build || echo "Build failed but continuing for analysis"
+        run: bun install
+
+      - name: Build Web
+        run: bun run build
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: tivo-release-${{ github.event.inputs.build_type }}
+          path: dist/
