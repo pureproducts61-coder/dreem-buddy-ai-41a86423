@@ -39,20 +39,54 @@ interface ChatTabProps {
   initialMode?: TivoMode | null;
 }
 
-// Extract suggestion chips from AI response
+// Extract suggestion chips from AI response.
+// Accepts bullets (- • *), numbered lists (1. 1) ১।), bolded lines, and
+// trailing question lines so Bangla + English replies both surface chips.
 function extractSuggestions(content: string): string[] {
-  // Match lines like: - **suggestion text** or • suggestion text at the end
+  if (!content) return [];
   const suggestions: string[] = [];
-  const lines = content.split('\n');
-  const lastLines = lines.slice(-10);
-  
-  for (const line of lastLines) {
-    const match = line.match(/^[-•]\s*\*{0,2}(.+?)\*{0,2}\s*$/);
-    if (match && match[1].length < 80 && match[1].length > 5) {
-      suggestions.push(match[1].trim());
+  const seen = new Set<string>();
+
+  const push = (raw: string) => {
+    const clean = raw
+      .replace(/^\s*[-•*]+\s*/, '')
+      .replace(/^\s*(?:\d+|[০-৯]+)[.)।:\-]\s*/, '')
+      .replace(/\*\*/g, '')
+      .replace(/`/g, '')
+      .replace(/^["'“”‘’]+|["'“”‘’]+$/g, '')
+      .trim();
+    if (clean.length < 6 || clean.length > 140) return;
+    const key = clean.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    suggestions.push(clean);
+  };
+
+  const lines = content.split('\n').map(l => l.trim()).filter(Boolean);
+  const tail = lines.slice(-14);
+
+  // 1) bullets / numbered lists near the end
+  const listRe = /^(?:[-•*]|\d+[.)]|[০-৯]+[.।)])\s+(.+)$/;
+  for (const line of tail) {
+    const m = line.match(listRe);
+    if (m) push(m[1]);
+  }
+
+  // 2) trailing question lines (great for follow-ups)
+  if (suggestions.length < 2) {
+    for (const line of tail) {
+      if (/[?？]$/.test(line) && !line.startsWith('#')) push(line);
     }
   }
-  
+
+  // 3) bold-only short lines like **Deploy now**
+  if (suggestions.length < 2) {
+    for (const line of tail) {
+      const m = line.match(/^\*\*(.+?)\*\*[.:!?]?$/);
+      if (m) push(m[1]);
+    }
+  }
+
   return suggestions.slice(0, 4);
 }
 
