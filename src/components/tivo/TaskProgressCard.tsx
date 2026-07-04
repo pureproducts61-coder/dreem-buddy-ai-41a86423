@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Loader2, Search, Cpu, CheckCircle2, XCircle, Sparkles, X, RotateCw } from 'lucide-react';
-import { subscribeAiTask, updateAiTask, type AiTaskRow } from '@/services/aiTaskService';
+import { subscribeAiTask, updateAiTask, getCachedTask, cacheTask, type AiTaskRow } from '@/services/aiTaskService';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
 
@@ -39,7 +39,8 @@ function usePrefersReducedMotion(): boolean {
 }
 
 export function TaskProgressCard({ taskId, compact, onComplete, onRetry }: TaskProgressCardProps) {
-  const [row, setRow] = useState<AiTaskRow | null>(null);
+  // Seed from localStorage so mobile/offline reloads render instantly.
+  const [row, setRow] = useState<AiTaskRow | null>(() => getCachedTask(taskId));
   const [typedStep, setTypedStep] = useState('');
   const [cancelling, setCancelling] = useState(false);
   const reducedMotion = usePrefersReducedMotion();
@@ -47,7 +48,13 @@ export function TaskProgressCard({ taskId, compact, onComplete, onRetry }: TaskP
   useEffect(() => {
     let alive = true;
     supabase.from('ai_tasks').select('*').eq('id', taskId).maybeSingle()
-      .then(({ data }) => { if (alive && data) setRow(data as unknown as AiTaskRow); });
+      .then(({ data }) => {
+        if (alive && data) {
+          const r = data as unknown as AiTaskRow;
+          setRow(r);
+          cacheTask(r);
+        }
+      });
     const unsub = subscribeAiTask(taskId, (r) => {
       if (!alive) return;
       setRow(r);
