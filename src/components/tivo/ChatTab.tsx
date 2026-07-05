@@ -523,6 +523,22 @@ export function ChatTab({ initialSessionId, initialMode }: ChatTabProps) {
         projectName="tivo-session"
         projectId={sessionIds[mode] || 'unknown'}
         files={[]}
+        onChatUpdate={(evt) => {
+          const sid = sessionIds[mode];
+          const line = evt.url
+            ? `**${evt.title}**\n\n${evt.detail || ''}\n\n🔗 ${evt.url}`
+            : `**${evt.title}**${evt.detail ? `\n\n${evt.detail}` : ''}`;
+          const msg: Message = {
+            id: crypto.randomUUID(),
+            role: 'assistant',
+            content: line,
+            timestamp: new Date(),
+          };
+          setMessages((prev) => ({ ...prev, [mode]: [...prev[mode], msg] }));
+          if (sid && evt.kind === 'complete') {
+            hybridChatPersistence.saveMessage(sid, 'assistant', line).catch(() => {});
+          }
+        }}
       />
     </div>
   );
