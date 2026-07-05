@@ -23,6 +23,13 @@ interface BuildDeliveryDialogProps {
   projectName: string;
   projectId: string;
   files: Array<{ path: string; content: string }>;
+  /** Called for every pipeline event so the parent chat can render live status. */
+  onChatUpdate?: (event: {
+    kind: 'step' | 'complete' | 'error';
+    title: string;
+    detail?: string;
+    url?: string;
+  }) => void;
 }
 
 const targets: Array<{ key: FullTarget; icon: typeof Globe; label: string; desc: string }> = [
@@ -56,7 +63,7 @@ function StepRow({ step }: { step: PipelineStepState }) {
   );
 }
 
-export function BuildDeliveryDialog({ open, onClose, projectName, projectId, files }: BuildDeliveryDialogProps) {
+export function BuildDeliveryDialog({ open, onClose, projectName, projectId, files, onChatUpdate }: BuildDeliveryDialogProps) {
   const { toast } = useToast();
   const [selected, setSelected] = useState<FullTarget>('zip');
   const [running, setRunning] = useState(false);
@@ -94,6 +101,7 @@ export function BuildDeliveryDialog({ open, onClose, projectName, projectId, fil
         files,
         buildTarget: selected as BuildTarget,
         onUpdate: (s) => setSteps(s),
+        onChat: (evt) => onChatUpdate?.(evt),
       });
       setResult(res);
       if (res.ok) {
