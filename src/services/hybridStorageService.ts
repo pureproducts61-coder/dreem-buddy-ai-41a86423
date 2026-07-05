@@ -39,13 +39,129 @@ async function checkDbUsable(): Promise<boolean> {
 supabase.auth.onAuthStateChange(() => {
   _dbUsable = null;
   _dbCheckPromise = null;
+  // Fire-and-forget sync when the user signs in or the session refreshes
+  void syncLocalToSupabase().catch(() => {});
 });
+
+// Also sync when the browser comes back online
+if (typeof window !== 'undefined') {
+  window.addEventListener('online', () => {
+    _dbUsable = null;
+    _dbCheckPromise = null;
+    void syncLocalToSupabase().catch(() => {});
+  });
+}
 
 export function isDbConnected(): boolean {
   const settings = getSettings();
   const hasEnvDb = !!import.meta.env.VITE_SUPABASE_URL;
   const hasConfigDb = !!(settings.supabaseUrl && settings.supabaseAnonKey);
   return hasEnvDb || hasConfigDb;
+}
+
+/* ------------------------------------------------------------------ */
+/* Hybrid Sync — merge local-only sessions/messages into Supabase      */
+/* when the user comes back online or signs in.                        */
+/*                                                                     */
+/* Idempotent: uses local UUIDs as primary keys so re-runs are safe.   */
+/* ------------------------------------------------------------------ */
+
+const SYNC_FLAG_KEY = 'tivo-hybrid-last-sync';
+let _syncInFlight: Promise<void> | null = null;
+
+export async function syncLocalToSupabase(): Promise<void> {
+  if (_syncInFlight) return _syncInFlight;
+  _syncInFlight = (async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const localSessions = getLocalSessions();
+      const localMessages = getLocalMessages();
+      if (localSessions.length === 0 && localMessages.length === 0) return;
+
+      // Sessions marked with user_id 'local-user' were created offline.
+      const orphanSessions = localSessions.filter((s) => s.user_id === 'local-user');
+      let pushedSessions = 0;
+      let pushedMessages = 0;
+
+      for (const s of orphanSessions) {
+        const { error } = await supabase.from('chat_sessions').upsert({
+          id: s.id,
+          user_id: user.id,
+          mode: s.mode,
+          title: s.title,
+          created_at: s.created_at,
+          updated_at: s.updated_at,
+        } as never, { onConflict: 'id' });
+        if (!error) pushedSessions += 1;
+      }
+      // Rewrite local user_id so future writes go straight to DB
+      if (pushedSessions > 0) {
+        const updated = localSessions.map((s) =>
+          s.user_id === 'local-user' ? { ...s, user_id: user.id } : s,
+        );
+        saveLocalSessions(updated);
+      }
+
+      // Push messages that belong to any known session
+      const sessionIds = new Set(localSessions.map((s) => s.id));
+      const toPush = localMessages.filter((m) => sessionIds.has(m.session_id));
+      // Batch by 50 to keep payloads small
+      for (let i = 0; i < toPush.length; i += 50) {
+        const batch = toPush.slice(i, i + 50).map((m) => ({
+          id: m.id,
+          session_id: m.session_id,
+          role: m.role,
+          content: m.content,
+          created_at: m.created_at,
+        }));
+        const { error } = await supabase.from('chat_messages').upsert(batch as never, { onConflict: 'id' });
+        if (!error) pushedMessages += batch.length;
+      }
+
+      // Also flush cached ai_tasks so Task_ID progress stays consistent across devices
+      try {
+        const { getRecentCachedTasks } = await import('./aiTaskService');
+        const cached = getRecentCachedTasks(10);
+        for (const t of cached) {
+          if (!t?.id) continue;
+          await supabase.from('ai_tasks').upsert({
+            id: t.id,
+            user_id: user.id,
+            session_id: t.session_id,
+            project_id: t.project_id,
+            kind: t.kind,
+            status: t.status,
+            step: t.step,
+            progress: t.progress,
+            input: t.input as never,
+            result: t.result as never,
+            error: t.error,
+            credits_used: t.credits_used,
+            execution_time_ms: t.execution_time_ms,
+            created_at: t.created_at,
+            updated_at: t.updated_at,
+            completed_at: t.completed_at,
+          } as never, { onConflict: 'id' });
+        }
+      } catch { /* ai_tasks sync is best-effort */ }
+
+      localStorage.setItem(SYNC_FLAG_KEY, new Date().toISOString());
+      if (pushedSessions || pushedMessages) {
+        console.info(`[hybridSync] pushed ${pushedSessions} sessions, ${pushedMessages} messages`);
+      }
+    } catch (e) {
+      void logRecoveryEvent('hybrid_sync.failed', { reason: e instanceof Error ? e.message : String(e) });
+    } finally {
+      _syncInFlight = null;
+    }
+  })();
+  return _syncInFlight;
+}
+
+export function getLastSyncAt(): string | null {
+  return localStorage.getItem(SYNC_FLAG_KEY);
 }
 
 export function getConfiguredCredentials(): Record<string, boolean> {
