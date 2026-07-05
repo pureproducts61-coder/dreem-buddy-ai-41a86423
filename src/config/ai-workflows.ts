@@ -50,6 +50,8 @@ export const AI_AGENTS: Record<AgentRole, AgentDefinition> = {
 
 export type BuildPipelineStepId =
   | 'validate'
+  | 'context'
+  | 'test'
   | 'sync'
   | 'dispatch'
   | 'link';
@@ -68,6 +70,20 @@ export const BUILD_PIPELINE_STEPS: BuildPipelineStepDef[] = [
     description:
       'Architect verifies package.json, main entry, build scripts and target-specific config.',
     agent: 'architect',
+  },
+  {
+    id: 'context',
+    label: 'Loading Prior Context (pgvector Memory)',
+    description:
+      'Architect fetches related prior decisions from ai_memory_entries so the build reuses proven patterns.',
+    agent: 'architect',
+  },
+  {
+    id: 'test',
+    label: 'Running Bug & Security Scan',
+    description:
+      'Reviewer scans code for hardcoded secrets, eval/Function usage, and obvious syntax issues before shipping.',
+    agent: 'reviewer',
   },
   {
     id: 'sync',
