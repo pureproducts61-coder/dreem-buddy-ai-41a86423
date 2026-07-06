@@ -88,6 +88,22 @@ CREATE TABLE IF NOT EXISTS public.user_projects (
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
+CREATE TABLE IF NOT EXISTS public.build_reports (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  project_id text,
+  project_name text NOT NULL,
+  build_target text NOT NULL,
+  status text NOT NULL DEFAULT 'running',
+  steps jsonb NOT NULL DEFAULT '[]'::jsonb,
+  findings jsonb NOT NULL DEFAULT '[]'::jsonb,
+  run_url text,
+  repo_url text,
+  error text,
+  duration_ms integer,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
 ALTER TABLE public.user_profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.chat_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.chat_messages ENABLE ROW LEVEL SECURITY;
@@ -96,6 +112,7 @@ ALTER TABLE public.user_blocks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.admin_messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ai_notifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_projects ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.build_reports ENABLE ROW LEVEL SECURITY;
 
 DO $$ BEGIN
   CREATE POLICY "users_self_profile" ON public.user_profiles FOR ALL TO authenticated
@@ -127,11 +144,17 @@ DO $$ BEGIN
   CREATE POLICY "users_read_own_msg" ON public.admin_messages FOR SELECT TO authenticated
     USING (user_id = auth.uid());
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE POLICY "users_own_build_reports" ON public.build_reports FOR ALL TO authenticated
+    USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 `;
 
 const TABLES_TO_MIGRATE = [
   "user_profiles", "chat_sessions", "chat_messages", "credit_usage",
   "user_blocks", "admin_messages", "ai_notifications", "user_projects",
+  "build_reports",
 ];
 
 async function verifyAdmin(authHeader: string | null): Promise<boolean> {

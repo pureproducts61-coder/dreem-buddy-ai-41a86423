@@ -308,6 +308,57 @@ export type Database = {
         }
         Relationships: []
       }
+      build_reports: {
+        Row: {
+          build_target: string
+          created_at: string
+          duration_ms: number | null
+          error: string | null
+          findings: Json
+          id: string
+          project_id: string | null
+          project_name: string
+          repo_url: string | null
+          run_url: string | null
+          status: string
+          steps: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          build_target: string
+          created_at?: string
+          duration_ms?: number | null
+          error?: string | null
+          findings?: Json
+          id?: string
+          project_id?: string | null
+          project_name: string
+          repo_url?: string | null
+          run_url?: string | null
+          status?: string
+          steps?: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          build_target?: string
+          created_at?: string
+          duration_ms?: number | null
+          error?: string | null
+          findings?: Json
+          id?: string
+          project_id?: string | null
+          project_name?: string
+          repo_url?: string | null
+          run_url?: string | null
+          status?: string
+          steps?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       chat_messages: {
         Row: {
           content: string

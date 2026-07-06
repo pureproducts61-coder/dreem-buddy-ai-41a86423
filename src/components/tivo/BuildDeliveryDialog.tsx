@@ -48,13 +48,27 @@ function StepRow({ step }: { step: PipelineStepState }) {
     step.status === 'done' ? 'text-emerald-500' :
     step.status === 'error' ? 'text-destructive' :
     step.status === 'active' ? 'text-primary' : 'text-muted-foreground/60';
+  const startedLabel = step.startedAt
+    ? new Date(step.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+    : null;
+  const durationMs = step.startedAt && step.endedAt ? step.endedAt - step.startedAt : null;
+  const durationLabel = durationMs !== null
+    ? durationMs < 1000 ? `${durationMs}ms` : `${(durationMs / 1000).toFixed(1)}s`
+    : null;
   return (
     <div className="flex items-start gap-3 py-2">
       <Icon className={cn('h-4 w-4 mt-0.5 flex-shrink-0', color, step.status === 'active' && 'animate-spin')} />
       <div className="flex-1 min-w-0">
-        <p className={cn('text-xs font-medium', step.status === 'pending' && 'text-muted-foreground')}>
-          {step.label}
-        </p>
+        <div className="flex items-center justify-between gap-2">
+          <p className={cn('text-xs font-medium truncate', step.status === 'pending' && 'text-muted-foreground')}>
+            {step.label}
+          </p>
+          {(startedLabel || durationLabel) && (
+            <span className="text-[10px] font-mono text-muted-foreground shrink-0 tabular-nums">
+              {startedLabel}{durationLabel ? ` · ${durationLabel}` : ''}
+            </span>
+          )}
+        </div>
         {step.detail && (
           <p className="text-[11px] text-muted-foreground mt-0.5 break-words">{step.detail}</p>
         )}

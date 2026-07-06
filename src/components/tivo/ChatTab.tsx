@@ -114,6 +114,8 @@ export function ChatTab({ initialSessionId, initialMode }: ChatTabProps) {
   const [creditDialogOpen, setCreditDialogOpen] = useState(false);
   const [downloadOpen, setDownloadOpen] = useState(false);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
+  const [lastBuildFailed, setLastBuildFailed] = useState(false);
+  const [autoRetryUsed, setAutoRetryUsed] = useState(false);
 
   // Only load messages when user explicitly opens a session from Vault
   useEffect(() => {
@@ -538,8 +540,36 @@ export function ChatTab({ initialSessionId, initialMode }: ChatTabProps) {
           if (sid && evt.kind === 'complete') {
             hybridChatPersistence.saveMessage(sid, 'assistant', line).catch(() => {});
           }
+          if (evt.kind === 'complete') {
+            setLastBuildFailed(false);
+            setAutoRetryUsed(false);
+          }
+          if (evt.kind === 'error') {
+            setLastBuildFailed(true);
+            // One-time automatic retry after a short delay
+            if (!autoRetryUsed) {
+              setAutoRetryUsed(true);
+              toast({ title: '🔁 স্বয়ংক্রিয় রিট্রাই', description: '৩ সেকেন্ডে আবার চেষ্টা করব…' });
+              setTimeout(() => setDownloadOpen(true), 3000);
+            }
+          }
         }}
       />
+
+      {/* Manual retry banner — appears when a build delivery has failed */}
+      {lastBuildFailed && !downloadOpen && (
+        <div className="mx-3 mb-2 flex items-center justify-between gap-2 rounded-xl border border-destructive/40 bg-destructive/5 px-3 py-2">
+          <p className="text-xs text-destructive-foreground/90">
+            শেষ বিল্ড ডেলিভারি ব্যর্থ হয়েছে।
+          </p>
+          <button
+            onClick={() => { setLastBuildFailed(false); setAutoRetryUsed(false); setDownloadOpen(true); }}
+            className="text-xs font-medium px-3 py-1 rounded-full bg-destructive text-destructive-foreground hover:opacity-90"
+          >
+            আবার চেষ্টা করুন
+          </button>
+        </div>
+      )}
     </div>
   );
 }
