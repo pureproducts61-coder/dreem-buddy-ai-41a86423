@@ -14,6 +14,7 @@ import { BUILD_PIPELINE_STEPS, type BuildPipelineStepId } from '@/config/ai-work
 import { githubService } from './githubService';
 import { pushProjectWithBuild, downloadProjectAsZip, type BuildTarget } from './projectExportService';
 import { supabase } from '@/integrations/supabase/client';
+import { createBuildReport, updateBuildReport } from './buildReportsService';
 
 export type StepStatus = 'pending' | 'active' | 'done' | 'error';
 
@@ -243,11 +244,21 @@ const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export async function runBuildPipeline(input: RunPipelineInput): Promise<PipelineResult> {
   const steps = makeInitialSteps();
+  const pipelineStartedAt = Date.now();
+  const reportId = await createBuildReport({
+    projectName: input.projectName,
+    projectId: input.projectId,
+    buildTarget: String(input.buildTarget),
+  });
+  let currentFindings: Array<{ file: string; severity: string; message: string }> = [];
   const setStep = (id: BuildPipelineStepId, patch: Partial<PipelineStepState>) => {
     const idx = steps.findIndex((s) => s.id === id);
     if (idx === -1) return;
     steps[idx] = { ...steps[idx], ...patch };
     input.onUpdate([...steps]);
+    if (reportId) {
+      updateBuildReport(reportId, { steps: [...steps] });
+    }
     if (patch.status === 'active' || patch.status === 'done' || patch.status === 'error') {
       input.onChat?.({
         kind: 'step',
@@ -255,6 +266,21 @@ export async function runBuildPipeline(input: RunPipelineInput): Promise<Pipelin
         detail: patch.detail,
       });
     }
+  };
+
+  const finalize = (result: PipelineResult) => {
+    if (reportId) {
+      updateBuildReport(reportId, {
+        status: result.ok ? 'succeeded' : 'failed',
+        steps: result.steps,
+        findings: currentFindings,
+        run_url: result.runUrl ?? null,
+        repo_url: result.repoUrl ?? null,
+        error: result.error ?? null,
+        duration_ms: Date.now() - pipelineStartedAt,
+      });
+    }
+    return result;
   };
 
   // ZIP shortcut — does not need GitHub
@@ -271,11 +297,12 @@ export async function runBuildPipeline(input: RunPipelineInput): Promise<Pipelin
     // Still scan — the ZIP will be shipped to users
     setStep('test', { status: 'active', startedAt: Date.now() });
     const zipFindings = scanFilesForIssues(fixedFiles);
+    currentFindings = zipFindings;
     const zipHigh = zipFindings.filter((f) => f.severity === 'high');
     if (zipHigh.length > 0) {
       setStep('test', { status: 'error', detail: zipHigh.map((f) => `${f.file}: ${f.message}`).join('; '), endedAt: Date.now() });
       input.onChat?.({ kind: 'error', title: 'Security scan ব্যর্থ — hardcoded secret পাওয়া গেছে', detail: zipHigh[0].message });
-      return { ok: false, steps, error: 'security_scan_failed' };
+      return finalize({ ok: false, steps, error: 'security_scan_failed' });
     }
     setStep('test', { status: 'done', detail: zipFindings.length ? `${zipFindings.length} low/medium notes` : 'Clean', endedAt: Date.now() });
     setStep('sync', { status: 'active', startedAt: Date.now() });
@@ -288,7 +315,7 @@ export async function runBuildPipeline(input: RunPipelineInput): Promise<Pipelin
       title: '📦 ZIP ডাউনলোড শুরু হয়েছে',
       detail: `${fixedFiles.length} ফাইল প্যাক করা হয়েছে — ব্রাউজারের Downloads দেখুন।`,
     });
-    return { ok: true, steps };
+    return finalize({ ok: true, steps });
   }
 
   // 1. Validate
@@ -302,7 +329,7 @@ export async function runBuildPipeline(input: RunPipelineInput): Promise<Pipelin
       endedAt: Date.now(),
     });
     input.onChat?.({ kind: 'error', title: 'Validation ব্যর্থ', detail: validation.issues.map((i) => i.message).join('; ') });
-    return { ok: false, steps, error: 'validation_failed' };
+    return finalize({ ok: false, steps, error: 'validation_failed' });
   }
   setStep('validate', {
     status: 'done',
@@ -324,6 +351,7 @@ export async function runBuildPipeline(input: RunPipelineInput): Promise<Pipelin
   // 3. Test — bug & security scan
   setStep('test', { status: 'active', startedAt: Date.now() });
   const findings = scanFilesForIssues(validation.fixedFiles);
+  currentFindings = findings;
   const high = findings.filter((f) => f.severity === 'high');
   if (high.length > 0) {
     setStep('test', {
@@ -336,7 +364,7 @@ export async function runBuildPipeline(input: RunPipelineInput): Promise<Pipelin
       title: '❌ Security scan ব্যর্থ — বিল্ড বন্ধ',
       detail: `${high.length}টি high-severity ইস্যু পাওয়া গেছে। প্রথমটি: ${high[0].file} — ${high[0].message}`,
     });
-    return { ok: false, steps, error: 'security_scan_failed' };
+    return finalize({ ok: false, steps, error: 'security_scan_failed' });
   }
   setStep('test', {
     status: 'done',
@@ -351,7 +379,7 @@ export async function runBuildPipeline(input: RunPipelineInput): Promise<Pipelin
   if (!githubService.hasToken()) {
     setStep('sync', { status: 'error', detail: 'GitHub token not configured in Settings.', endedAt: Date.now() });
     input.onChat?.({ kind: 'error', title: 'GitHub token নেই', detail: 'Settings → Integrations-এ token যোগ করুন।' });
-    return { ok: false, steps, error: 'no_github_token' };
+    return finalize({ ok: false, steps, error: 'no_github_token' });
   }
   let owner: string;
   let repoName: string;
@@ -377,7 +405,7 @@ export async function runBuildPipeline(input: RunPipelineInput): Promise<Pipelin
       endedAt: Date.now(),
     });
     input.onChat?.({ kind: 'error', title: 'GitHub push ব্যর্থ', detail: e instanceof Error ? e.message : 'Push failed' });
-    return { ok: false, steps, error: 'sync_failed' };
+    return finalize({ ok: false, steps, error: 'sync_failed' });
   }
 
   // 5. Dispatch — push on main already triggers the workflow on:push.
@@ -406,10 +434,10 @@ export async function runBuildPipeline(input: RunPipelineInput): Promise<Pipelin
     url: runsUrl,
   });
 
-  return {
+  return finalize({
     ok: true,
     steps,
     runUrl: runsUrl,
     repoUrl: `https://github.com/${owner}/${repoName}`,
-  };
+  });
 }
