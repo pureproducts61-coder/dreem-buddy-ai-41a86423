@@ -24,7 +24,7 @@ interface ChatPanelProps {
 // Mock AI responses for demo - normally these come from the backend
 const mockResponses = [
   "আমি আপনার অনুরোধ বুঝতে পেরেছি। চলুন এটি তৈরি করি!\n\n```tsx\nconst Button = () => {\n  return <button>Click me</button>;\n};\n```\n\nএই কম্পোনেন্টটি আপনার প্রজেক্টে যোগ করা হয়েছে।",
-  "অবশ্যই! এখানে আপনার জন্য একটি responsive navbar তৈরি করছি...\n\n```tsx\nconst Navbar = () => {\n  return (\n    <nav className="flex items-center justify-between p-4">\n      <Logo />\n      <NavLinks />\n    </nav>\n  );\n};\n```",
+  'অবশ্যই! এখানে আপনার জন্য একটি responsive navbar তৈরি করছি...\n\n```tsx\nconst Navbar = () => {\n  return (\n    <nav className="flex items-center justify-between p-4">\n      <Logo />\n      <NavLinks />\n    </nav>\n  );\n};\n```',
   "দারুণ আইডিয়া! আমি এই ফিচারটি implement করছি। আপনি Preview ট্যাবে পরিবর্তনগুলো দেখতে পারবেন।",
 ];
 
