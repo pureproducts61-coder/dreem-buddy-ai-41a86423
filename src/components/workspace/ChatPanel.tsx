@@ -6,7 +6,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { ChatMessage } from './ChatMessage';
 import { AgentProgress } from '../chat/AgentProgress';
-import { SuggestionChips } from '../chat/SuggestionChips';
+import { SuggestionChips } from '@/components/tivo/SuggestionChips';
 import { cn } from '@/lib/utils';
 import { useAgentSuggestions } from '@/hooks/useAgentSuggestions';
 
@@ -30,7 +30,8 @@ const mockResponses = [
 
 export function ChatPanel({ projectId }: ChatPanelProps) {
   const { t } = useLanguage();
-  const { prompts, setContext } = useAgentSuggestions();
+  const [suggestionContext, setSuggestionContext] = useState('');
+  const prompts = useAgentSuggestions(suggestionContext);
   const [messages, setMessages] = useState<Message[]>(() => {
     const stored = localStorage.getItem(`chat-${projectId}`);
     if (stored) {
@@ -158,7 +159,7 @@ export function ChatPanel({ projectId }: ChatPanelProps) {
       <div className="border-t p-4">
         {/* Dynamic Suggestion Chips - Injected */}
         <SuggestionChips 
-          prompts={prompts} 
+          suggestions={prompts} 
           onSelect={(prompt) => handleSend(prompt)} 
         />
         

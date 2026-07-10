@@ -1,4 +1,4 @@
-import { create } from 'zustand';
+import { useSyncExternalStore } from 'react';
 
 interface AgentState {
   currentStep: number;
@@ -9,15 +9,35 @@ interface AgentState {
   resetAgent: () => void;
 }
 
-export const useAgentStore = create<AgentState>((set) => ({
+type AgentStatus = AgentState['status'];
+
+const listeners = new Set<() => void>();
+
+let state: AgentState = {
   currentStep: 0,
   steps: ['Architect', 'Planner', 'Researcher', 'Coder', 'Tester', 'Reviewer'],
   status: 'idle',
   agentName: '',
-  setAgentStatus: (name, status, step) => set((state) => ({ 
-    agentName: name, 
-    status, 
-    currentStep: step !== undefined ? step : state.currentStep 
-  })),
-  resetAgent: () => set({ currentStep: 0, status: 'idle', agentName: '' }),
-}));
+  setAgentStatus: (name: string, status: AgentStatus, step?: number) => {
+    state = {
+      ...state,
+      agentName: name,
+      status,
+      currentStep: step !== undefined ? step : state.currentStep,
+    };
+    listeners.forEach((listener) => listener());
+  },
+  resetAgent: () => {
+    state = { ...state, currentStep: 0, status: 'idle', agentName: '' };
+    listeners.forEach((listener) => listener());
+  },
+};
+
+const subscribe = (listener: () => void) => {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+};
+
+const getSnapshot = () => state;
+
+export const useAgentStore = () => useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
