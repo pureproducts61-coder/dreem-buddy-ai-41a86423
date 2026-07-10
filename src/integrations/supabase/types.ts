@@ -281,6 +281,60 @@ export type Database = {
         }
         Relationships: []
       }
+      ai_provider_configs: {
+        Row: {
+          api_key_secret_name: string | null
+          base_url: string | null
+          capabilities: Json
+          created_at: string
+          display_name: string | null
+          enabled: boolean
+          id: string
+          is_free: boolean
+          max_tokens: number | null
+          model: string
+          notes: string | null
+          priority: number
+          provider: string
+          task_types: Json
+          updated_at: string
+        }
+        Insert: {
+          api_key_secret_name?: string | null
+          base_url?: string | null
+          capabilities?: Json
+          created_at?: string
+          display_name?: string | null
+          enabled?: boolean
+          id?: string
+          is_free?: boolean
+          max_tokens?: number | null
+          model: string
+          notes?: string | null
+          priority?: number
+          provider: string
+          task_types?: Json
+          updated_at?: string
+        }
+        Update: {
+          api_key_secret_name?: string | null
+          base_url?: string | null
+          capabilities?: Json
+          created_at?: string
+          display_name?: string | null
+          enabled?: boolean
+          id?: string
+          is_free?: boolean
+          max_tokens?: number | null
+          model?: string
+          notes?: string | null
+          priority?: number
+          provider?: string
+          task_types?: Json
+          updated_at?: string
+        }
+        Relationships: []
+      }
       ai_system_settings: {
         Row: {
           id: string
@@ -301,6 +355,41 @@ export type Database = {
           value?: Json
         }
         Relationships: []
+      }
+      ai_task_routing: {
+        Row: {
+          auto_route: boolean
+          fallback_config_ids: string[] | null
+          id: string
+          preferred_config_id: string | null
+          task_type: string
+          updated_at: string
+        }
+        Insert: {
+          auto_route?: boolean
+          fallback_config_ids?: string[] | null
+          id?: string
+          preferred_config_id?: string | null
+          task_type: string
+          updated_at?: string
+        }
+        Update: {
+          auto_route?: boolean
+          fallback_config_ids?: string[] | null
+          id?: string
+          preferred_config_id?: string | null
+          task_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_task_routing_preferred_config_id_fkey"
+            columns: ["preferred_config_id"]
+            isOneToOne: false
+            referencedRelation: "ai_provider_configs"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       ai_tasks: {
         Row: {

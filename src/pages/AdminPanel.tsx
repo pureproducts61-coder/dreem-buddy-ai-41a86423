@@ -34,6 +34,7 @@ import { AdminWeeklyReportsTab } from '@/components/admin/AdminWeeklyReportsTab'
 import { AdminUserManagementTab } from '@/components/admin/AdminUserManagementTab';
 import { AdminCapabilityStatusTab } from '@/components/admin/AdminCapabilityStatusTab';
 import { AdminBuildReportsTab } from '@/components/admin/AdminBuildReportsTab';
+import { ProviderConfigTab } from '@/components/admin/ProviderConfigTab';
 
 const STORAGE_KEY = 'dreem-settings';
 
@@ -266,6 +267,9 @@ const AdminPanel = () => {
 
           {/* API Keys Tab */}
           <TabsContent value="api-keys" className="space-y-6">
+            {/* Dynamic provider/model configuration — enables Lovable/Gemini/Groq/DeepSeek/OpenRouter/HF
+                toggle, priority, secret name, and per-task routing. */}
+            <ProviderConfigTab />
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2"><Brain className="h-5 w-5" />AI Provider Keys</CardTitle>
