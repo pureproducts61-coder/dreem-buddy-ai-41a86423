@@ -13,6 +13,7 @@ import Home from "./pages/Home";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 import AdminPanel from "./pages/AdminPanel";
+import { Analytics } from "@vercel/analytics/react";
 
 const queryClient = new QueryClient();
 
@@ -57,6 +58,7 @@ const App = () => (
               </BrowserRouter>
             </ProjectProvider>
           </AuthProvider>
+          <Analytics />
         </TooltipProvider>
       </LanguageProvider>
     </ThemeProvider>
