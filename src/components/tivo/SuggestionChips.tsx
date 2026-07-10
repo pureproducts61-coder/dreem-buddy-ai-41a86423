@@ -112,50 +112,37 @@ export function SuggestionChips({ suggestions, onSelect, onSelectMany, className
         </button>
       )}
 
+      {/* Single-line, horizontally-scrollable pill chips. Click sends the full
+          suggestion to the input bar (via onSelect). Long-press / hover reveals
+          the checkmark for multi-select mode. */}
       <div
         ref={scrollerRef}
-        className="flex gap-2.5 overflow-x-auto snap-x snap-mandatory scroll-smooth px-2 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="flex gap-2 overflow-x-auto scroll-smooth px-2 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         {suggestions.map((suggestion, i) => {
           const isPicked = picked.has(i);
           return (
-            <motion.div
+            <motion.button
               key={i}
-              initial={{ opacity: 0, y: 6 }}
+              initial={{ opacity: 0, y: 4 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.05 }}
+              transition={{ delay: i * 0.03 }}
+              onClick={() => onSelect(suggestion)}
+              onContextMenu={(e) => { e.preventDefault(); toggle(i); }}
+              title={suggestion}
               className={cn(
-                'snap-start shrink-0 w-[78%] sm:w-[280px] max-w-[320px]',
-                'group relative rounded-2xl overflow-hidden',
-                'border transition-all duration-200',
+                'group shrink-0 h-8 max-w-[260px] px-3 rounded-full',
+                'inline-flex items-center gap-1.5',
+                'text-xs font-medium whitespace-nowrap overflow-hidden text-ellipsis',
+                'border transition-all',
                 isPicked
-                  ? 'border-primary/70 bg-primary/10 shadow-lg shadow-primary/15'
-                  : 'border-border/40 bg-card/80 hover:border-primary/40 hover:-translate-y-0.5'
+                  ? 'border-primary/70 bg-primary/15 text-primary'
+                  : 'border-border/50 bg-card/70 text-foreground hover:border-primary/40 hover:bg-primary/5'
               )}
             >
-              <button
-                onClick={() => toggle(i)}
-                onDoubleClick={() => onSelect(suggestion)}
-                className="w-full text-left p-3.5 pr-9"
-                title="Click to select · Double-click to send"
-              >
-                <p className="text-[13px] leading-snug text-foreground line-clamp-4 font-medium">
-                  {suggestion}
-                </p>
-              </button>
-              <button
-                onClick={() => toggle(i)}
-                aria-label={isPicked ? 'Unselect' : 'Select'}
-                className={cn(
-                  'absolute top-2.5 right-2.5 h-5 w-5 rounded-md border flex items-center justify-center transition-all',
-                  isPicked
-                    ? 'bg-primary border-primary text-primary-foreground'
-                    : 'bg-background/80 border-border/60 text-transparent group-hover:text-muted-foreground'
-                )}
-              >
-                <Check className="h-3 w-3" strokeWidth={3} />
-              </button>
-            </motion.div>
+              {isPicked && <Check className="h-3 w-3 shrink-0" strokeWidth={3} />}
+              <span className="truncate">{suggestion}</span>
+            </motion.button>
           );
         })}
       </div>
