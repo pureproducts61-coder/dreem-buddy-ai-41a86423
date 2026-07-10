@@ -21,7 +21,6 @@ CREATE TABLE IF NOT EXISTS public.user_profiles (
   display_name text,
   role text NOT NULL DEFAULT 'user',
   credits integer NOT NULL DEFAULT 50,
-  github_token text,
   last_active timestamptz DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
