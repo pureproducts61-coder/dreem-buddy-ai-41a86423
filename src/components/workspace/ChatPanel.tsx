@@ -6,7 +6,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { ChatMessage } from './ChatMessage';
 import { AgentProgress } from '../chat/AgentProgress';
-import { SuggestionChips } from '../chat/SuggestionChips';
+import { SuggestionChips } from '@/components/tivo/SuggestionChips';
 import { cn } from '@/lib/utils';
 import { useAgentSuggestions } from '@/hooks/useAgentSuggestions';
 
@@ -24,13 +24,14 @@ interface ChatPanelProps {
 // Mock AI responses for demo - normally these come from the backend
 const mockResponses = [
   "আমি আপনার অনুরোধ বুঝতে পেরেছি। চলুন এটি তৈরি করি!\n\n```tsx\nconst Button = () => {\n  return <button>Click me</button>;\n};\n```\n\nএই কম্পোনেন্টটি আপনার প্রজেক্টে যোগ করা হয়েছে।",
-  "অবশ্যই! এখানে আপনার জন্য একটি responsive navbar তৈরি করছি...\n\n```tsx\nconst Navbar = () => {\n  return (\n    <nav className="flex items-center justify-between p-4">\n      <Logo />\n      <NavLinks />\n    </nav>\n  );\n};\n```",
+  'অবশ্যই! এখানে আপনার জন্য একটি responsive navbar তৈরি করছি...\n\n```tsx\nconst Navbar = () => {\n  return (\n    <nav className="flex items-center justify-between p-4">\n      <Logo />\n      <NavLinks />\n    </nav>\n  );\n};\n```',
   "দারুণ আইডিয়া! আমি এই ফিচারটি implement করছি। আপনি Preview ট্যাবে পরিবর্তনগুলো দেখতে পারবেন।",
 ];
 
 export function ChatPanel({ projectId }: ChatPanelProps) {
   const { t } = useLanguage();
-  const { prompts, setContext } = useAgentSuggestions();
+  const [suggestionContext, setSuggestionContext] = useState('');
+  const prompts = useAgentSuggestions(suggestionContext);
   const [messages, setMessages] = useState<Message[]>(() => {
     const stored = localStorage.getItem(`chat-${projectId}`);
     if (stored) {
@@ -57,10 +58,10 @@ export function ChatPanel({ projectId }: ChatPanelProps) {
     if (messages.length > 0) {
       const lastMsg = messages[messages.length - 1];
       if (lastMsg.role === 'assistant') {
-        setContext(lastMsg.content);
+        setSuggestionContext(lastMsg.content);
       }
     }
-  }, [messages, projectId, setContext]);
+  }, [messages, projectId]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -158,7 +159,7 @@ export function ChatPanel({ projectId }: ChatPanelProps) {
       <div className="border-t p-4">
         {/* Dynamic Suggestion Chips - Injected */}
         <SuggestionChips 
-          prompts={prompts} 
+          suggestions={prompts} 
           onSelect={(prompt) => handleSend(prompt)} 
         />
         
