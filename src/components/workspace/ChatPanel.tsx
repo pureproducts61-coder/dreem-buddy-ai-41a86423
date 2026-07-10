@@ -58,10 +58,10 @@ export function ChatPanel({ projectId }: ChatPanelProps) {
     if (messages.length > 0) {
       const lastMsg = messages[messages.length - 1];
       if (lastMsg.role === 'assistant') {
-        setContext(lastMsg.content);
+        setSuggestionContext(lastMsg.content);
       }
     }
-  }, [messages, projectId, setContext]);
+  }, [messages, projectId]);
 
   useEffect(() => {
     if (scrollRef.current) {
