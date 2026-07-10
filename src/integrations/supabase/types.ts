@@ -143,6 +143,75 @@ export type Database = {
         }
         Relationships: []
       }
+      agent_execution_logs: {
+        Row: {
+          created_at: string
+          id: string
+          message: string | null
+          metadata: Json | null
+          progress: number | null
+          session_id: string
+          status: string
+          step_name: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          message?: string | null
+          metadata?: Json | null
+          progress?: number | null
+          session_id: string
+          status: string
+          step_name: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          message?: string | null
+          metadata?: Json | null
+          progress?: number | null
+          session_id?: string
+          status?: string
+          step_name?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      agent_tasks_queue: {
+        Row: {
+          created_at: string
+          id: string
+          payload: Json | null
+          result: Json | null
+          status: string
+          task_name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          payload?: Json | null
+          result?: Json | null
+          status?: string
+          task_name: string
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          payload?: Json | null
+          result?: Json | null
+          status?: string
+          task_name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       ai_memory_entries: {
         Row: {
           content: string
@@ -209,6 +278,27 @@ export type Database = {
           title?: string
           type?: string
           user_id?: string | null
+        }
+        Relationships: []
+      }
+      ai_system_settings: {
+        Row: {
+          id: string
+          key: string
+          updated_at: string
+          value: Json
+        }
+        Insert: {
+          id?: string
+          key: string
+          updated_at?: string
+          value: Json
+        }
+        Update: {
+          id?: string
+          key?: string
+          updated_at?: string
+          value?: Json
         }
         Relationships: []
       }
