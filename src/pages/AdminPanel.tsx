@@ -5,6 +5,7 @@ import {
   CheckCircle2, XCircle, Eye, EyeOff, Save, Shield, Brain, Settings2,
   RefreshCw, Minus, Plus, UserCheck, UserX, Activity, Database, Zap,
   Hammer, MessageSquare, Image as ImageIcon, Sparkles, GitBranch, Bell, Inbox,
+  Cpu,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -32,6 +33,7 @@ import { EmergencyContactsTab } from '@/components/admin/EmergencyContactsTab';
 import { loadMergedSystemSettings, saveLocalSystemSettings, saveSystemSettingsToDb } from '@/services/systemSettingsService';
 import { AdminWeeklyReportsTab } from '@/components/admin/AdminWeeklyReportsTab';
 import { AdminUserManagementTab } from '@/components/admin/AdminUserManagementTab';
+import AiOsTab from '@/components/os/AiOsTab';
 import { AdminCapabilityStatusTab } from '@/components/admin/AdminCapabilityStatusTab';
 import { AdminBuildReportsTab } from '@/components/admin/AdminBuildReportsTab';
 import { ProviderConfigTab } from '@/components/admin/ProviderConfigTab';
