@@ -137,6 +137,8 @@ export async function streamChat({
         vercelToken: vercelToken || undefined,
         tavilyApiKey: tavilyApiKey || undefined,
         credentials,
+        constitution: buildSystemPrompt(),
+        plugins: pluginsPromptBlock(),
       }),
     });
 
