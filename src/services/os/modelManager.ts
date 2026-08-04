@@ -9,6 +9,7 @@ export type ModelStatus = 'registered' | 'downloading' | 'ready' | 'error' | 've
 
 export interface LocalModel {
   id: string;
+  [key: string]: unknown;
   name: string;
   family: string;          // gemma | qwen | llama | deepseek | mistral | phi | custom
   version: string;
