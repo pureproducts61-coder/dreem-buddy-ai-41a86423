@@ -840,7 +840,7 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    let { messages, model, apiKey, provider, githubToken, vercelToken, tavilyApiKey, credentials } = await req.json();
+    let { messages, model, apiKey, provider, githubToken, vercelToken, tavilyApiKey, credentials, constitution, plugins } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     const SERVER_GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || "";
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
@@ -1117,7 +1117,16 @@ Do not be terse to the point of feeling robotic — a good senior engineer *expl
 
 You are TIVO AI. Ship like a senior engineer.`;
 
-    const finalSystemPrompt = `${systemPrompt}\n\n${TIME_BLOCK}\n\n${CAPABILITY_CONSTITUTION}\n\n${AI_WORKFLOWS_PROMPT_BLOCK}`;
+    // Live AI Constitution supplied by the client (edited in Admin → AI OS).
+    // Length-capped so a huge or hostile payload cannot dominate the core prompt.
+    const liveConstitution = typeof constitution === "string" ? constitution.slice(0, 12000) : "";
+    const livePlugins = typeof plugins === "string" ? plugins.slice(0, 4000) : "";
+    const liveBlocks = [
+      liveConstitution ? `# LIVE AI CONSTITUTION (user-configured, applies now)\n${liveConstitution}` : "",
+      livePlugins ? `# ENABLED PLUGINS\n${livePlugins}` : "",
+    ].filter(Boolean).join("\n\n");
+
+    const finalSystemPrompt = `${systemPrompt}\n\n${TIME_BLOCK}\n\n${CAPABILITY_CONSTITUTION}\n\n${AI_WORKFLOWS_PROMPT_BLOCK}${liveBlocks ? `\n\n${liveBlocks}` : ""}`;
 
     // ── V3.1: intent classifier short-circuit for trivial small-talk ──
     // Saves credits & latency by NEVER hitting the main model for greetings.
