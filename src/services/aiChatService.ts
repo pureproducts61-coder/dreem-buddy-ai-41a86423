@@ -3,6 +3,8 @@ import { getConfiguredCredentials } from './hybridStorageService';
 import { getMemoryContext, addMemoryEntry } from './githubMemoryService';
 import { supabase } from '@/integrations/supabase/client';
 import { loadLocalSystemSettings, loadSystemSettingsFromDb } from './systemSettingsService';
+import { buildSystemPrompt } from './os/constitution';
+import { pluginsPromptBlock } from './os/plugins';
 import { listUserSecrets } from './userSecretsService';
 import { logRecoveryEvent, notifyAdminOfIssue } from './recoveryService';
 const STORAGE_KEY = 'dreem-settings';
@@ -137,6 +139,8 @@ export async function streamChat({
         vercelToken: vercelToken || undefined,
         tavilyApiKey: tavilyApiKey || undefined,
         credentials,
+        constitution: buildSystemPrompt(),
+        plugins: pluginsPromptBlock(),
       }),
     });
 

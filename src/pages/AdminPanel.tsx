@@ -5,6 +5,7 @@ import {
   CheckCircle2, XCircle, Eye, EyeOff, Save, Shield, Brain, Settings2,
   RefreshCw, Minus, Plus, UserCheck, UserX, Activity, Database, Zap,
   Hammer, MessageSquare, Image as ImageIcon, Sparkles, GitBranch, Bell, Inbox,
+  Cpu,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -32,6 +33,7 @@ import { EmergencyContactsTab } from '@/components/admin/EmergencyContactsTab';
 import { loadMergedSystemSettings, saveLocalSystemSettings, saveSystemSettingsToDb } from '@/services/systemSettingsService';
 import { AdminWeeklyReportsTab } from '@/components/admin/AdminWeeklyReportsTab';
 import { AdminUserManagementTab } from '@/components/admin/AdminUserManagementTab';
+import AiOsTab from '@/components/os/AiOsTab';
 import { AdminCapabilityStatusTab } from '@/components/admin/AdminCapabilityStatusTab';
 import { AdminBuildReportsTab } from '@/components/admin/AdminBuildReportsTab';
 import { ProviderConfigTab } from '@/components/admin/ProviderConfigTab';
@@ -226,8 +228,9 @@ const AdminPanel = () => {
 
       <main className="mx-auto max-w-5xl p-4 md:p-8">
         <Tabs defaultValue="status" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4 sm:grid-cols-7 h-auto">
+          <TabsList className="grid w-full grid-cols-4 sm:grid-cols-8 h-auto">
             <TabsTrigger value="status" className="gap-1.5 flex-col sm:flex-row py-2"><Activity className="h-3.5 w-3.5" /><span className="text-[11px] sm:text-xs">Status</span></TabsTrigger>
+            <TabsTrigger value="ai-os" className="gap-1.5 flex-col sm:flex-row py-2"><Cpu className="h-3.5 w-3.5" /><span className="text-[11px] sm:text-xs">AI OS</span></TabsTrigger>
             <TabsTrigger value="monitor" className="gap-1.5 flex-col sm:flex-row py-2"><Zap className="h-3.5 w-3.5" /><span className="text-[11px] sm:text-xs">Monitor</span></TabsTrigger>
             <TabsTrigger value="messages" className="gap-1.5 flex-col sm:flex-row py-2"><Inbox className="h-3.5 w-3.5" /><span className="text-[11px] sm:text-xs">Inbox</span></TabsTrigger>
             <TabsTrigger value="notifications" className="gap-1.5 flex-col sm:flex-row py-2"><Bell className="h-3.5 w-3.5" /><span className="text-[11px] sm:text-xs">Alerts</span></TabsTrigger>
@@ -241,6 +244,11 @@ const AdminPanel = () => {
             <KillSwitchPanel />
             <AdminCapabilityStatusTab />
             <SystemStatusPanel settings={settings} dbAvailable={dbAvailable} />
+          </TabsContent>
+
+          {/* AI OS — local models, constitution, desktop bridge, plugins */}
+          <TabsContent value="ai-os" className="space-y-6">
+            <AiOsTab />
           </TabsContent>
 
           {/* Monitoring */}
