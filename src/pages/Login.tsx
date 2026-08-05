@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import tivoLogo from '@/assets/tivo-logo.png';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Button } from '@/components/ui/button';
