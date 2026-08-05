@@ -5,6 +5,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { loadLocalSystemSettings, loadSystemSettingsFromDb } from './systemSettingsService';
 import { buildSystemPrompt } from './os/constitution';
 import { pluginsPromptBlock } from './os/plugins';
+import { brainPromptBlock } from './os/brain';
+import { capabilitiesPromptBlock, detectCapabilities } from './os/capabilities';
+import { runLocalEngines, setActiveEngine } from './os/engineRouter';
 import { listUserSecrets } from './userSecretsService';
 import { logRecoveryEvent, notifyAdminOfIssue } from './recoveryService';
 const STORAGE_KEY = 'dreem-settings';
@@ -85,6 +88,22 @@ export async function streamChat({
   userContext?: { isAdmin: boolean; email?: string; userId?: string };
 }) {
   const settings = await getRuntimeSettings();
+
+  // Compose the live system prompt (constitution + brain + real capabilities).
+  await detectCapabilities().catch(() => []);
+  const capsBlock = capabilitiesPromptBlock();
+  const systemPrompt = [
+    buildSystemPrompt(),
+    brainPromptBlock() ? `## AI BRAIN\n${brainPromptBlock()}` : '',
+    capsBlock ? `## DEVICE CAPABILITIES (only claim what is ready)\n${capsBlock}` : '',
+  ].filter(Boolean).join('\n\n');
+
+  // 1 & 2 — local engines first. When local answers, the cloud is never touched.
+  try {
+    const handledLocally = await runLocalEngines(messages, onDelta, systemPrompt);
+    if (handledLocally) { onDone(); return; }
+  } catch { /* fall through to cloud engines */ }
+
   const provider = String(settings.aiModel || getActiveProvider() || 'gemini');
   const apiKey = provider === 'gemini' ? settings.geminiApiKey || ''
     : provider === 'groq' ? settings.groqApiKey || ''
@@ -139,7 +158,7 @@ export async function streamChat({
         vercelToken: vercelToken || undefined,
         tavilyApiKey: tavilyApiKey || undefined,
         credentials,
-        constitution: buildSystemPrompt(),
+        constitution: systemPrompt,
         plugins: pluginsPromptBlock(),
       }),
     });
@@ -147,6 +166,7 @@ export async function streamChat({
     if (!resp.ok) {
       const errData = await resp.json().catch(() => ({ error: 'Unknown error' }));
       const errMsg = errData.error || `Error ${resp.status}`;
+      setActiveEngine(null);
       await logRecoveryEvent('ai_http_error', { status: resp.status, error: errMsg, provider });
       await notifyAdminOfIssue('AI runtime error', `Provider: ${provider}\nStatus: ${resp.status}\nError: ${errMsg}`);
       if (onError) onError(errMsg);

@@ -135,3 +135,72 @@ export function constitutionRevision(): string {
   const all = constitution.getAll();
   return `${all.length}:${all.reduce((s, e) => s + String(e.updatedAt).length + e.content.length, 0)}`;
 }
+
+/* ---------------- validation ---------------- */
+
+export interface ConstitutionIssue {
+  level: 'error' | 'warning';
+  entryId?: string;
+  message: string;
+}
+
+/**
+ * Validate the whole constitution: conflicts, missing variables, broken
+ * templates, weak memory rules and missing safety rules.
+ * Called before saving so warnings can be shown up front.
+ */
+export function validateConstitution(candidate?: ConstitutionEntry): ConstitutionIssue[] {
+  const entries = constitution.getAll();
+  const all = candidate
+    ? [...entries.filter((e) => e.id !== candidate.id), candidate]
+    : entries;
+  const issues: ConstitutionIssue[] = [];
+  const varNames = new Set(all.filter((e) => e.section === 'variables').map((e) => e.title));
+
+  for (const e of all) {
+    if (!e.content.trim()) issues.push({ level: 'error', entryId: e.id, message: `"${e.title}" has no content.` });
+
+    // Template validation — unbalanced braces.
+    const open = (e.content.match(/\{\{/g) || []).length;
+    const close = (e.content.match(/\}\}/g) || []).length;
+    if (open !== close) issues.push({ level: 'error', entryId: e.id, message: `"${e.title}" has an unbalanced {{ }} template.` });
+
+    // Missing variable detection.
+    for (const m of e.content.matchAll(/\{\{\s*([\w.-]+)\s*\}\}/g)) {
+      if (!varNames.has(m[1])) {
+        issues.push({ level: 'warning', entryId: e.id, message: `"${e.title}" uses {{${m[1]}}} but no such variable exists.` });
+      }
+    }
+
+    // Conflict detection — contradicting directives on the same subject.
+    if (/\bnever\b/i.test(e.content)) {
+      const subject = e.content.toLowerCase();
+      const conflict = all.find((o) =>
+        o.id !== e.id && o.enabled && /\balways\b/i.test(o.content)
+        && o.content.toLowerCase().split(/\s+/).filter((w) => w.length > 5).some((w) => subject.includes(w)));
+      if (conflict) {
+        issues.push({ level: 'warning', entryId: e.id, message: `"${e.title}" may conflict with "${conflict.title}" (never vs always).` });
+      }
+    }
+  }
+
+  // Duplicate titles inside a section.
+  const seen = new Map<string, string>();
+  for (const e of all) {
+    const key = `${e.section}|${e.title.toLowerCase()}`;
+    if (seen.has(key)) issues.push({ level: 'warning', entryId: e.id, message: `Duplicate entry title "${e.title}" in ${e.section}.` });
+    seen.set(key, e.id);
+  }
+
+  // Section coverage.
+  if (!all.some((e) => e.section === 'safety-rules' && e.enabled)) {
+    issues.push({ level: 'error', message: 'No enabled safety rule — the AI would run without safety limits.' });
+  }
+  if (!all.some((e) => e.section === 'memory-rules' && e.enabled)) {
+    issues.push({ level: 'warning', message: 'No enabled memory rule — the AI will not know what to remember.' });
+  }
+  if (all.some((e) => e.enabled && /api[_ -]?key|password|secret\s*[:=]/i.test(e.content))) {
+    issues.push({ level: 'error', message: 'A constitution entry looks like it contains a credential. Remove it.' });
+  }
+  return issues;
+}
