@@ -863,11 +863,15 @@ serve(async (req) => {
       });
     }
 
+    const callerToken = callerAuthHeader.slice("Bearer ".length).trim();
     const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2.45.0");
     const userClient = createClient(SUPABASE_URL, ANON_KEY, {
+      auth: { persistSession: false, autoRefreshToken: false },
       global: { headers: { Authorization: callerAuthHeader } },
     });
-    const { data: { user }, error: userError } = await userClient.auth.getUser();
+    // Pass the token explicitly — otherwise the client validates its own anon
+    // key and Auth rejects it with "missing sub claim".
+    const { data: { user }, error: userError } = await userClient.auth.getUser(callerToken);
     if (userError || !user) {
       return new Response(JSON.stringify({ error: "unauthorized" }), {
         status: 401,
