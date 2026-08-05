@@ -1,7 +1,7 @@
 import { ShieldAlert, Mail, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 
 export function BlockedScreen({ reason }: { reason?: string | null }) {
   const { user, logout } = useAuth();

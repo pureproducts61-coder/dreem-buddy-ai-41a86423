@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import {
   ArrowLeft, Users, CreditCard, Key, Bot, Server, Search, Globe, Rocket,
   CheckCircle2, XCircle, Eye, EyeOff, Save, Shield, Brain, Settings2,
