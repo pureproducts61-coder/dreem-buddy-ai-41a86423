@@ -15,6 +15,33 @@
 
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 
+/** Reject non-public URLs to prevent SSRF against internal/metadata endpoints. */
+function isPrivateHost(host: string): boolean {
+  const h = host.toLowerCase().replace(/^\[|\]$/g, '');
+  if (h === 'localhost' || h.endsWith('.localhost') || h.endsWith('.local') || h.endsWith('.internal')) return true;
+  if (h === '::1' || h === '0.0.0.0') return true;
+  if (h.startsWith('fc') || h.startsWith('fd') || h.startsWith('fe80:')) return true;
+  const m = h.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (m) {
+    const [a, b] = [Number(m[1]), Number(m[2])];
+    if (a === 10 || a === 127 || a === 0) return true;
+    if (a === 169 && b === 254) return true; // link-local / cloud metadata
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 192 && b === 168) return true;
+    if (a === 100 && b >= 64 && b <= 127) return true;
+    if (a >= 224) return true;
+  }
+  return false;
+}
+
+function validatePublicUrl(raw: string): URL | null {
+  let u: URL;
+  try { u = new URL(raw); } catch { return null; }
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
+  if (!u.hostname || isPrivateHost(u.hostname)) return null;
+  return u;
+}
+
 interface ResearchResult {
   title: string;
   url: string;
