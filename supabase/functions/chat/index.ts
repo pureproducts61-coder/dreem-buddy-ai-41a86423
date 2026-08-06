@@ -923,6 +923,32 @@ serve(async (req) => {
       }
 
       if (!isAdmin) {
+        // Server-side enforcement of the admin block list (client UI check is not trustworthy)
+        const { data: blockRow } = await adminClient
+          .from("user_blocks")
+          .select("id")
+          .eq("user_id", user.id)
+          .maybeSingle();
+        if (blockRow) {
+          return new Response(JSON.stringify({ error: "USER_BLOCKED" }), {
+            status: 403,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        // Server-side enforcement of the global emergency kill switch
+        const { data: ks } = await adminClient
+          .from("system_controls")
+          .select("kill_switch")
+          .eq("id", "global")
+          .maybeSingle();
+        if (ks?.kill_switch) {
+          return new Response(JSON.stringify({ error: "KILL_SWITCH_ENGAGED" }), {
+            status: 423,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
         const { error: creditError } = await userClient.rpc("deduct_credits", {
           amount: 1,
           reason: "ai_message",
