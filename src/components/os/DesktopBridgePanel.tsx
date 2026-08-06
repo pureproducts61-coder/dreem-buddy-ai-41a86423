@@ -14,6 +14,7 @@ import {
   type BridgeHealth,
 } from '@/services/os/desktopBridge';
 import { captureScreen } from '@/services/os/vision';
+import BridgeInstallCard from './BridgeInstallCard';
 
 export default function DesktopBridgePanel() {
   const permissions = useRegistry(bridgePermissions);
@@ -41,6 +42,7 @@ export default function DesktopBridgePanel() {
 
   return (
     <div className="space-y-6">
+      <BridgeInstallCard />
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
