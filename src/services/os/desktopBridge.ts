@@ -12,7 +12,10 @@ const DEFAULT_ENDPOINT = 'http://127.0.0.1:8791';
 
 export type BridgeCapability =
   | 'files.read' | 'files.write' | 'apps.launch' | 'terminal.run'
-  | 'screen.capture' | 'input.control' | 'clipboard' | 'notifications';
+  | 'screen.capture' | 'input.control' | 'clipboard' | 'notifications'
+  | 'windows.manage' | 'audio.record' | 'audio.play' | 'camera.use'
+  | 'usb.access' | 'bluetooth.access' | 'serial.access' | 'network.access'
+  | 'browser.control' | 'system.info';
 
 export interface BridgePermission {
   id: string;
@@ -34,11 +37,28 @@ const PERMISSION_SEED: BridgePermission[] = ([
   ['input.control', 'Control mouse and keyboard'],
   ['clipboard', 'Read and write the clipboard'],
   ['notifications', 'Show desktop notifications'],
+  ['windows.manage', 'Move, focus and close windows'],
+  ['audio.record', 'Use the microphone'],
+  ['audio.play', 'Play sound through the speakers'],
+  ['camera.use', 'Use the camera'],
+  ['usb.access', 'Talk to USB devices'],
+  ['bluetooth.access', 'Talk to Bluetooth devices'],
+  ['serial.access', 'Talk to serial devices'],
+  ['network.access', 'Make local network requests'],
+  ['browser.control', 'Control the web browser'],
+  ['system.info', 'Read system information (CPU, GPU, RAM, storage)'],
 ] as [BridgeCapability, string][]).map(([capability, label]) => ({
   id: capability, capability, label, granted: false, scope: '*',
 }));
 
 export const bridgePermissions = new LocalRegistry<BridgePermission>('tivo-os-bridge-permissions', PERMISSION_SEED);
+
+/** Adds any newly shipped permission rows to an existing (older) local registry. */
+export function ensureSeedPermissions() {
+  const existing = new Set(bridgePermissions.getAll().map((p) => p.capability));
+  const missing = PERMISSION_SEED.filter((p) => !existing.has(p.capability));
+  if (missing.length) bridgePermissions.replaceAll([...bridgePermissions.getAll(), ...missing]);
+}
 
 export function isPermitted(capability: BridgeCapability): boolean {
   return bridgePermissions.get(capability)?.granted === true;
