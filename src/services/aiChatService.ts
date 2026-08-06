@@ -7,6 +7,7 @@ import { buildSystemPrompt } from './os/constitution';
 import { pluginsPromptBlock } from './os/plugins';
 import { brainPromptBlock } from './os/brain';
 import { capabilitiesPromptBlock, detectCapabilities } from './os/capabilities';
+import { orchestrationPromptBlock, listMissingModelNotices } from './os/orchestrator';
 import { runLocalEngines, setActiveEngine } from './os/engineRouter';
 import { listUserSecrets } from './userSecretsService';
 import { logRecoveryEvent, notifyAdminOfIssue } from './recoveryService';
@@ -92,10 +93,14 @@ export async function streamChat({
   // Compose the live system prompt (constitution + brain + real capabilities).
   await detectCapabilities().catch(() => []);
   const capsBlock = capabilitiesPromptBlock();
+  const modelsBlock = orchestrationPromptBlock();
+  const missing = listMissingModelNotices();
   const systemPrompt = [
     buildSystemPrompt(),
     brainPromptBlock() ? `## AI BRAIN\n${brainPromptBlock()}` : '',
     capsBlock ? `## DEVICE CAPABILITIES (only claim what is ready)\n${capsBlock}` : '',
+    modelsBlock ? `## LOCAL MODELS AVAILABLE\n${modelsBlock}` : '',
+    missing.length ? `## MISSING LOCAL MODELS (tell the user, offer download or GGUF import, never fail silently)\n${missing.map((m) => `- ${m.task}: ${m.message}`).join('\n')}` : '',
   ].filter(Boolean).join('\n\n');
 
   // 1 & 2 — local engines first. When local answers, the cloud is never touched.
