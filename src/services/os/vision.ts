@@ -73,3 +73,57 @@ export async function findUiElement(description: string): Promise<{ x: number; y
   );
   return res.match;
 }
+/* ---------------- UI understanding ---------------- */
+
+export interface UiElement {
+  role: string;              // button | menu | dialog | icon | field | window | notification
+  label: string;
+  x: number; y: number; width: number; height: number;
+  confidence?: number;
+  app?: string;
+}
+
+export interface ScreenUnderstanding {
+  shot: ScreenShot;
+  elements: UiElement[];
+  text: string;
+  windows: { title: string; app: string; focused?: boolean }[];
+  notes: string[];
+}
+
+/**
+ * Full screen understanding: capture → OCR → UI element detection.
+ * Model needs are resolved through the Model Manager; when something is missing
+ * the user is told instead of the call failing silently.
+ */
+export async function analyzeScreen(): Promise<ScreenUnderstanding> {
+  const { requireModelFor } = await import('./orchestrator');
+  const shot = await captureScreen();
+  const notes: string[] = [];
+  let elements: UiElement[] = [];
+  let text = '';
+  let windows: { title: string; app: string; focused?: boolean }[] = [];
+
+  const ocrModel = await requireModelFor('ocr');
+  const visionModel = await requireModelFor('vision');
+  if (ocrModel.missing) notes.push(ocrModel.reason);
+  if (visionModel.missing) notes.push(visionModel.reason);
+
+  if (shot.source === 'bridge') {
+    const res = await bridgeCall<{ elements?: UiElement[]; text?: string; windows?: typeof windows }>(
+      'screen.capture', 'screen.analyze',
+      { dataUrl: shot.dataUrl, ocrModel: ocrModel.model?.name || '', visionModel: visionModel.model?.name || '' },
+    ).catch(() => ({}));
+    elements = res.elements || [];
+    text = res.text || '';
+    windows = res.windows || [];
+  } else {
+    notes.push('Only a browser screenshot is available. Install the Desktop Bridge so I can read windows, buttons and menus.');
+  }
+  return { shot, elements, text, windows, notes };
+}
+
+/** Lists open windows through the Bridge window manager. */
+export async function listWindows() {
+  return bridgeCall<{ windows: { title: string; app: string; focused?: boolean }[] }>('windows.manage', 'windows.list');
+}
