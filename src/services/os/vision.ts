@@ -113,7 +113,7 @@ export async function analyzeScreen(): Promise<ScreenUnderstanding> {
     const res = await bridgeCall<{ elements?: UiElement[]; text?: string; windows?: typeof windows }>(
       'screen.capture', 'screen.analyze',
       { dataUrl: shot.dataUrl, ocrModel: ocrModel.model?.name || '', visionModel: visionModel.model?.name || '' },
-    ).catch(() => ({}));
+    ).catch(() => ({} as { elements?: UiElement[]; text?: string; windows?: typeof windows }));
     elements = res.elements || [];
     text = res.text || '';
     windows = res.windows || [];
