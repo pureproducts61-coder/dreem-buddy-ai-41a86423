@@ -115,6 +115,7 @@ async function duckDuckGo(query: string, limit: number): Promise<ResearchResult[
 }
 
 async function scrapeUrl(url: string): Promise<{ url: string; content: string; title?: string } | null> {
+  if (!validatePublicUrl(url)) return null;
   const key = Deno.env.get('FIRECRAWL_API_KEY');
   if (key) {
     try {
@@ -131,7 +132,8 @@ async function scrapeUrl(url: string): Promise<{ url: string; content: string; t
   }
   // Bare fetch fallback (HTML — the AI can still parse it)
   try {
-    const res = await fetch(url, { headers: { 'User-Agent': 'TIVO-Research/1.0' } });
+    const res = await fetch(url, { headers: { 'User-Agent': 'TIVO-Research/1.0' }, redirect: 'manual' });
+    if (res.status >= 300 && res.status < 400) return null;
     const html = await res.text();
     const text = html.replace(/<script[\s\S]*?<\/script>/gi, '').replace(/<style[\s\S]*?<\/style>/gi, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
     return { url, content: text.slice(0, 12000) };
@@ -141,10 +143,30 @@ async function scrapeUrl(url: string): Promise<{ url: string; content: string; t
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   try {
+    // Require a genuine authenticated user (anon key alone is not enough).
+    const authHeader = req.headers.get('Authorization') ?? '';
+    const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+    const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
+    const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
+    if (!token) {
+      return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+    const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2.45.0');
+    const userClient = createClient(SUPABASE_URL, ANON_KEY, {
+      global: { headers: { Authorization: `Bearer ${token}` } },
+    });
+    const { data: { user }, error: userErr } = await userClient.auth.getUser(token);
+    if (userErr || !user) {
+      return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
     const body = await req.json().catch(() => ({}));
     const { query, url, mode = 'search', limit = 5 } = body as { query?: string; url?: string; mode?: 'search' | 'scrape'; limit?: number };
 
     if (mode === 'scrape' && url) {
+      if (typeof url !== 'string' || url.length > 2000 || !validatePublicUrl(url)) {
+        return new Response(JSON.stringify({ error: 'invalid_url' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
       const result = await scrapeUrl(url);
       return new Response(JSON.stringify({ ok: true, mode: 'scrape', result }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -168,7 +190,7 @@ Deno.serve(async (req) => {
     });
   } catch (e) {
     console.error('[web-research] error', e);
-    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), {
+    return new Response(JSON.stringify({ error: 'internal_error' }), {
       status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
