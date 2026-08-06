@@ -1,6 +1,7 @@
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
+import { bootOs } from "./services/os/boot";
 
 // PWA service worker is auto-registered by vite-plugin-pwa
 
@@ -23,3 +24,6 @@ document.addEventListener('touchend', (e) => {
 }, { passive: false });
 
 createRoot(document.getElementById("root")!).render(<App />);
+
+// Local-first OS boot: workspace, permissions, capabilities, auto-updates, diagnostics.
+bootOs().catch(() => {});
