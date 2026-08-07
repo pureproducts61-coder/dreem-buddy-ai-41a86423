@@ -5,6 +5,7 @@
  * when the Bridge is absent the app keeps working, just without OS control.
  */
 import { LocalRegistry } from './registry';
+import { recordPermissionUse } from './permissionAudit';
 
 const ENDPOINT_KEY = 'tivo-os-bridge-endpoint';
 const TOKEN_KEY = 'tivo-os-bridge-token';
@@ -26,6 +27,13 @@ export interface BridgePermission {
   scope: string;        // e.g. folder path or "*"
   grantedAt?: string;
   note?: string;
+  /** where the decision came from: the user, a plugin manifest or the system */
+  source?: 'user' | 'plugin' | 'system';
+  lastUsedAt?: string;
+  /** set when an admin/policy hard-blocks a capability regardless of grant */
+  blocked?: boolean;
+  /** an AI request is waiting for the user to decide */
+  pending?: boolean;
 }
 
 const PERMISSION_SEED: BridgePermission[] = ([
@@ -61,11 +69,40 @@ export function ensureSeedPermissions() {
 }
 
 export function isPermitted(capability: BridgeCapability): boolean {
-  return bridgePermissions.get(capability)?.granted === true;
+  const p = bridgePermissions.get(capability);
+  return p?.granted === true && p?.blocked !== true;
 }
 
-export function setPermission(capability: BridgeCapability, granted: boolean, scope = '*') {
-  bridgePermissions.update(capability, { granted, scope, grantedAt: granted ? new Date().toISOString() : undefined });
+export type PermissionStatus = 'enabled' | 'disabled' | 'pending' | 'blocked';
+
+export function permissionStatus(capability: BridgeCapability): PermissionStatus {
+  const p = bridgePermissions.get(capability);
+  if (!p) return 'disabled';
+  if (p.blocked) return 'blocked';
+  if (p.pending) return 'pending';
+  return p.granted ? 'enabled' : 'disabled';
+}
+
+export function setPermission(
+  capability: BridgeCapability,
+  granted: boolean,
+  scope = '*',
+  source: 'user' | 'plugin' | 'system' = 'user',
+) {
+  bridgePermissions.update(capability, {
+    granted, scope, source, pending: false,
+    grantedAt: granted ? new Date().toISOString() : undefined,
+  });
+  recordPermissionUse({
+    capability, action: granted ? 'permission.granted' : 'permission.revoked',
+    allowed: granted, reason: `Changed by ${source}`, source: source === 'user' ? 'user' : 'system',
+  });
+}
+
+/** Mark that the AI is waiting for the user to decide on a capability. */
+export function requestPermission(capability: BridgeCapability, reason: string) {
+  bridgePermissions.update(capability, { pending: true });
+  recordPermissionUse({ capability, action: 'permission.requested', allowed: false, reason });
 }
 
 export function getEndpoint(): string {
@@ -136,16 +173,20 @@ export async function bridgeCall<T = unknown>(
   payload: Record<string, unknown> = {},
 ): Promise<T> {
   if (!isPermitted(capability)) {
+    requestPermission(capability, `Needed for "${action}"`);
     throw new BridgeUnavailableError(
       `I need your permission for "${bridgePermissions.get(capability)?.label || capability}" before I can do that.`,
     );
   }
   const health = await pingBridge();
   if (!health.online) {
+    recordPermissionUse({ capability, action, allowed: false, reason: 'Desktop Bridge is not running' });
     throw new BridgeUnavailableError(
       'The Desktop Bridge is not running on this computer, so I cannot control it right now.',
     );
   }
+  bridgePermissions.update(capability, { lastUsedAt: new Date().toISOString() });
+  recordPermissionUse({ capability, action, allowed: true, reason: `AI executed "${action}"` });
   const res = await fetch(`${getEndpoint()}/action/${action}`, {
     method: 'POST',
     headers: {
