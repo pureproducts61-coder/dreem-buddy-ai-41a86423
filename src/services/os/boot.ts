@@ -7,6 +7,7 @@ import { ensureSeedPermissions, pingBridge } from './desktopBridge';
 import { detectCapabilities } from './capabilities';
 import { startAutoUpdates } from './updates';
 import { runSelfTest, lastSelfTest } from './selfTest';
+import { startConfigSync } from './dbSync';
 
 let booted = false;
 
@@ -18,6 +19,8 @@ export async function bootOs() {
   pingBridge().catch(() => {});
   detectCapabilities().catch(() => {});
   startAutoUpdates();
+  // AI intelligence (Constitution, Brain, Plugins) hot-reloads from the database.
+  startConfigSync().catch(() => {});
   // First launch (or once a day) run diagnostics in the background.
   const last = lastSelfTest();
   const stale = !last || Date.now() - new Date(last.ranAt).getTime() > 24 * 60 * 60 * 1000;

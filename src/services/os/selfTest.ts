@@ -16,7 +16,12 @@ export interface SelfTestResult {
   label: string;
   status: 'pass' | 'warn' | 'fail';
   detail: string;
+  /** what to press / do next */
   action?: string;
+  /** why it failed, in plain language */
+  why?: string;
+  /** what becomes possible once it is fixed */
+  after?: string;
 }
 
 export interface SelfTestReport {
@@ -44,6 +49,8 @@ export async function runSelfTest(): Promise<SelfTestReport> {
     status: health.online ? 'pass' : 'warn',
     detail: health.online ? `Connected (${health.version || 'unknown version'}, ${health.latencyMs}ms)` : 'Not running on this computer',
     action: health.online ? undefined : 'Open Desktop bridge and press "Install Desktop Bridge".',
+    why: health.online ? undefined : 'The local helper service that gives TIVO access to this computer is not answering on 127.0.0.1.',
+    after: health.online ? undefined : 'Files, terminal, apps, screen and input control become available.',
   });
 
   let runtime = false;
@@ -53,6 +60,8 @@ export async function runSelfTest(): Promise<SelfTestReport> {
     status: runtime ? 'pass' : 'warn',
     detail: runtime ? 'Local runtime is answering' : 'No local runtime detected — cloud engines will be used',
     action: runtime ? undefined : 'Install the Bridge or start Ollama / LM Studio.',
+    why: runtime ? undefined : 'No local inference server responded, so answers must go to a cloud provider.',
+    after: runtime ? undefined : 'Chat, reasoning and coding run fully offline on your own machine.',
   });
 
   const vision = await selectModelFor('vision');
@@ -64,12 +73,16 @@ export async function runSelfTest(): Promise<SelfTestReport> {
       ? isPermitted('screen.capture') ? 'Screen capture allowed through the Bridge' : 'Screen permission is off'
       : 'Only browser screen sharing is available',
     action: isPermitted('screen.capture') ? undefined : 'Turn on "See the screen" in Bridge permissions.',
+    why: isPermitted('screen.capture') ? undefined : 'Screen capture permission is off, so TIVO cannot see windows, buttons or dialogs.',
+    after: isPermitted('screen.capture') ? undefined : 'TIVO can read the screen and operate applications for you.',
   });
   push({
     id: 'vision-models', label: 'Vision / OCR models',
     status: vision.missing && ocr.missing ? 'warn' : 'pass',
     detail: vision.missing && ocr.missing ? 'No vision or OCR model installed' : `${vision.model?.name || ocr.model?.name} is ready`,
     action: vision.missing && ocr.missing ? 'Add a vision or OCR model in Local models (download or import GGUF).' : undefined,
+    why: vision.missing && ocr.missing ? 'No installed model declares vision or OCR capability.' : undefined,
+    after: vision.missing && ocr.missing ? 'Screen text reading and UI element detection start working, and the paused action retries automatically.' : undefined,
   });
 
   for (const [id, label, cap] of [
@@ -84,6 +97,9 @@ export async function runSelfTest(): Promise<SelfTestReport> {
       status: health.online && granted ? 'pass' : 'warn',
       detail: !health.online ? 'Needs the Desktop Bridge' : granted ? 'Allowed' : 'Permission is off',
       action: health.online && !granted ? `Enable "${bridgePermissions.get(cap)?.label}" in Bridge permissions.` : undefined,
+      why: !health.online ? 'This resource is exposed by the Desktop Bridge, which is not running.'
+        : granted ? undefined : 'You have not granted this permission yet, so TIVO refuses to touch it.',
+      after: granted ? undefined : `TIVO can use ${label.toLowerCase()} on your behalf, and every use is written to the permission audit.`,
     });
   }
 
@@ -110,6 +126,8 @@ export async function runSelfTest(): Promise<SelfTestReport> {
     status: models.some((m) => m.status === 'ready') ? 'pass' : 'warn',
     detail: `${models.filter((m) => m.status === 'ready').length} ready of ${models.length} registered`,
     action: models.some((m) => m.status === 'ready') ? undefined : 'Download or import a model in Local models.',
+    why: models.some((m) => m.status === 'ready') ? undefined : 'No model files are fully downloaded and verified on this device.',
+    after: models.some((m) => m.status === 'ready') ? undefined : 'Offline answers become possible without any cloud provider.',
   });
   push({ id: 'plugins', label: 'Plugins', status: 'pass', detail: `${enabledPlugins().length} enabled` });
 
@@ -131,7 +149,9 @@ export async function runSelfTest(): Promise<SelfTestReport> {
     id: 'workspace', label: 'Local workspace',
     status: ws?.initialised ? 'pass' : 'fail',
     detail: ws?.initialised ? `${ws.folders.length} folders, ${ws.quotaGb.toFixed(1)} GB available${ws.persistent ? ', persistent' : ''}` : 'Workspace could not be created',
-    action: ws?.initialised ? undefined : 'Reload the app so the workspace can be created again.',
+    action: ws?.initialised ? undefined : 'Press "Repair workspace" above.',
+    why: ws?.initialised ? undefined : 'The local folders and IndexedDB stores could not be created (browser storage may be blocked).',
+    after: ws?.initialised ? undefined : 'Projects, chats, models and settings persist offline.',
   });
   push({
     id: 'database', label: 'Offline database',
