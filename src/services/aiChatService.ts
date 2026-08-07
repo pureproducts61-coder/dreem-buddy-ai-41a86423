@@ -4,6 +4,7 @@ import { getMemoryContext, addMemoryEntry } from './githubMemoryService';
 import { supabase } from '@/integrations/supabase/client';
 import { loadLocalSystemSettings, loadSystemSettingsFromDb } from './systemSettingsService';
 import { buildSystemPrompt } from './os/constitution';
+import { reloadAiConfig } from './os/dbSync';
 import { pluginsPromptBlock } from './os/plugins';
 import { brainPromptBlock } from './os/brain';
 import { capabilitiesPromptBlock, detectCapabilities } from './os/capabilities';
@@ -89,6 +90,9 @@ export async function streamChat({
   userContext?: { isAdmin: boolean; email?: string; userId?: string };
 }) {
   const settings = await getRuntimeSettings();
+
+  // Always answer with the newest database-defined intelligence (hot reload).
+  await reloadAiConfig().catch(() => false);
 
   // Compose the live system prompt (constitution + brain + real capabilities).
   await detectCapabilities().catch(() => []);

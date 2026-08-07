@@ -6,6 +6,7 @@
  * Everything fails soft — when no runtime is present the Engine Router simply
  * moves on to the next engine.
  */
+import { reportRuntimeCapability } from './capabilities';
 import { getEndpoint, getPairToken } from './desktopBridge';
 import { modelRegistry, getWeights, getDefaultModel, setDefaultModel, type LocalModel } from './modelManager';
 
@@ -44,12 +45,18 @@ function authHeaders(): Record<string, string> {
 
 /** Is a local inference runtime reachable right now? */
 export async function probeRuntime(timeoutMs = 1500): Promise<boolean> {
+  const report = (ok: boolean, detail: string) => reportRuntimeCapability({
+    id: 'local-runtime', label: 'Local GGUF runtime',
+    state: ok ? 'ready' : 'unavailable', detail, health: ok ? 'good' : 'down',
+  });
   const c = new AbortController();
   const t = setTimeout(() => c.abort(), timeoutMs);
   try {
     const res = await fetch(`${getEndpoint()}/llm/health`, { signal: c.signal, headers: authHeaders() });
+    report(res.ok, res.ok ? 'Local inference server is answering' : 'Local inference server refused the request');
     return res.ok;
   } catch {
+    report(false, 'No local inference server is reachable');
     return false;
   } finally { clearTimeout(t); }
 }
