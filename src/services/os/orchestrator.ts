@@ -131,8 +131,8 @@ export function clearPendingModelRequest() { pending = null; requestListeners.fo
  * original action resumes automatically after Download / Import GGUF —
  * never a silent failure and never a manual restart.
  */
-export async function requireModelFor(task: ModelTask, retry: () => void | Promise<void>) {
-  const choice = await resolveModelFor(task);
+export async function requireModelWithRetry(task: ModelTask, retry: () => void | Promise<void>) {
+  const choice = await requireModelFor(task);
   if (!choice.missing) return choice;
   pending = {
     task,
@@ -146,17 +146,11 @@ export async function requireModelFor(task: ModelTask, retry: () => void | Promi
 /** Called by the Model Manager when a model finishes installing. */
 export async function onModelInstalled() {
   if (!pending) return;
-  const choice = await resolveModelFor(pending.task);
+  const choice = await requireModelFor(pending.task);
   if (choice.missing) return;
   const { retry } = pending;
   clearPendingModelRequest();
   await retry();
 }
-
-function legacyOrchestrationPromptBlock(): string {
-  const rows = modelRegistry.getAll().filter((m) => m.enabled).map((m) => {
-    const r = modelRequirements(m);
-    return `- ${m.name} [${m.status}] can: ${r.capabilities.join(', ')} (needs ~${r.ramGb}GB RAM${r.needsGpu ? ', GPU' : ''})`;
-  });
   return rows.join('\n');
 }
