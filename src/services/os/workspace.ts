@@ -4,6 +4,7 @@
  * Re-running is safe — missing pieces are repaired, existing data is kept.
  */
 import { ensureSeedPermissions } from './desktopBridge';
+import { reportRuntimeCapability } from './capabilities';
 
 const STATE_KEY = 'tivo-os-workspace';
 const DB_NAME = 'tivo-os-workspace';
@@ -91,5 +92,10 @@ export async function bootstrapWorkspace(): Promise<WorkspaceState> {
     folders, stores, persistent, quotaGb,
   };
   localStorage.setItem(STATE_KEY, JSON.stringify(state));
+  reportRuntimeCapability({
+    id: 'offline-workspace', label: 'Offline workspace',
+    state: 'ready', health: stores.length ? 'good' : 'degraded',
+    detail: `${folders.length} folders, ${stores.length} local stores, ${quotaGb.toFixed(1)} GB available`,
+  });
   return state;
 }

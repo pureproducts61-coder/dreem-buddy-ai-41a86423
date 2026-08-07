@@ -69,7 +69,9 @@ export default function SelfTestPanel() {
                 <div className="min-w-0">
                   <p className="text-sm font-medium">{res.label}</p>
                   <p className="text-xs text-muted-foreground">{res.detail}</p>
-                  {res.action && <p className="mt-1 text-[11px] text-primary">{res.action}</p>}
+                  {res.why && <p className="mt-1 text-[11px] text-muted-foreground">Why: {res.why}</p>}
+                  {res.action && <p className="mt-1 text-[11px] text-primary">Do this: {res.action}</p>}
+                  {res.after && <p className="mt-0.5 text-[11px] text-muted-foreground">After fixing: {res.after}</p>}
                 </div>
                 <Badge variant={res.status === 'pass' ? 'default' : 'secondary'} className="ml-auto text-[10px]">{res.status}</Badge>
               </div>

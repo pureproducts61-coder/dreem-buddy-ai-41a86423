@@ -3,6 +3,7 @@
  * Preferred path: Desktop Bridge screen capture (real OS screen).
  * Fallback path: browser getDisplayMedia (user picks a window/tab).
  */
+import { reportRuntimeCapability } from './capabilities';
 import { bridgeCall, isPermitted, pingBridge } from './desktopBridge';
 
 export interface ScreenShot {
@@ -61,9 +62,16 @@ export async function captureViaBrowser(): Promise<ScreenShot> {
 export async function readScreenText(shot?: ScreenShot): Promise<string> {
   const image = shot ?? (await captureScreen());
   if (image.source === 'bridge') {
-    const res = await bridgeCall<{ text: string }>('screen.capture', 'screen.ocr', { dataUrl: image.dataUrl });
-    return res.text;
+    try {
+      const res = await bridgeCall<{ text: string }>('screen.capture', 'screen.ocr', { dataUrl: image.dataUrl });
+      reportRuntimeCapability({ id: 'ocr', label: 'OCR runtime', state: 'ready', detail: 'Reading screen text through the Bridge', health: 'good' });
+      return res.text;
+    } catch (e) {
+      reportRuntimeCapability({ id: 'ocr', label: 'OCR runtime', state: 'unavailable', detail: e instanceof Error ? e.message : 'OCR failed', health: 'down' });
+      throw e;
+    }
   }
+  reportRuntimeCapability({ id: 'ocr', label: 'OCR runtime', state: 'unavailable', detail: 'Needs the Desktop Bridge', health: 'down' });
   throw new Error('Reading text from the screen needs the Desktop Bridge. I can still show you the screenshot.');
 }
 

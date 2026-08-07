@@ -109,3 +109,46 @@ export function orchestrationPromptBlock(): string {
   });
   return rows.join('\n');
 }
+
+/* ---------------- automatic model resolution ---------------- */
+
+export interface PendingModelRequest {
+  task: ModelTask;
+  explanation: string;
+  /** re-runs the original action once the model is installed */
+  retry: () => void | Promise<void>;
+}
+
+let pending: PendingModelRequest | null = null;
+const requestListeners = new Set<() => void>();
+export const subscribeModelRequests = (fn: () => void) => { requestListeners.add(fn); return () => { requestListeners.delete(fn); }; };
+export const getPendingModelRequest = () => pending;
+export function clearPendingModelRequest() { pending = null; requestListeners.forEach((l) => l()); }
+
+/**
+ * Ensures a model exists for a task. When one is missing the caller gets back
+ * `null` and the UI is handed a human explanation plus a retry callback, so the
+ * original action resumes automatically after Download / Import GGUF —
+ * never a silent failure and never a manual restart.
+ */
+export async function requireModelWithRetry(task: ModelTask, retry: () => void | Promise<void>) {
+  const choice = await requireModelFor(task);
+  if (!choice.missing) return choice;
+  pending = {
+    task,
+    explanation: `${choice.reason} Download a model, or import a GGUF file from this computer — I will continue automatically once it is ready.`,
+    retry,
+  };
+  requestListeners.forEach((l) => l());
+  return choice;
+}
+
+/** Called by the Model Manager when a model finishes installing. */
+export async function onModelInstalled() {
+  if (!pending) return;
+  const choice = await requireModelFor(pending.task);
+  if (choice.missing) return;
+  const { retry } = pending;
+  clearPendingModelRequest();
+  await retry();
+}

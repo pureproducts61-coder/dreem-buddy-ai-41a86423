@@ -22,6 +22,25 @@ export interface CapabilityInfo {
 
 const LAST_USED_KEY = 'tivo-os-capability-usage';
 
+/**
+ * Live status reported by the native runtimes (GGUF runtime, OCR, screen
+ * understanding, offline workspace, update and security runtimes). The AI may
+ * only claim an ability that a runtime has reported as ready — it never guesses.
+ */
+const runtimeReports = new Map<string, CapabilityInfo>();
+
+export function reportRuntimeCapability(info: Omit<CapabilityInfo, 'checkedAt'> & { checkedAt?: string }) {
+  runtimeReports.set(info.id, { ...info, checkedAt: info.checkedAt || new Date().toISOString() });
+  cache = mergeReports(cache);
+  listeners.forEach((l) => l());
+}
+
+function mergeReports(list: CapabilityInfo[]): CapabilityInfo[] {
+  const byId = new Map(list.map((c) => [c.id, c]));
+  runtimeReports.forEach((r, id) => byId.set(id, { ...(byId.get(id) || {}), ...r }));
+  return [...byId.values()];
+}
+
 function lastUsedMap(): Record<string, string> {
   try { return JSON.parse(localStorage.getItem(LAST_USED_KEY) || '{}'); } catch { return {}; }
 }
@@ -116,9 +135,14 @@ export async function detectCapabilities(): Promise<CapabilityInfo[]> {
   });
 
   const used = lastUsedMap();
-  cache = list.map((c) => ({ ...c, lastUsedAt: used[c.id] }));
+  cache = mergeReports(list.map((c) => ({ ...c, lastUsedAt: used[c.id] })));
   listeners.forEach((l) => l());
   return cache;
+}
+
+/** True only when a runtime/detection has actually reported the ability ready. */
+export function isCapabilityReady(id: string): boolean {
+  return cache.find((c) => c.id === id)?.state === 'ready';
 }
 
 /** Compact block injected into the system prompt so the AI knows its real limits. */

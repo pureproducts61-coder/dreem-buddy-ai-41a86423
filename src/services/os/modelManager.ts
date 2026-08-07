@@ -3,6 +3,7 @@
  * Models live in localStorage metadata; weights live in IndexedDB (imported/downloaded GGUF).
  */
 import { LocalRegistry } from './registry';
+import { onModelInstalled } from './orchestrator';
 
 export type ModelSource = 'download' | 'import' | 'detected' | 'remote';
 export type ModelStatus = 'registered' | 'downloading' | 'ready' | 'error' | 'verifying';
@@ -229,6 +230,7 @@ export async function downloadModel(id: string, onProgress?: (pct: number) => vo
     const blob = new Blob(chunks);
     await putWeights(id, blob);
     modelRegistry.update(id, { status: 'ready', bytesDownloaded: blob.size, sizeBytes: blob.size });
+    void onModelInstalled();
     onProgress?.(100);
   } catch (e) {
     modelRegistry.update(id, {
@@ -283,6 +285,7 @@ export async function verifyModel(id: string): Promise<{ ok: boolean; reason: st
     } catch { /* fall through */ }
   }
   modelRegistry.update(id, { status: 'ready', verified: true, error: undefined });
+  void onModelInstalled();
   return { ok: true, reason: 'File present and size matches' };
 }
 

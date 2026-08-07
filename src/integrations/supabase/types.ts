@@ -281,6 +281,30 @@ export type Database = {
         }
         Relationships: []
       }
+      ai_os_config: {
+        Row: {
+          id: string
+          payload: Json
+          revision: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          id: string
+          payload?: Json
+          revision?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          id?: string
+          payload?: Json
+          revision?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       ai_provider_configs: {
         Row: {
           api_key_secret_name: string | null
@@ -666,6 +690,39 @@ export type Database = {
           status?: string
           subject?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      permission_audit: {
+        Row: {
+          action: string
+          allowed: boolean
+          capability: string
+          created_at: string
+          id: string
+          reason: string | null
+          source: string
+          user_id: string
+        }
+        Insert: {
+          action: string
+          allowed?: boolean
+          capability: string
+          created_at?: string
+          id?: string
+          reason?: string | null
+          source?: string
+          user_id?: string
+        }
+        Update: {
+          action?: string
+          allowed?: boolean
+          capability?: string
+          created_at?: string
+          id?: string
+          reason?: string | null
+          source?: string
+          user_id?: string
         }
         Relationships: []
       }
