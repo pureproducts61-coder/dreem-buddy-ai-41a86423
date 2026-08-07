@@ -152,5 +152,3 @@ export async function onModelInstalled() {
   clearPendingModelRequest();
   await retry();
 }
-  return rows.join('\n');
-}
