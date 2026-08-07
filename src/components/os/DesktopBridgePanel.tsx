@@ -10,9 +10,10 @@ import { Camera, Link2, MonitorSmartphone, RefreshCw, Trash2 } from 'lucide-reac
 import { useRegistry } from '@/hooks/useRegistry';
 import {
   bridgePermissions, generatePairCode, getEndpoint, getPairToken, pairDevice,
-  pairedDevices, pingBridge, setEndpoint, setPairToken, setPermission,
+  pairedDevices, permissionStatus, pingBridge, setEndpoint, setPairToken, setPermission,
   type BridgeHealth,
 } from '@/services/os/desktopBridge';
+import { localPermissionAudit, subscribePermissionAudit } from '@/services/os/permissionAudit';
 import { captureScreen } from '@/services/os/vision';
 import BridgeInstallCard from './BridgeInstallCard';
 
@@ -24,6 +25,9 @@ export default function DesktopBridgePanel() {
   const [token, setTokenState] = useState(getPairToken());
   const [pairCode, setPairCode] = useState('');
   const [shot, setShot] = useState<string | null>(null);
+  const [audit, setAudit] = useState(localPermissionAudit());
+
+  useEffect(() => subscribePermissionAudit(() => setAudit(localPermissionAudit())), []);
 
   const check = async () => setHealth(await pingBridge());
 
