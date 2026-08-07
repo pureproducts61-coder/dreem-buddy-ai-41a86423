@@ -91,7 +91,11 @@ export default function DesktopBridgePanel() {
             <div key={p.id} className="flex items-center gap-3 rounded-lg border border-border p-3">
               <div className="min-w-0">
                 <p className="text-sm font-medium">{p.label}</p>
-                <p className="text-[11px] text-muted-foreground">{p.capability} · scope {p.scope}</p>
+                <p className="text-[11px] text-muted-foreground">
+                  {p.capability} · {permissionStatus(p.capability)}
+                  {p.source ? ` · set by ${p.source}` : ''}
+                  {p.lastUsedAt ? ` · last used ${new Date(p.lastUsedAt).toLocaleString()}` : ' · never used'}
+                </p>
               </div>
               <Input
                 className="ml-auto h-8 max-w-[180px] text-xs"
@@ -99,6 +103,26 @@ export default function DesktopBridgePanel() {
                 onChange={(e) => bridgePermissions.update(p.id, { scope: e.target.value })}
               />
               <Switch checked={p.granted} onCheckedChange={(v) => setPermission(p.capability, v, p.scope)} />
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Permission audit</CardTitle>
+          <CardDescription>Everything TIVO tried to access — what, when, why and whether it was allowed.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {audit.length === 0 && <p className="text-xs text-muted-foreground">Nothing has been accessed yet.</p>}
+          {audit.slice(0, 25).map((a, i) => (
+            <div key={`${a.at}-${i}`} className="rounded-lg border border-border p-2">
+              <p className="text-xs font-medium">
+                {a.allowed ? 'Allowed' : 'Blocked'} · {a.capability} · {a.action}
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                {new Date(a.at).toLocaleString()}{a.reason ? ` — ${a.reason}` : ''}
+              </p>
             </div>
           ))}
         </CardContent>
