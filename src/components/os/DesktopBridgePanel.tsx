@@ -134,9 +134,17 @@ export default function DesktopBridgePanel() {
       </Card>
 
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Permission audit</CardTitle>
-          <CardDescription>Everything TIVO tried to access — what, when, why and whether it was allowed.</CardDescription>
+        <CardHeader className="flex-row items-start justify-between space-y-0">
+          <div>
+            <CardTitle className="text-base">Permission audit</CardTitle>
+            <CardDescription>Everything TIVO tried to access — what, when, why and whether it was allowed.</CardDescription>
+          </div>
+          <Button size="sm" variant="outline" disabled={!audit.length} onClick={() => {
+            const url = URL.createObjectURL(new Blob([auditCsv(audit)], { type: 'text/csv' }));
+            const a = document.createElement('a');
+            a.href = url; a.download = `tivo-permission-audit-${new Date().toISOString().slice(0, 10)}.csv`;
+            a.click(); URL.revokeObjectURL(url);
+          }}>Export CSV</Button>
         </CardHeader>
         <CardContent className="space-y-2">
           {audit.length === 0 && <p className="text-xs text-muted-foreground">Nothing has been accessed yet.</p>}
@@ -182,6 +190,29 @@ export default function DesktopBridgePanel() {
               toast.success('Device paired');
               setPairCode('');
             }}>Pair this device</Button>
+          </div>
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <p className="text-xs font-medium">Devices on this account</p>
+              <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { void heartbeat(); }}>Refresh</Button>
+            </div>
+            {cloudDevices.length === 0 && <p className="text-xs text-muted-foreground">No devices have reported in yet.</p>}
+            {cloudDevices.map((d) => (
+              <div key={d.device_id} className="rounded-lg border border-border p-3 text-sm">
+                <p className="font-medium">
+                  {d.name} <Badge variant={d.online ? 'default' : 'secondary'} className="ml-1 text-[10px]">{d.online ? 'online' : 'offline'}</Badge>
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  {d.platform || 'unknown'} · {d.role} · health {d.health} · last seen {new Date(d.last_heartbeat).toLocaleString()}
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  ready: {(d.capabilities || []).filter((c) => c.state === 'ready').map((c) => c.label).join(', ') || 'none reported'}
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  local models: {(d.models || []).filter((m) => m.status === 'ready').map((m) => m.name).join(', ') || 'none installed'}
+                </p>
+              </div>
+            ))}
           </div>
           {devices.map((d) => (
             <div key={d.id} className="flex items-center gap-3 rounded-lg border border-border p-3 text-sm">
