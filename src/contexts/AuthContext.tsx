@@ -17,29 +17,57 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const CACHE_KEY = 'tivo-auth-cache';
+
+/** Never let a network call keep the app on the loading screen. */
+function withTimeout<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return Promise.race([
+    p.catch(() => fallback),
+    new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms)),
+  ]);
+}
+
+function cachedAuth(): { user: User | null; isAdmin: boolean } {
+  try { return JSON.parse(localStorage.getItem(CACHE_KEY) || 'null') || { user: null, isAdmin: false }; }
+  catch { return { user: null, isAdmin: false }; }
+}
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const cached = cachedAuth();
+  const [user, setUser] = useState<User | null>(cached.user);
+  const [isAdmin, setIsAdmin] = useState(cached.isAdmin);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Keep the last known identity so the shell renders instantly and offline.
+  useEffect(() => {
+    try { localStorage.setItem(CACHE_KEY, JSON.stringify({ user, isAdmin })); } catch { /* quota */ }
+  }, [user, isAdmin]);
 
   // Check admin role via edge function (which reads ADMIN_EMAIL secret server-side)
   const syncRole = async () => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session } } = await withTimeout(
+        supabase.auth.getSession(), 4000, { data: { session: null } } as never,
+      );
       if (!session) {
-        setIsAdmin(false);
+        // Offline: keep the cached role instead of downgrading the UI.
+        if (navigator.onLine) setIsAdmin(false);
         return;
       }
 
       const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-check`;
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json',
-          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-        },
-      });
+      const res = await withTimeout(
+        fetch(url, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          },
+        }),
+        5000,
+        new Response(null, { status: 503 }),
+      );
       if (res.ok) {
         const data = await res.json();
         setIsAdmin(!!data.isAdmin);
@@ -60,10 +88,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           if (user) startUserPushListener(user.id).catch(() => {});
         }
       } else {
-        setIsAdmin(false);
+        if (navigator.onLine && res.status !== 503) setIsAdmin(false);
       }
     } catch {
-      setIsAdmin(false);
+      /* offline — keep the cached role */
     }
   };
 
@@ -83,15 +111,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     });
 
     // Then check existing session
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
+    withTimeout(supabase.auth.getSession(), 4000, { data: { session: null } } as never)
+      .then(async ({ data: { session } }) => {
       if (session?.user?.email) {
         setUser({ email: session.user.email, id: session.user.id });
         await syncRole();
       }
       setIsLoading(false);
-    });
+    }).catch(() => setIsLoading(false));
 
-    return () => subscription.unsubscribe();
+    // Hard stop: the app shell must never hang on a network call.
+    const guard = setTimeout(() => setIsLoading(false), 6000);
+
+    return () => { clearTimeout(guard); subscription.unsubscribe(); };
   }, []);
 
   // Legacy email/password login — now uses Supabase auth

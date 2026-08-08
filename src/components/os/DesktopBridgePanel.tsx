@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,8 +14,17 @@ import {
   type BridgeHealth,
 } from '@/services/os/desktopBridge';
 import { localPermissionAudit, subscribePermissionAudit } from '@/services/os/permissionAudit';
+import { getBridgeMonitorState, retryBridgeNow, startBridgeMonitor, subscribeBridgeMonitor } from '@/services/os/bridgeMonitor';
+import { getDevices, heartbeat, subscribeDevices } from '@/services/os/deviceRegistry';
 import { captureScreen } from '@/services/os/vision';
 import BridgeInstallCard from './BridgeInstallCard';
+
+function auditCsv(rows: { at: string; capability: string; action: string; allowed: boolean; reason?: string; source?: string }[]) {
+  const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const head = ['timestamp', 'capability', 'action', 'permission', 'source', 'reason'].join(',');
+  const body = rows.map((r) => [r.at, r.capability, r.action, r.allowed ? 'allowed' : 'blocked', r.source || '', r.reason || ''].map(esc).join(','));
+  return [head, ...body].join('\n');
+}
 
 export default function DesktopBridgePanel() {
   const permissions = useRegistry(bridgePermissions);
@@ -26,8 +35,11 @@ export default function DesktopBridgePanel() {
   const [pairCode, setPairCode] = useState('');
   const [shot, setShot] = useState<string | null>(null);
   const [audit, setAudit] = useState(localPermissionAudit());
+  const monitor = useSyncExternalStore(subscribeBridgeMonitor, getBridgeMonitorState, getBridgeMonitorState);
+  const cloudDevices = useSyncExternalStore(subscribeDevices, getDevices, getDevices);
 
   useEffect(() => subscribePermissionAudit(() => setAudit(localPermissionAudit())), []);
+  useEffect(() => { startBridgeMonitor(); }, []);
 
   const check = async () => setHealth(await pingBridge());
 
@@ -51,8 +63,8 @@ export default function DesktopBridgePanel() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <MonitorSmartphone className="h-4 w-4" /> Desktop Bridge
-            <Badge variant={health?.online ? 'default' : 'secondary'} className="text-[10px]">
-              {health?.online ? 'connected' : 'not connected'}
+            <Badge variant={monitor.state === 'connected' ? 'default' : monitor.state === 'stale' ? 'outline' : 'secondary'} className="text-[10px]">
+              {monitor.state}
             </Badge>
           </CardTitle>
           <CardDescription>
@@ -73,8 +85,17 @@ export default function DesktopBridgePanel() {
           </div>
           <div className="flex flex-wrap gap-2">
             <Button size="sm" onClick={saveConnection}><Link2 className="mr-1.5 h-3.5 w-3.5" /> Save & connect</Button>
-            <Button size="sm" variant="outline" onClick={check}><RefreshCw className="mr-1.5 h-3.5 w-3.5" /> Check now</Button>
+            <Button size="sm" variant="outline" onClick={() => { retryBridgeNow(); check(); }}>
+              <RefreshCw className="mr-1.5 h-3.5 w-3.5" /> Check now
+            </Button>
           </div>
+          <p className="text-xs text-muted-foreground">{monitor.message}</p>
+          <p className="text-[11px] text-muted-foreground">
+            transport: {monitor.transport} · last connected: {monitor.lastConnectedAt ? new Date(monitor.lastConnectedAt).toLocaleString() : 'never'}
+            {' '}· last heartbeat: {monitor.lastHeartbeatAt ? new Date(monitor.lastHeartbeatAt).toLocaleTimeString() : '—'}
+            {monitor.state !== 'connected' ? ` · retrying in ${Math.round(monitor.nextRetryInMs / 1000)}s (attempt ${monitor.attempts})` : ''}
+            {monitor.paused ? ' · retries paused' : ''}
+          </p>
           {health && (
             <p className="text-xs text-muted-foreground">
               {health.online
@@ -113,9 +134,17 @@ export default function DesktopBridgePanel() {
       </Card>
 
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Permission audit</CardTitle>
-          <CardDescription>Everything TIVO tried to access — what, when, why and whether it was allowed.</CardDescription>
+        <CardHeader className="flex-row items-start justify-between space-y-0">
+          <div>
+            <CardTitle className="text-base">Permission audit</CardTitle>
+            <CardDescription>Everything TIVO tried to access — what, when, why and whether it was allowed.</CardDescription>
+          </div>
+          <Button size="sm" variant="outline" disabled={!audit.length} onClick={() => {
+            const url = URL.createObjectURL(new Blob([auditCsv(audit)], { type: 'text/csv' }));
+            const a = document.createElement('a');
+            a.href = url; a.download = `tivo-permission-audit-${new Date().toISOString().slice(0, 10)}.csv`;
+            a.click(); URL.revokeObjectURL(url);
+          }}>Export CSV</Button>
         </CardHeader>
         <CardContent className="space-y-2">
           {audit.length === 0 && <p className="text-xs text-muted-foreground">Nothing has been accessed yet.</p>}
@@ -161,6 +190,29 @@ export default function DesktopBridgePanel() {
               toast.success('Device paired');
               setPairCode('');
             }}>Pair this device</Button>
+          </div>
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <p className="text-xs font-medium">Devices on this account</p>
+              <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { void heartbeat(); }}>Refresh</Button>
+            </div>
+            {cloudDevices.length === 0 && <p className="text-xs text-muted-foreground">No devices have reported in yet.</p>}
+            {cloudDevices.map((d) => (
+              <div key={d.device_id} className="rounded-lg border border-border p-3 text-sm">
+                <p className="font-medium">
+                  {d.name} <Badge variant={d.online ? 'default' : 'secondary'} className="ml-1 text-[10px]">{d.online ? 'online' : 'offline'}</Badge>
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  {d.platform || 'unknown'} · {d.role} · health {d.health} · last seen {new Date(d.last_heartbeat).toLocaleString()}
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  ready: {(d.capabilities || []).filter((c) => c.state === 'ready').map((c) => c.label).join(', ') || 'none reported'}
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  local models: {(d.models || []).filter((m) => m.status === 'ready').map((m) => m.name).join(', ') || 'none installed'}
+                </p>
+              </div>
+            ))}
           </div>
           {devices.map((d) => (
             <div key={d.id} className="flex items-center gap-3 rounded-lg border border-border p-3 text-sm">

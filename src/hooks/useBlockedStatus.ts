@@ -14,7 +14,11 @@ export function useBlockedStatus(): { blocked: boolean; reason: string | null; l
     let cancelled = false;
     async function check() {
       if (!user?.id) { setLoading(false); return; }
-      const { data } = await db.from('user_blocks').select('reason').eq('user_id', user.id).maybeSingle();
+      // Offline-safe: if the lookup cannot complete we keep the app usable.
+      const { data } = await Promise.race([
+        db.from('user_blocks').select('reason').eq('user_id', user.id).maybeSingle(),
+        new Promise<{ data: null }>((resolve) => setTimeout(() => resolve({ data: null }), 4000)),
+      ]).catch(() => ({ data: null }));
       if (cancelled) return;
       setBlocked(!!data);
       setReason((data as { reason: string } | null)?.reason || null);
