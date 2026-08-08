@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,8 +14,17 @@ import {
   type BridgeHealth,
 } from '@/services/os/desktopBridge';
 import { localPermissionAudit, subscribePermissionAudit } from '@/services/os/permissionAudit';
+import { getBridgeMonitorState, retryBridgeNow, startBridgeMonitor, subscribeBridgeMonitor } from '@/services/os/bridgeMonitor';
+import { getDevices, heartbeat, subscribeDevices } from '@/services/os/deviceRegistry';
 import { captureScreen } from '@/services/os/vision';
 import BridgeInstallCard from './BridgeInstallCard';
+
+function auditCsv(rows: { at: string; capability: string; action: string; allowed: boolean; reason?: string; source?: string }[]) {
+  const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const head = ['timestamp', 'capability', 'action', 'permission', 'source', 'reason'].join(',');
+  const body = rows.map((r) => [r.at, r.capability, r.action, r.allowed ? 'allowed' : 'blocked', r.source || '', r.reason || ''].map(esc).join(','));
+  return [head, ...body].join('\n');
+}
 
 export default function DesktopBridgePanel() {
   const permissions = useRegistry(bridgePermissions);
@@ -26,8 +35,11 @@ export default function DesktopBridgePanel() {
   const [pairCode, setPairCode] = useState('');
   const [shot, setShot] = useState<string | null>(null);
   const [audit, setAudit] = useState(localPermissionAudit());
+  const monitor = useSyncExternalStore(subscribeBridgeMonitor, getBridgeMonitorState, getBridgeMonitorState);
+  const cloudDevices = useSyncExternalStore(subscribeDevices, getDevices, getDevices);
 
   useEffect(() => subscribePermissionAudit(() => setAudit(localPermissionAudit())), []);
+  useEffect(() => { startBridgeMonitor(); }, []);
 
   const check = async () => setHealth(await pingBridge());
 
