@@ -63,8 +63,8 @@ export default function DesktopBridgePanel() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <MonitorSmartphone className="h-4 w-4" /> Desktop Bridge
-            <Badge variant={health?.online ? 'default' : 'secondary'} className="text-[10px]">
-              {health?.online ? 'connected' : 'not connected'}
+            <Badge variant={monitor.state === 'connected' ? 'default' : monitor.state === 'stale' ? 'outline' : 'secondary'} className="text-[10px]">
+              {monitor.state}
             </Badge>
           </CardTitle>
           <CardDescription>
@@ -85,8 +85,17 @@ export default function DesktopBridgePanel() {
           </div>
           <div className="flex flex-wrap gap-2">
             <Button size="sm" onClick={saveConnection}><Link2 className="mr-1.5 h-3.5 w-3.5" /> Save & connect</Button>
-            <Button size="sm" variant="outline" onClick={check}><RefreshCw className="mr-1.5 h-3.5 w-3.5" /> Check now</Button>
+            <Button size="sm" variant="outline" onClick={() => { retryBridgeNow(); check(); }}>
+              <RefreshCw className="mr-1.5 h-3.5 w-3.5" /> Check now
+            </Button>
           </div>
+          <p className="text-xs text-muted-foreground">{monitor.message}</p>
+          <p className="text-[11px] text-muted-foreground">
+            transport: {monitor.transport} · last connected: {monitor.lastConnectedAt ? new Date(monitor.lastConnectedAt).toLocaleString() : 'never'}
+            {' '}· last heartbeat: {monitor.lastHeartbeatAt ? new Date(monitor.lastHeartbeatAt).toLocaleTimeString() : '—'}
+            {monitor.state !== 'connected' ? ` · retrying in ${Math.round(monitor.nextRetryInMs / 1000)}s (attempt ${monitor.attempts})` : ''}
+            {monitor.paused ? ' · retries paused' : ''}
+          </p>
           {health && (
             <p className="text-xs text-muted-foreground">
               {health.online
