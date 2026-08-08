@@ -657,6 +657,54 @@ export type Database = {
         }
         Relationships: []
       }
+      device_commands: {
+        Row: {
+          action: string
+          capability: string
+          created_at: string
+          error: string | null
+          id: string
+          payload: Json
+          progress: string | null
+          result: Json | null
+          source_device_id: string | null
+          status: string
+          target_device_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          action: string
+          capability: string
+          created_at?: string
+          error?: string | null
+          id?: string
+          payload?: Json
+          progress?: string | null
+          result?: Json | null
+          source_device_id?: string | null
+          status?: string
+          target_device_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          action?: string
+          capability?: string
+          created_at?: string
+          error?: string | null
+          id?: string
+          payload?: Json
+          progress?: string | null
+          result?: Json | null
+          source_device_id?: string | null
+          status?: string
+          target_device_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       emergency_contacts: {
         Row: {
           created_at: string
@@ -803,6 +851,60 @@ export type Database = {
           created_at?: string
           id?: string
           reason?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_devices: {
+        Row: {
+          bridge_state: Json
+          capabilities: Json
+          created_at: string
+          device_id: string
+          health: string
+          id: string
+          last_heartbeat: string
+          models: Json
+          name: string
+          online: boolean
+          permissions: Json
+          platform: string | null
+          role: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          bridge_state?: Json
+          capabilities?: Json
+          created_at?: string
+          device_id: string
+          health?: string
+          id?: string
+          last_heartbeat?: string
+          models?: Json
+          name: string
+          online?: boolean
+          permissions?: Json
+          platform?: string | null
+          role?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          bridge_state?: Json
+          capabilities?: Json
+          created_at?: string
+          device_id?: string
+          health?: string
+          id?: string
+          last_heartbeat?: string
+          models?: Json
+          name?: string
+          online?: boolean
+          permissions?: Json
+          platform?: string | null
+          role?: string
+          updated_at?: string
           user_id?: string
         }
         Relationships: []
