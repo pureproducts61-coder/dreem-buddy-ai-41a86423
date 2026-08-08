@@ -8,6 +8,9 @@ import { detectCapabilities } from './capabilities';
 import { startAutoUpdates } from './updates';
 import { runSelfTest, lastSelfTest } from './selfTest';
 import { startConfigSync } from './dbSync';
+import { startBridgeMonitor, getBridgeMonitorState } from './bridgeMonitor';
+import { startDeviceRuntime } from './deviceRegistry';
+import { startCommandHost } from './deviceCommands';
 
 let booted = false;
 
@@ -18,6 +21,13 @@ export async function bootOs() {
   await bootstrapWorkspace().catch(() => {});
   pingBridge().catch(() => {});
   detectCapabilities().catch(() => {});
+  // Bridge heartbeat + reconnect, then device identity/heartbeat.
+  startBridgeMonitor();
+  startDeviceRuntime().catch(() => {});
+  // Only a machine that actually owns a Bridge may execute remote commands.
+  setTimeout(() => {
+    if (getBridgeMonitorState().state === 'connected') startCommandHost().catch(() => {});
+  }, 5000);
   startAutoUpdates();
   // AI intelligence (Constitution, Brain, Plugins) hot-reloads from the database.
   startConfigSync().catch(() => {});
