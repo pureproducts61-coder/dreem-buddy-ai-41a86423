@@ -99,10 +99,18 @@ export async function streamChat({
   const capsBlock = capabilitiesPromptBlock();
   const modelsBlock = orchestrationPromptBlock();
   const missing = listMissingModelNotices();
+  // Real connected devices (never invented) so the AI can route work to the computer.
+  const { getDevices, deviceId: thisDeviceId } = await import('./os/deviceRegistry');
+  const devicesBlock = getDevices().map((d) => {
+    const ready = (d.capabilities || []).filter((c) => c.state === 'ready').map((c) => c.label).join(', ') || 'none';
+    const models = (d.models || []).filter((m) => m.status === 'ready').map((m) => m.name).join(', ') || 'none';
+    return `- ${d.name} (${d.platform || 'unknown'}, ${d.role})${d.device_id === thisDeviceId() ? ' [this device]' : ''}: ${d.online ? 'online' : 'OFFLINE'} · ready: ${ready} · local models: ${models}`;
+  }).join('\n');
   const systemPrompt = [
     buildSystemPrompt(),
     brainPromptBlock() ? `## AI BRAIN\n${brainPromptBlock()}` : '',
     capsBlock ? `## DEVICE CAPABILITIES (only claim what is ready)\n${capsBlock}` : '',
+    devicesBlock ? `## CONNECTED DEVICES (route work to a computer when it is online; never claim an offline device)\n${devicesBlock}` : '',
     modelsBlock ? `## LOCAL MODELS AVAILABLE\n${modelsBlock}` : '',
     missing.length ? `## MISSING LOCAL MODELS (tell the user, offer download or GGUF import, never fail silently)\n${missing.map((m) => `- ${m.task}: ${m.message}`).join('\n')}` : '',
   ].filter(Boolean).join('\n\n');
