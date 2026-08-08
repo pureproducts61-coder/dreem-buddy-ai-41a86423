@@ -7,6 +7,7 @@ import { buildSystemPrompt } from './os/constitution';
 import { reloadAiConfig } from './os/dbSync';
 import { pluginsPromptBlock } from './os/plugins';
 import { brainPromptBlock } from './os/brain';
+import { getDevices, deviceId } from './os/deviceRegistry';
 import { capabilitiesPromptBlock, detectCapabilities } from './os/capabilities';
 import { orchestrationPromptBlock, listMissingModelNotices } from './os/orchestrator';
 import { runLocalEngines, setActiveEngine } from './os/engineRouter';
