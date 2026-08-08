@@ -100,11 +100,10 @@ export async function streamChat({
   const modelsBlock = orchestrationPromptBlock();
   const missing = listMissingModelNotices();
   // Real connected devices (never invented) so the AI can route work to the computer.
-  const { getDevices, deviceId: thisDeviceId } = await import('./os/deviceRegistry');
   const devicesBlock = getDevices().map((d) => {
     const ready = (d.capabilities || []).filter((c) => c.state === 'ready').map((c) => c.label).join(', ') || 'none';
     const models = (d.models || []).filter((m) => m.status === 'ready').map((m) => m.name).join(', ') || 'none';
-    return `- ${d.name} (${d.platform || 'unknown'}, ${d.role})${d.device_id === thisDeviceId() ? ' [this device]' : ''}: ${d.online ? 'online' : 'OFFLINE'} · ready: ${ready} · local models: ${models}`;
+    return `- ${d.name} (${d.platform || 'unknown'}, ${d.role})${d.device_id === deviceId() ? ' [this device]' : ''}: ${d.online ? 'online' : 'OFFLINE'} · ready: ${ready} · local models: ${models}`;
   }).join('\n');
   const systemPrompt = [
     buildSystemPrompt(),
