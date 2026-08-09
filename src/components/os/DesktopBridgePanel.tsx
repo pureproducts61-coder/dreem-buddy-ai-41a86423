@@ -241,9 +241,13 @@ export default function DesktopBridgePanel() {
             {pairCode && <code className="rounded bg-muted px-2 py-1 text-sm tracking-widest">{pairCode}</code>}
             <Button size="sm" disabled={!pairCode} onClick={() => {
               pairDevice(navigator.platform || 'Device', navigator.platform || 'unknown', endpoint, token || pairCode);
-              toast.success('Device paired');
+              void trustThisDevice();
+              toast.success('Device paired and trusted');
               setPairCode('');
             }}>Pair this device</Button>
+            <Badge variant={isTrustedLocally() ? 'default' : 'secondary'} className="text-[10px]">
+              {isTrustedLocally() ? 'this device is trusted' : 'this device is not trusted yet'}
+            </Badge>
           </div>
           <div className="space-y-2">
             <div className="flex items-center gap-2">
@@ -265,6 +269,21 @@ export default function DesktopBridgePanel() {
                 <p className="text-[11px] text-muted-foreground">
                   local models: {(d.models || []).filter((m) => m.status === 'ready').map((m) => m.name).join(', ') || 'none installed'}
                 </p>
+                <p className="text-[11px] text-muted-foreground">
+                  {d.trusted ? 'trusted' : 'not trusted'}{d.revoked ? ' · revoked' : ''}
+                  {d.bridge_version ? ` · Bridge ${d.bridge_version}` : ''}
+                </p>
+                <div className="mt-2 flex gap-2">
+                  {d.revoked ? (
+                    <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => { void restoreDevice(d.device_id).then(() => toast.success('Device restored')); }}>
+                      Restore access
+                    </Button>
+                  ) : (
+                    <Button size="sm" variant="outline" className="h-7 text-xs text-destructive" onClick={() => { void revokeDevice(d.device_id).then(() => toast.success('Device revoked')); }}>
+                      Revoke {d.device_id === me ? 'this device' : 'device'}
+                    </Button>
+                  )}
+                </div>
               </div>
             ))}
           </div>
