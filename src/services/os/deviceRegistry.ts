@@ -10,6 +10,8 @@ import { detectCapabilities, getCapabilities } from './capabilities';
 import { getBridgeMonitorState } from './bridgeMonitor';
 import { modelRegistry } from './modelManager';
 import { bridgePermissions } from './desktopBridge';
+import { detectHardware } from './modelManager';
+import { getOllamaState } from './ollama';
 
 const ID_KEY = 'tivo-os-device-id';
 const NAME_KEY = 'tivo-os-device-name';
@@ -29,6 +31,11 @@ export interface DeviceRow {
   models: { name: string; status: string }[];
   permissions: { capability: string; granted: boolean }[];
   last_heartbeat: string;
+  trusted?: boolean;
+  revoked?: boolean;
+  bridge_version?: string | null;
+  hardware?: Record<string, unknown>;
+  runtimes?: Record<string, unknown>;
 }
 
 export function deviceId(): string {
@@ -79,15 +86,73 @@ function publish(list: DeviceRow[]) {
   listeners.forEach((l) => l());
 }
 
+const TRUST_KEY = 'tivo-os-device-trusted';
+
+/** A brand-new device is untrusted until it is paired from an existing session. */
+export function isTrustedLocally(): boolean {
+  return localStorage.getItem(TRUST_KEY) === 'yes';
+}
+
+export async function trustThisDevice(): Promise<void> {
+  localStorage.setItem(TRUST_KEY, 'yes');
+  const uid = await currentUserId();
+  if (!uid) return;
+  await supabase.from('user_devices')
+    .update({ trusted: true, revoked: false, trusted_at: new Date().toISOString() } as never)
+    .eq('user_id', uid).eq('device_id', deviceId())
+    .then(() => undefined, () => undefined);
+  await refreshDevices();
+}
+
+/** Revoking a device stops it receiving any new command immediately. */
+export async function revokeDevice(targetDeviceId: string): Promise<void> {
+  const uid = await currentUserId();
+  if (!uid) return;
+  await supabase.from('user_devices')
+    .update({ revoked: true, trusted: false, online: false } as never)
+    .eq('user_id', uid).eq('device_id', targetDeviceId)
+    .then(() => undefined, () => undefined);
+  if (targetDeviceId === deviceId()) localStorage.removeItem(TRUST_KEY);
+  await refreshDevices();
+}
+
+export async function restoreDevice(targetDeviceId: string): Promise<void> {
+  const uid = await currentUserId();
+  if (!uid) return;
+  await supabase.from('user_devices')
+    .update({ revoked: false, trusted: true, trusted_at: new Date().toISOString() } as never)
+    .eq('user_id', uid).eq('device_id', targetDeviceId)
+    .then(() => undefined, () => undefined);
+  await refreshDevices();
+}
+
+/** True when this device has been revoked from the account. */
+export async function isRevoked(): Promise<boolean> {
+  const me = devices.find((d) => d.device_id === deviceId());
+  return me?.revoked === true;
+}
+
 async function currentUserId(): Promise<string | null> {
   try { return (await supabase.auth.getUser()).data.user?.id ?? null; } catch { return null; }
 }
 
 /** Snapshot of this device's real state — never invented, always from the registries. */
-function snapshot() {
+async function snapshot() {
   const bridge = getBridgeMonitorState();
   const caps = getCapabilities();
+  const hw = await detectHardware().catch(() => null);
+  const ollama = getOllamaState();
   return {
+    bridge_version: bridge.health?.version || null,
+    hardware: hw
+      ? { cores: hw.cores, ramGb: hw.ramGb, gpu: hw.gpu, storageQuotaGb: Math.round(hw.storageQuotaGb), isMobile: hw.isMobile }
+      : {},
+    runtimes: {
+      ollama: {
+        installed: ollama.installed, running: ollama.running, version: ollama.version,
+        models: ollama.models.map((m) => ({ name: m.name, params: m.params, quant: m.quant, health: m.health })),
+      },
+    },
     capabilities: caps.map((c) => ({ id: c.id, label: c.label, state: c.state })),
     models: modelRegistry.getAll().filter((m) => m.enabled).map((m) => ({ name: m.name, status: m.status })),
     permissions: bridgePermissions.getAll().map((p) => ({ capability: p.capability, granted: p.granted })),
@@ -100,13 +165,14 @@ export async function heartbeat(online = true) {
   const uid = await currentUserId();
   if (!uid) return;
   await detectCapabilities().catch(() => {});
-  const s = snapshot();
+  const s = await snapshot();
   await supabase.from('user_devices').upsert({
     user_id: uid,
     device_id: deviceId(),
     name: deviceName(),
     platform: guessPlatform(),
     role: deviceRole(),
+    trusted: isTrustedLocally(),
     online,
     last_heartbeat: new Date().toISOString(),
     ...s,
@@ -119,7 +185,7 @@ export async function refreshDevices() {
   if (!uid) return;
   const { data } = await supabase
     .from('user_devices')
-    .select('device_id,name,platform,role,online,health,bridge_state,capabilities,models,permissions,last_heartbeat')
+    .select('device_id,name,platform,role,online,health,bridge_state,capabilities,models,permissions,last_heartbeat,trusted,revoked,bridge_version,hardware,runtimes')
     .eq('user_id', uid);
   if (data) publish(data as unknown as DeviceRow[]);
 }
@@ -127,7 +193,7 @@ export async function refreshDevices() {
 /** Best device for a capability: this device first, then a connected computer. */
 export function selectDeviceFor(capabilityId: string): DeviceRow | null {
   const me = deviceId();
-  const ready = devices.filter((d) => d.online && d.capabilities?.some((c) => c.id === capabilityId && c.state === 'ready'));
+  const ready = devices.filter((d) => d.online && !d.revoked && d.capabilities?.some((c) => c.id === capabilityId && c.state === 'ready'));
   return ready.find((d) => d.device_id === me)
     || ready.find((d) => d.role === 'desktop')
     || ready[0]
