@@ -15,7 +15,12 @@ import {
 } from '@/services/os/desktopBridge';
 import { localPermissionAudit, subscribePermissionAudit } from '@/services/os/permissionAudit';
 import { getBridgeMonitorState, retryBridgeNow, startBridgeMonitor, subscribeBridgeMonitor } from '@/services/os/bridgeMonitor';
-import { getDevices, heartbeat, subscribeDevices } from '@/services/os/deviceRegistry';
+import {
+  getDevices, heartbeat, subscribeDevices, deviceId, isTrustedLocally,
+  trustThisDevice, revokeDevice, restoreDevice,
+} from '@/services/os/deviceRegistry';
+import { discoverOllama, getOllamaState, subscribeOllama, getOllamaHost, setOllamaHost } from '@/services/os/ollama';
+import { listTools } from '@/services/os/toolRouter';
 import { captureScreen } from '@/services/os/vision';
 import BridgeInstallCard from './BridgeInstallCard';
 
@@ -37,6 +42,9 @@ export default function DesktopBridgePanel() {
   const [audit, setAudit] = useState(localPermissionAudit());
   const monitor = useSyncExternalStore(subscribeBridgeMonitor, getBridgeMonitorState, getBridgeMonitorState);
   const cloudDevices = useSyncExternalStore(subscribeDevices, getDevices, getDevices);
+  const ollama = useSyncExternalStore(subscribeOllama, getOllamaState, getOllamaState);
+  const [ollamaHost, setOllamaHostState] = useState(getOllamaHost());
+  const me = deviceId();
 
   useEffect(() => subscribePermissionAudit(() => setAudit(localPermissionAudit())), []);
   useEffect(() => { startBridgeMonitor(); }, []);
