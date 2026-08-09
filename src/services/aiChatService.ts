@@ -10,6 +10,8 @@ import { brainPromptBlock } from './os/brain';
 import { getDevices, deviceId } from './os/deviceRegistry';
 import { capabilitiesPromptBlock, detectCapabilities } from './os/capabilities';
 import { orchestrationPromptBlock, listMissingModelNotices } from './os/orchestrator';
+import { toolsPromptBlock } from './os/toolRouter';
+import { modelRoutingPromptBlock } from './os/modelRouter';
 import { runLocalEngines, setActiveEngine } from './os/engineRouter';
 import { listUserSecrets } from './userSecretsService';
 import { logRecoveryEvent, notifyAdminOfIssue } from './recoveryService';
@@ -99,6 +101,8 @@ export async function streamChat({
   await detectCapabilities().catch(() => []);
   const capsBlock = capabilitiesPromptBlock();
   const modelsBlock = orchestrationPromptBlock();
+  const toolsBlock = toolsPromptBlock();
+  const routingBlock = await modelRoutingPromptBlock('chat').catch(() => '');
   const missing = listMissingModelNotices();
   // Real connected devices (never invented) so the AI can route work to the computer.
   const devicesBlock = getDevices().map((d) => {
@@ -112,6 +116,8 @@ export async function streamChat({
     capsBlock ? `## DEVICE CAPABILITIES (only claim what is ready)\n${capsBlock}` : '',
     devicesBlock ? `## CONNECTED DEVICES (route work to a computer when it is online; never claim an offline device)\n${devicesBlock}` : '',
     modelsBlock ? `## LOCAL MODELS AVAILABLE\n${modelsBlock}` : '',
+    toolsBlock ? `## TOOLS YOU CAN ROUTE (only these; a tool needs its capability ready and its permission granted)\n${toolsBlock}` : '',
+    routingBlock ? `## MODEL ROUTING\n${routingBlock}` : '',
     missing.length ? `## MISSING LOCAL MODELS (tell the user, offer download or GGUF import, never fail silently)\n${missing.map((m) => `- ${m.task}: ${m.message}`).join('\n')}` : '',
   ].filter(Boolean).join('\n\n');
 
