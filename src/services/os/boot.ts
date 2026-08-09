@@ -10,7 +10,8 @@ import { runSelfTest, lastSelfTest } from './selfTest';
 import { startConfigSync } from './dbSync';
 import { startBridgeMonitor, getBridgeMonitorState } from './bridgeMonitor';
 import { startDeviceRuntime } from './deviceRegistry';
-import { startCommandHost } from './deviceCommands';
+import { startCommandHost, flushOutbox } from './deviceCommands';
+import { startOllamaDiscovery } from './ollama';
 
 let booted = false;
 
@@ -24,6 +25,11 @@ export async function bootOs() {
   // Bridge heartbeat + reconnect, then device identity/heartbeat.
   startBridgeMonitor();
   startDeviceRuntime().catch(() => {});
+  // Discover Ollama / local model runtimes on this machine.
+  startOllamaDiscovery();
+  // Any command that could not reach the network is retried safely.
+  flushOutbox().catch(() => {});
+  if (typeof window !== 'undefined') window.addEventListener('online', () => { void flushOutbox().catch(() => {}); });
   // Only a machine that actually owns a Bridge may execute remote commands.
   setTimeout(() => {
     if (getBridgeMonitorState().state === 'connected') startCommandHost().catch(() => {});
