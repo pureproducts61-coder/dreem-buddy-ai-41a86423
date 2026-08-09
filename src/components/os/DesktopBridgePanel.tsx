@@ -170,6 +170,52 @@ export default function DesktopBridgePanel() {
       </Card>
 
       <Card>
+        <CardHeader className="flex-row items-start justify-between space-y-0">
+          <div>
+            <CardTitle className="text-base">Ollama & local model runtimes</CardTitle>
+            <CardDescription>Discovered from this computer — through the Bridge when available, otherwise the local Ollama API.</CardDescription>
+          </div>
+          <Button size="sm" variant="outline" onClick={() => { setOllamaHost(ollamaHost); void discoverOllama(); }}>Check</Button>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Ollama address</Label>
+            <Input value={ollamaHost} onChange={(e) => setOllamaHostState(e.target.value)} placeholder="http://127.0.0.1:11434" />
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {ollama.running
+              ? `Running${ollama.version ? ` · Ollama ${ollama.version}` : ''} · via ${ollama.source} · checked ${new Date(ollama.checkedAt).toLocaleTimeString()}`
+              : ollama.error || 'Ollama has not been detected on this computer.'}
+          </p>
+          {ollama.models.map((m) => (
+            <div key={m.name} className="rounded-lg border border-border p-2 text-xs">
+              <span className="font-medium">{m.name}</span>
+              <span className="text-muted-foreground"> · {m.params || 'unknown size'} · {m.quant || 'unknown quant'} · {m.health}</span>
+            </div>
+          ))}
+          {ollama.running && ollama.models.length === 0 && (
+            <p className="text-xs text-muted-foreground">Ollama is running but no models are installed yet.</p>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Tool registry</CardTitle>
+          <CardDescription>Every action TIVO can route to a device. Each one needs its capability ready and its permission granted.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-1.5">
+          {listTools().map((t) => (
+            <div key={t.id} className="flex items-center gap-2 rounded-lg border border-border p-2 text-xs">
+              <span className="font-medium">{t.label}</span>
+              <span className="text-muted-foreground">{t.id} · {t.capabilityId} · {t.permission}</span>
+              {t.destructive && <Badge variant="outline" className="ml-auto text-[10px]">needs confirmation</Badge>}
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
+      <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base"><Camera className="h-4 w-4" /> Screen vision</CardTitle>
           <CardDescription>Uses the Bridge when available, otherwise asks the browser to share a window.</CardDescription>
