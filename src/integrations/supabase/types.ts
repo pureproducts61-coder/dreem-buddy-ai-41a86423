@@ -630,6 +630,68 @@ export type Database = {
         }
         Relationships: []
       }
+      command_executions: {
+        Row: {
+          action: string
+          attempt: number
+          capability: string
+          command_id: string
+          created_at: string
+          duration_ms: number | null
+          failure_reason: string | null
+          id: string
+          permission_result: string
+          result_summary: string | null
+          status: string
+          target_device_id: string
+          tool: string | null
+          user_id: string
+          verification: Json | null
+        }
+        Insert: {
+          action: string
+          attempt?: number
+          capability: string
+          command_id: string
+          created_at?: string
+          duration_ms?: number | null
+          failure_reason?: string | null
+          id?: string
+          permission_result: string
+          result_summary?: string | null
+          status: string
+          target_device_id: string
+          tool?: string | null
+          user_id: string
+          verification?: Json | null
+        }
+        Update: {
+          action?: string
+          attempt?: number
+          capability?: string
+          command_id?: string
+          created_at?: string
+          duration_ms?: number | null
+          failure_reason?: string | null
+          id?: string
+          permission_result?: string
+          result_summary?: string | null
+          status?: string
+          target_device_id?: string
+          tool?: string | null
+          user_id?: string
+          verification?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "command_executions_command_id_fkey"
+            columns: ["command_id"]
+            isOneToOne: false
+            referencedRelation: "device_commands"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       credit_usage: {
         Row: {
           action: string
@@ -660,48 +722,78 @@ export type Database = {
       device_commands: {
         Row: {
           action: string
+          attempts: number
+          authorized_at: string | null
           capability: string
+          completed_at: string | null
           created_at: string
+          destructive: boolean
+          dispatched_at: string | null
           error: string | null
+          expires_at: string | null
           id: string
+          idempotency_key: string | null
+          max_attempts: number
           payload: Json
           progress: string | null
           result: Json | null
           source_device_id: string | null
           status: string
           target_device_id: string
+          tool: string | null
           updated_at: string
           user_id: string
+          verification: Json | null
         }
         Insert: {
           action: string
+          attempts?: number
+          authorized_at?: string | null
           capability: string
+          completed_at?: string | null
           created_at?: string
+          destructive?: boolean
+          dispatched_at?: string | null
           error?: string | null
+          expires_at?: string | null
           id?: string
+          idempotency_key?: string | null
+          max_attempts?: number
           payload?: Json
           progress?: string | null
           result?: Json | null
           source_device_id?: string | null
           status?: string
           target_device_id: string
+          tool?: string | null
           updated_at?: string
           user_id: string
+          verification?: Json | null
         }
         Update: {
           action?: string
+          attempts?: number
+          authorized_at?: string | null
           capability?: string
+          completed_at?: string | null
           created_at?: string
+          destructive?: boolean
+          dispatched_at?: string | null
           error?: string | null
+          expires_at?: string | null
           id?: string
+          idempotency_key?: string | null
+          max_attempts?: number
           payload?: Json
           progress?: string | null
           result?: Json | null
           source_device_id?: string | null
           status?: string
           target_device_id?: string
+          tool?: string | null
           updated_at?: string
           user_id?: string
+          verification?: Json | null
         }
         Relationships: []
       }
@@ -858,9 +950,11 @@ export type Database = {
       user_devices: {
         Row: {
           bridge_state: Json
+          bridge_version: string | null
           capabilities: Json
           created_at: string
           device_id: string
+          hardware: Json
           health: string
           id: string
           last_heartbeat: string
@@ -869,15 +963,21 @@ export type Database = {
           online: boolean
           permissions: Json
           platform: string | null
+          revoked: boolean
           role: string
+          runtimes: Json
+          trusted: boolean
+          trusted_at: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
           bridge_state?: Json
+          bridge_version?: string | null
           capabilities?: Json
           created_at?: string
           device_id: string
+          hardware?: Json
           health?: string
           id?: string
           last_heartbeat?: string
@@ -886,15 +986,21 @@ export type Database = {
           online?: boolean
           permissions?: Json
           platform?: string | null
+          revoked?: boolean
           role?: string
+          runtimes?: Json
+          trusted?: boolean
+          trusted_at?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
           bridge_state?: Json
+          bridge_version?: string | null
           capabilities?: Json
           created_at?: string
           device_id?: string
+          hardware?: Json
           health?: string
           id?: string
           last_heartbeat?: string
@@ -903,7 +1009,11 @@ export type Database = {
           online?: boolean
           permissions?: Json
           platform?: string | null
+          revoked?: boolean
           role?: string
+          runtimes?: Json
+          trusted?: boolean
+          trusted_at?: string | null
           updated_at?: string
           user_id?: string
         }
