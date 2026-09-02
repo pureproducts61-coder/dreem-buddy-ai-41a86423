@@ -13,7 +13,8 @@ import { orchestrationPromptBlock, listMissingModelNotices } from './os/orchestr
 import { toolsPromptBlock } from './os/toolRouter';
 import { modelRoutingPromptBlock } from './os/modelRouter';
 import { runLocalEngines, setActiveEngine } from './os/engineRouter';
-import { listUserSecrets } from './userSecretsService';
+import { pickProviderForTask, markProviderFailed } from './aiRouter';
+import { systemStatusPromptBlock } from './os/systemStatus';
 import { logRecoveryEvent, notifyAdminOfIssue } from './recoveryService';
 const STORAGE_KEY = 'dreem-settings';
 
@@ -40,30 +41,16 @@ function getSettings() {
 }
 
 async function getRuntimeSettings() {
+  // NON-SECRET runtime preferences only. Provider API keys, GitHub/Vercel/Tavily
+  // tokens are never read into the client and never leave the server boundary —
+  // the chat Edge Function resolves them from server-side secret storage.
   const local = { ...loadLocalSystemSettings(), ...getSettings() } as Record<string, string>;
   const remote = await loadSystemSettingsFromDb().catch(() => ({})) as Record<string, string>;
-  const secrets = await listUserSecrets().catch(() => []);
-  const secretMap = Object.fromEntries(secrets.map((s) => [s.name, s.value]));
-  return {
-    ...local,
-    ...remote,
-    geminiApiKey: remote.geminiApiKey || local.geminiApiKey || secretMap.GEMINI_API_KEY || secretMap.GEMINI || '',
-    groqApiKey: remote.groqApiKey || local.groqApiKey || secretMap.GROQ_API_KEY || secretMap.GROQ || '',
-    deepseekApiKey: remote.deepseekApiKey || local.deepseekApiKey || secretMap.DEEPSEEK_API_KEY || secretMap.DEEPSEEK || '',
-    githubToken: local.githubToken || secretMap.GITHUB_TOKEN || '',
-    vercelToken: remote.vercelToken || local.vercelToken || secretMap.VERCEL_TOKEN || '',
-    tavilyApiKey: remote.tavilyApiKey || local.tavilyApiKey || secretMap.TAVILY_API_KEY || '',
-  } as Record<string, string>;
-}
-
-function getApiKeyForProvider(provider: string): string {
-  const settings = getSettings();
-  switch (provider) {
-    case 'gemini': return settings.geminiApiKey || '';
-    case 'groq': return settings.groqApiKey || '';
-    case 'deepseek': return settings.deepseekApiKey || '';
-    default: return '';
+  const merged = { ...local, ...remote } as Record<string, string>;
+  for (const k of Object.keys(merged)) {
+    if (/key|token|secret|password/i.test(k)) delete merged[k];
   }
+  return merged;
 }
 
 export function getActiveProvider(): string {
@@ -110,8 +97,10 @@ export async function streamChat({
     const models = (d.models || []).filter((m) => m.status === 'ready').map((m) => m.name).join(', ') || 'none';
     return `- ${d.name} (${d.platform || 'unknown'}, ${d.role})${d.device_id === deviceId() ? ' [this device]' : ''}: ${d.online ? 'online' : 'OFFLINE'} · ready: ${ready} · local models: ${models}`;
   }).join('\n');
+  const statusBlock = await systemStatusPromptBlock().catch(() => '');
   const systemPrompt = [
     buildSystemPrompt(),
+    statusBlock ? `## REAL SYSTEM STATUS (authoritative — never claim beyond this)\n${statusBlock}` : '',
     brainPromptBlock() ? `## AI BRAIN\n${brainPromptBlock()}` : '',
     capsBlock ? `## DEVICE CAPABILITIES (only claim what is ready)\n${capsBlock}` : '',
     devicesBlock ? `## CONNECTED DEVICES (route work to a computer when it is online; never claim an offline device)\n${devicesBlock}` : '',
@@ -127,16 +116,22 @@ export async function streamChat({
     if (handledLocally) { onDone(); return; }
   } catch { /* fall through to cloud engines */ }
 
-  const provider = String(settings.aiModel || getActiveProvider() || 'gemini');
-  const apiKey = provider === 'gemini' ? settings.geminiApiKey || ''
-    : provider === 'groq' ? settings.groqApiKey || ''
-    : provider === 'deepseek' ? settings.deepseekApiKey || ''
-    : '';
-  const githubToken = settings.githubToken || '';
-  const vercelToken = settings.vercelToken || '';
-  const tavilyApiKey = settings.tavilyApiKey || '';
+  // 3 — cloud engines. The admin-managed provider registry (ai_provider_configs
+  // + ai_task_routing) is the single source of truth for ordering, enabled
+  // state, capabilities and fallbacks. No API key is ever attached client-side.
+  const chain = await pickProviderForTask('chat').catch(() => []);
+  const providerChain = chain.map((c) => ({
+    configId: c.id,
+    provider: c.provider,
+    model: c.model,
+    secretName: c.api_key_secret_name || undefined,
+    baseUrl: c.base_url || undefined,
+    maxTokens: c.max_tokens || undefined,
+  }));
+  const provider = providerChain[0]?.provider || String(settings.aiModel || 'gemini');
+  const model = providerChain[0]?.model;
 
-  // Build credentials context for AI
+  // Non-secret capability flags only (which integrations are configured), never values.
   const credentials = getConfiguredCredentials();
   // Identity is derived server-side from the JWT — do NOT send client-supplied flags.
   const { data: { session } } = await supabase.auth.getSession();
@@ -175,11 +170,8 @@ export async function streamChat({
       body: JSON.stringify({
         messages: messagesWithMemory,
         provider,
-        apiKey: apiKey || undefined,
-        model: undefined,
-        githubToken: githubToken || undefined,
-        vercelToken: vercelToken || undefined,
-        tavilyApiKey: tavilyApiKey || undefined,
+        model,
+        providerChain,
         credentials,
         constitution: systemPrompt,
         plugins: pluginsPromptBlock(),
@@ -190,6 +182,7 @@ export async function streamChat({
       const errData = await resp.json().catch(() => ({ error: 'Unknown error' }));
       const errMsg = errData.error || `Error ${resp.status}`;
       setActiveEngine(null);
+      if (providerChain[0]) markProviderFailed(providerChain[0].configId);
       await logRecoveryEvent('ai_http_error', { status: resp.status, error: errMsg, provider });
       await notifyAdminOfIssue('AI runtime error', `Provider: ${provider}\nStatus: ${resp.status}\nError: ${errMsg}`);
       if (onError) onError(errMsg);
