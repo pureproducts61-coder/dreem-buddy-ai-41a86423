@@ -1,38 +1,63 @@
-name: TIVO Build Factory (EXE/APK)
+name: TIVO Build Factory
 
+# Truthful build targets:
+#   web  -> real: produces dist/ (PWA)
+#   apk  -> real: Capacitor + Gradle produce an installable debug .apk
+#   exe  -> NOT implemented; a web dist is never published as an .exe
 on:
   workflow_dispatch:
     inputs:
       build_type:
-        description: 'Type of build'
+        description: 'Build target'
         required: true
         default: 'web'
         type: choice
         options:
           - web
-          - exe
           - apk
 
 jobs:
-  build:
+  web:
+    if: ${{ github.event.inputs.build_type == 'web' || github.event.inputs.build_type == 'apk' }}
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v1
         with:
           bun-version: latest
-
-      - name: Install Dependencies
-        run: bun install
-
-      - name: Build Web
-        run: bun run build
-
-      - name: Upload Artifacts
+      - run: bun install
+      - run: bun run build
+      - name: Upload web bundle (dist, not an installer)
         uses: actions/upload-artifact@v4
         with:
-          name: tivo-release-${{ github.event.inputs.build_type }}
+          name: tivo-web-dist
           path: dist/
+
+  apk:
+    if: ${{ github.event.inputs.build_type == 'apk' }}
+    needs: web
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+      - run: bun install
+      - run: bun run build
+      - name: Create/refresh the Android project
+        run: |
+          if [ ! -d android ]; then bunx cap add android; fi
+          bunx cap sync android
+      - name: Assemble debug APK
+        working-directory: android
+        run: chmod +x gradlew && ./gradlew assembleDebug --no-daemon
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: tivo-debug-apk
+          path: android/app/build/outputs/apk/debug/*.apk
