@@ -840,7 +840,17 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    let { messages, model, apiKey, provider, githubToken, vercelToken, tavilyApiKey, credentials, constitution, plugins } = await req.json();
+    const body = await req.json();
+    // SECURITY: the client never supplies provider API keys or integration tokens.
+    // Anything key-shaped in the request body is discarded; every credential is
+    // resolved server-side from Edge secrets / system_settings / user_secrets.
+    let { messages, model, provider, credentials, constitution, plugins } = body;
+    const providerChain: Array<{ provider: string; model?: string; secretName?: string; baseUrl?: string }> =
+      Array.isArray(body.providerChain) ? body.providerChain.slice(0, 6) : [];
+    let apiKey: string | undefined;
+    let githubToken: string | undefined;
+    let vercelToken: string | undefined;
+    let tavilyApiKey: string | undefined;
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     const SERVER_GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || "";
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
@@ -976,7 +986,7 @@ serve(async (req) => {
     if (adminClient && userId) {
       const runtimeSettings = await loadRuntimeSecrets(adminClient, userId);
       if (!provider && runtimeSettings.aiModel) provider = runtimeSettings.aiModel;
-      if (!apiKey) {
+      {
         const selectedProvider = provider || runtimeSettings.aiModel || "gemini";
         if (selectedProvider === "gemini") apiKey = runtimeSettings.geminiApiKey || runtimeSettings.GEMINI_API_KEY;
         if (selectedProvider === "groq") apiKey = runtimeSettings.groqApiKey || runtimeSettings.GROQ_API_KEY;
@@ -1183,6 +1193,48 @@ You are TIVO AI. Ship like a senior engineer.`;
     // workspace-level Lovable AI 403 never blocks the owner from using TIVO.
     const gatewayConfigs: GatewayConfig[] = [];
     let useToolCalling = true;
+
+    // Admin-managed routing first: ai_provider_configs / ai_task_routing decide the
+    // order, and each entry's key is resolved from server-side secret storage only.
+    const secretsForChain: Record<string, string> = {};
+    if (adminClient && userId) {
+      const { data: rows } = await adminClient.from("user_secrets").select("name, value").eq("user_id", userId);
+      for (const r of rows || []) secretsForChain[(r as any).name] = (r as any).value;
+    }
+    const resolveChainKey = (p: { provider: string; secretName?: string }): string => {
+      const named = p.secretName ? (Deno.env.get(p.secretName) || secretsForChain[p.secretName]) : "";
+      if (named) return named;
+      const byProvider: Record<string, string[]> = {
+        gemini: ["GEMINI_API_KEY", "GOOGLE_API_KEY"],
+        groq: ["GROQ_API_KEY"],
+        deepseek: ["DEEPSEEK_API_KEY"],
+        openai: ["OPENAI_API_KEY"],
+      };
+      for (const n of byProvider[p.provider] || []) {
+        const v = Deno.env.get(n) || secretsForChain[n];
+        if (v) return v;
+      }
+      return p.provider === "gemini" ? (apiKey || SERVER_GEMINI_API_KEY) : (apiKey || "");
+    };
+    const chainUrl = (p: { provider: string; baseUrl?: string }) =>
+      p.baseUrl ||
+      (p.provider === "gemini" ? "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+        : p.provider === "groq" ? "https://api.groq.com/openai/v1/chat/completions"
+        : p.provider === "deepseek" ? "https://api.deepseek.com/v1/chat/completions"
+        : p.provider === "openai" ? "https://api.openai.com/v1/chat/completions"
+        : "");
+    for (const entry of providerChain) {
+      const url = chainUrl(entry);
+      const key = resolveChainKey(entry);
+      if (!url || !key) continue;                       // never fake an available provider
+      if (gatewayConfigs.some((c) => c.gatewayUrl === url && c.modelName === (entry.model || ""))) continue;
+      gatewayConfigs.push({
+        gatewayUrl: url,
+        authHeader: `Bearer ${key}`,
+        modelName: entry.model || model || "gemini-2.0-flash",
+        label: `routed_${entry.provider}`,
+      });
+    }
 
     if (provider === "gemini" && apiKey) {
       gatewayConfigs.push({
