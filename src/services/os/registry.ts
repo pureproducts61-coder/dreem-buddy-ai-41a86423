@@ -1,8 +1,11 @@
 /**
  * Generic local-first reactive registry.
- * Backed by localStorage so everything survives restart and works offline.
+ * Backed by localStorage (synchronous fast path) and mirrored into IndexedDB
+ * (durable, no 5MB cap) so everything survives restart, quota pressure and
+ * works fully offline.
  * Used by the Model Manager, AI Constitution, Bridge permissions and Plugins.
  */
+import { idbGet, idbSet } from './idbStore';
 
 type Listener = () => void;
 
@@ -28,6 +31,23 @@ export class LocalRegistry<T extends RegistryRecord> {
         }
       });
     }
+    void this.hydrateFromIdb();
+  }
+
+  /**
+   * Restore from IndexedDB when localStorage was cleared/evicted (common on
+   * mobile). Never overwrites data that localStorage already holds.
+   */
+  private async hydrateFromIdb() {
+    try {
+      if (typeof localStorage !== 'undefined' && localStorage.getItem(this.key)) return;
+      const rows = await idbGet<T[]>(`registry:${this.key}`);
+      if (!Array.isArray(rows) || !rows.length) return;
+      if (typeof localStorage !== 'undefined' && localStorage.getItem(this.key)) return;
+      this.cache = rows;
+      try { localStorage.setItem(this.key, JSON.stringify(rows)); } catch { /* quota */ }
+      this.emit();
+    } catch { /* IndexedDB unavailable — localStorage stays authoritative */ }
   }
 
   subscribe = (fn: Listener) => {
@@ -58,6 +78,7 @@ export class LocalRegistry<T extends RegistryRecord> {
   private write(next: T[]) {
     this.cache = next;
     try { localStorage.setItem(this.key, JSON.stringify(next)); } catch { /* quota */ }
+    void idbSet(`registry:${this.key}`, next);
     this.emit();
   }
 
