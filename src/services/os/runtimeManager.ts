@@ -19,7 +19,7 @@
 import { isLocalReady, loadModel, probeRuntime, unloadModel, localChatStream } from './localRuntime';
 import { getDefaultModel, modelRegistry } from './modelManager';
 import { engineRegistry, probeLocalApi } from './engineRouter';
-import { getOllamaState, refreshOllama } from './ollama';
+import { getOllamaState, discoverOllama } from './ollama';
 import { getBridgeMonitorState } from './bridgeMonitor';
 import { deviceId, getDevices } from './deviceRegistry';
 import { canProbeLocalHostServers, isNative, platformKind } from './platform';
@@ -86,7 +86,7 @@ const localApiAdapter = (): RuntimeAdapter => ({
       : { health: 'not-installed', detail: 'No local AI server answered on this device.' };
   },
   async discover() {
-    const oll = await refreshOllama().catch(() => getOllamaState());
+    const oll = await discoverOllama().catch(() => getOllamaState());
     return (oll?.models || []).map((m) => ({ id: m.name, name: m.name, sizeBytes: m.sizeBytes, ready: true }));
   },
   async stream(messages, onDelta, opts) {
