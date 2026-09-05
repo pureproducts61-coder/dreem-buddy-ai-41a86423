@@ -12,6 +12,7 @@ import { capabilitiesPromptBlock, detectCapabilities } from './os/capabilities';
 import { orchestrationPromptBlock, listMissingModelNotices } from './os/orchestrator';
 import { toolsPromptBlock } from './os/toolRouter';
 import { modelRoutingPromptBlock } from './os/modelRouter';
+import { runtimePromptBlock } from './os/runtimeManager';
 import { runLocalEngines, setActiveEngine } from './os/engineRouter';
 import { pickProviderForTask, markProviderFailed } from './aiRouter';
 import { systemStatusPromptBlock } from './os/systemStatus';
@@ -98,9 +99,11 @@ export async function streamChat({
     return `- ${d.name} (${d.platform || 'unknown'}, ${d.role})${d.device_id === deviceId() ? ' [this device]' : ''}: ${d.online ? 'online' : 'OFFLINE'} · ready: ${ready} · local models: ${models}`;
   }).join('\n');
   const statusBlock = await systemStatusPromptBlock().catch(() => '');
+  const runtimeBlock = await runtimePromptBlock().catch(() => '');
   const systemPrompt = [
     buildSystemPrompt(),
     statusBlock ? `## REAL SYSTEM STATUS (authoritative — never claim beyond this)\n${statusBlock}` : '',
+    runtimeBlock ? `## RUNTIME DETECTION (local first, cloud only as fallback)\n${runtimeBlock}` : '',
     brainPromptBlock() ? `## AI BRAIN\n${brainPromptBlock()}` : '',
     capsBlock ? `## DEVICE CAPABILITIES (only claim what is ready)\n${capsBlock}` : '',
     devicesBlock ? `## CONNECTED DEVICES (route work to a computer when it is online; never claim an offline device)\n${devicesBlock}` : '',

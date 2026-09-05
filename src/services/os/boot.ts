@@ -12,6 +12,10 @@ import { startBridgeMonitor, getBridgeMonitorState } from './bridgeMonitor';
 import { startDeviceRuntime } from './deviceRegistry';
 import { startCommandHost, flushOutbox } from './deviceCommands';
 import { startOllamaDiscovery } from './ollama';
+import { discoverRuntimes } from './runtimeManager';
+import { startSnapshotPersistence } from './workspaceSnapshot';
+import { runAutomaticCleanup } from './dataLifecycle';
+import { canProbeLocalHostServers } from './platform';
 
 let booted = false;
 
