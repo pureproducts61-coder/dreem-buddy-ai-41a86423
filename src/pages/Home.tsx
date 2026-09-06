@@ -24,6 +24,30 @@ const Home = () => {
   const [menuOpen, setMenuOpen] = useState(false);
   const [openSessionId, setOpenSessionId] = useState<string | null>(null);
   const [openSessionMode, setOpenSessionMode] = useState<TivoMode | null>(null);
+  const [restored, setRestored] = useState(false);
+
+  // Restore the last workspace (tab + conversation) without blocking first paint.
+  useEffect(() => {
+    let cancelled = false;
+    restoreSnapshot(null)
+      .then((snap) => {
+        if (cancelled) return;
+        if (snap.tab && ['vault', 'chat', 'preview'].includes(snap.tab)) setActiveTab(snap.tab as BottomTab);
+        if (snap.conversationId) {
+          setOpenSessionId(snap.conversationId);
+          setOpenSessionMode((snap.mode as TivoMode) || 'build');
+        }
+      })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setRestored(true); });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Persist the workspace state (debounced inside the snapshot service).
+  useEffect(() => {
+    if (!restored) return;
+    updateSnapshot({ route: '/', tab: activeTab, conversationId: openSessionId, mode: openSessionMode });
+  }, [restored, activeTab, openSessionId, openSessionMode]);
 
   // Listen for auto tab switch (e.g. preview bridge after build)
   useEffect(() => {
@@ -39,6 +63,7 @@ const Home = () => {
     setOpenSessionMode((mode as TivoMode) || 'build');
     setActiveTab('chat');
   };
+
 
   return (
     <div className="flex h-[100dvh] flex-col bg-background">
