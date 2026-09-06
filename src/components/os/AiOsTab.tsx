@@ -8,6 +8,7 @@ import CapabilitiesPanel from './CapabilitiesPanel';
 import BrainPanel from './BrainPanel';
 import PluginGuidePanel from './PluginGuidePanel';
 import SelfTestPanel from './SelfTestPanel';
+import DataControlsPanel from './DataControlsPanel';
 
 export default function AiOsTab() {
   return (
