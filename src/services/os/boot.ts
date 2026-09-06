@@ -35,8 +35,8 @@ export async function bootOs() {
   // Bridge heartbeat + reconnect, then device identity/heartbeat.
   startBridgeMonitor();
   startDeviceRuntime().catch(() => {});
-  // Discover Ollama / local model runtimes on this machine.
-  startOllamaDiscovery();
+  // Discover Ollama / local model runtimes where that is actually possible.
+  if (canProbeLocalHostServers()) startOllamaDiscovery();
   // Any command that could not reach the network is retried safely.
   flushOutbox().catch(() => {});
   if (typeof window !== 'undefined') window.addEventListener('online', () => { void flushOutbox().catch(() => {}); });
