@@ -23,14 +23,20 @@ export async function bootOs() {
   if (booted) return;
   booted = true;
   try { ensureSeedPermissions(); } catch { /* ignore */ }
+  // Keep the workspace exactly as the user left it (mobile background/kill safe).
+  startSnapshotPersistence();
   await bootstrapWorkspace().catch(() => {});
   pingBridge().catch(() => {});
   detectCapabilities().catch(() => {});
+  // Local-first runtime discovery; only probe local servers where that is real.
+  if (canProbeLocalHostServers()) discoverRuntimes().catch(() => {});
+  // Housekeeping for temporary/expirable data only (never projects or memory).
+  setTimeout(() => { void runAutomaticCleanup().catch(() => {}); }, 8000);
   // Bridge heartbeat + reconnect, then device identity/heartbeat.
   startBridgeMonitor();
   startDeviceRuntime().catch(() => {});
-  // Discover Ollama / local model runtimes on this machine.
-  startOllamaDiscovery();
+  // Discover Ollama / local model runtimes where that is actually possible.
+  if (canProbeLocalHostServers()) startOllamaDiscovery();
   // Any command that could not reach the network is retried safely.
   flushOutbox().catch(() => {});
   if (typeof window !== 'undefined') window.addEventListener('online', () => { void flushOutbox().catch(() => {}); });
