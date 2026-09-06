@@ -23,9 +23,15 @@ export async function bootOs() {
   if (booted) return;
   booted = true;
   try { ensureSeedPermissions(); } catch { /* ignore */ }
+  // Keep the workspace exactly as the user left it (mobile background/kill safe).
+  startSnapshotPersistence();
   await bootstrapWorkspace().catch(() => {});
   pingBridge().catch(() => {});
   detectCapabilities().catch(() => {});
+  // Local-first runtime discovery; only probe local servers where that is real.
+  if (canProbeLocalHostServers()) discoverRuntimes().catch(() => {});
+  // Housekeeping for temporary/expirable data only (never projects or memory).
+  setTimeout(() => { void runAutomaticCleanup().catch(() => {}); }, 8000);
   // Bridge heartbeat + reconnect, then device identity/heartbeat.
   startBridgeMonitor();
   startDeviceRuntime().catch(() => {});
