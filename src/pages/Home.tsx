@@ -9,6 +9,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import type { TivoMode } from '@/components/tivo/SmartInputBar';
+import { restoreSnapshot, updateSnapshot } from '@/services/os/workspaceSnapshot';
 
 type BottomTab = 'vault' | 'chat' | 'preview';
 
