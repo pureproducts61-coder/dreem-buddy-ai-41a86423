@@ -35,6 +35,8 @@ export default function AiOsTab() {
       <TabsContent value="plugins"><PluginsPanel /></TabsContent>
       <TabsContent value="guide"><PluginGuidePanel /></TabsContent>
       <TabsContent value="selftest"><SelfTestPanel /></TabsContent>
+      <TabsContent value="data"><DataControlsPanel /></TabsContent>
+
     </Tabs>
   );
 }
