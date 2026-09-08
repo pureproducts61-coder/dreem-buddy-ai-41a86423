@@ -16,12 +16,16 @@ import { discoverRuntimes } from './runtimeManager';
 import { startSnapshotPersistence } from './workspaceSnapshot';
 import { runAutomaticCleanup } from './dataLifecycle';
 import { canProbeLocalHostServers } from './platform';
+import { registriesReady } from './registry';
 
 let booted = false;
 
 export async function bootOs() {
   if (booted) return;
   booted = true;
+  // Deterministic hydration: every local registry finishes restoring from
+  // IndexedDB before anything reads model/permission/plugin state.
+  await registriesReady().catch(() => {});
   try { ensureSeedPermissions(); } catch { /* ignore */ }
   // Keep the workspace exactly as the user left it (mobile background/kill safe).
   startSnapshotPersistence();

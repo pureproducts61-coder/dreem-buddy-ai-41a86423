@@ -10,17 +10,9 @@ try {
   orient?.lock?.('portrait').catch(() => {});
 } catch { /* unsupported */ }
 
-// Block multi-touch pinch-zoom and double-tap zoom globally
-document.addEventListener('gesturestart', (e) => e.preventDefault(), { passive: false });
-document.addEventListener('touchmove', (e) => {
-  if ((e as TouchEvent).touches.length > 1) e.preventDefault();
-}, { passive: false });
-let lastTap = 0;
-document.addEventListener('touchend', (e) => {
-  const now = Date.now();
-  if (now - lastTap < 300) e.preventDefault();
-  lastTap = now;
-}, { passive: false });
+// Accessibility: pinch-zoom and double-tap zoom are intentionally NOT blocked.
+// Users who need to magnify the UI must be able to.
+
 
 createRoot(document.getElementById("root")!).render(<App />);
 
