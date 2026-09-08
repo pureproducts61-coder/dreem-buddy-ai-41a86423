@@ -164,7 +164,7 @@ export const UI_BUTTON_ATLAS: UiButtonSpec[] = [
     location: 'BuildDeliveryDialog',
     label: 'Run Build Pipeline',
     action:
-      'Executes the 4-step pipeline (validate → sync → dispatch → link) and renders the live status tracker.',
+      'Executes the 6-step pipeline (validate → context → test → sync → dispatch → link), then polls the real GitHub Actions run until it succeeds or fails.',
   },
 ];
 

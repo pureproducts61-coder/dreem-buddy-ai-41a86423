@@ -158,7 +158,7 @@ export async function streamChat({
   } catch { /* ignore memory errors */ }
 
   if (!CHAT_URL || CHAT_URL.includes('undefined')) {
-    await mockStreamResponse(messages, onDelta, onDone);
+    onError?.('AI ব্যাকএন্ড কনফিগার করা নেই — কোনো উত্তর তৈরি করা যাচ্ছে না।');
     return;
   }
 
@@ -193,7 +193,7 @@ export async function streamChat({
     }
 
     if (!resp.body) {
-      await mockStreamResponse(messages, onDelta, onDone);
+      onError?.('AI সার্ভার কোনো উত্তর পাঠায়নি। আবার চেষ্টা করুন।');
       return;
     }
 
@@ -286,32 +286,16 @@ export async function streamChat({
     onDone();
   } catch (e) {
     console.error('Stream chat error:', e);
-    if (onError) onError(e instanceof Error ? e.message : 'Connection failed');
-    await mockStreamResponse(messages, onDelta, onDone);
+    setActiveEngine(null);
+    if (providerChain[0]) markProviderFailed(providerChain[0].configId);
+    await logRecoveryEvent('ai_transport_error', { provider }).catch(() => {});
+    onError?.(
+      e instanceof Error
+        ? `AI সংযোগ ব্যর্থ: ${e.message}. আবার চেষ্টা করুন।`
+        : 'AI সংযোগ ব্যর্থ। আবার চেষ্টা করুন।',
+    );
   }
 }
 
-// Mock response when no AI is configured
-async function mockStreamResponse(
-  messages: ChatMessage[],
-  onDelta: (text: string) => void,
-  onDone: () => void,
-) {
-  const lastMsg = messages[messages.length - 1]?.content?.toLowerCase() || '';
-
-  let response = '';
-  if (lastMsg.includes('plan') || lastMsg.includes('প্ল্যান')) {
-    response = `## প্রজেক্ট প্ল্যান\n\nআপনার প্রজেক্টের জন্য আমি নিচের প্ল্যান প্রস্তাব করছি:\n\n**Phase 1:** ফ্রন্টএন্ড — React + Tailwind\n**Phase 2:** ব্যাকএন্ড — API Integration\n**Phase 3:** ডাটাবেজ — PostgreSQL\n\n> ⚠️ এটি একটি মক রেসপন্স। সম্পূর্ণ AI ফিচার পেতে **Settings → API Keys**-এ আপনার Gemini/Groq API Key যোগ করুন।`;
-  } else if (lastMsg.includes('build') || lastMsg.includes('বানা') || lastMsg.includes('তৈরি')) {
-    response = `## কোড জেনারেশন\n\n\`\`\`tsx\nexport function Component() {\n  return (\n    <div className="p-4">\n      <h1>Hello TIVO!</h1>\n    </div>\n  );\n}\n\`\`\`\n\n> ⚠️ মক রেসপন্স। Real AI-এর জন্য Settings-এ API Key সেট করুন।`;
-  } else {
-    response = `আমি আপনার রিকোয়েস্ট বুঝতে পেরেছি! 🚀\n\nবর্তমানে আমি **মক মোডে** কাজ করছি। সম্পূর্ণ AI ক্ষমতা পেতে:\n\n1. **Settings** (⚙️) এ যান\n2. **API Keys** সেকশনে আপনার key যোগ করুন\n3. Gemini, Groq, বা DeepSeek — যেকোনো একটি দিলেই হবে`;
-  }
-
-  const words = response.split(' ');
-  for (const word of words) {
-    onDelta(word + ' ');
-    await new Promise(r => setTimeout(r, 30 + Math.random() * 40));
-  }
-  onDone();
-}
+// NOTE: there is deliberately NO mock/simulated answer path in this service.
+// When every engine fails the user is told the truth and offered a retry.
