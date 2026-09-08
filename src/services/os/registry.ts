@@ -14,11 +14,24 @@ export interface RegistryRecord {
   [key: string]: unknown;
 }
 
+const allRegistries: Array<Promise<void>> = [];
+
+/**
+ * Deterministic startup: resolves once every registry created so far has
+ * finished its IndexedDB rehydration. Boot awaits this before any consumer
+ * (model manager, engine router, capabilities) reads registry state.
+ */
+export function registriesReady(): Promise<void> {
+  return Promise.all([...allRegistries]).then(() => undefined);
+}
+
 export class LocalRegistry<T extends RegistryRecord> {
   private key: string;
   private seed: T[];
   private cache: T[] | null = null;
   private listeners = new Set<Listener>();
+  /** resolves when this registry finished hydrating from IndexedDB */
+  readonly ready: Promise<void>;
 
   constructor(key: string, seed: T[] = []) {
     this.key = key;
@@ -31,14 +44,15 @@ export class LocalRegistry<T extends RegistryRecord> {
         }
       });
     }
-    void this.hydrateFromIdb();
+    this.ready = this.hydrateFromIdb();
+    allRegistries.push(this.ready);
   }
 
   /**
    * Restore from IndexedDB when localStorage was cleared/evicted (common on
    * mobile). Never overwrites data that localStorage already holds.
    */
-  private async hydrateFromIdb() {
+  private async hydrateFromIdb(): Promise<void> {
     try {
       if (typeof localStorage !== 'undefined' && localStorage.getItem(this.key)) return;
       const rows = await idbGet<T[]>(`registry:${this.key}`);
