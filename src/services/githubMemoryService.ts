@@ -36,7 +36,7 @@ export async function getMemory(): Promise<TivoMemory> {
     return getLocalMemory();
   }
 
-  if (githubService.hasToken()) {
+  if (await githubService.hasToken()) {
     try {
       const user = await githubService.getUser();
       const repos = await githubService.listRepos();
@@ -64,7 +64,7 @@ export async function saveMemory(memory: TivoMemory): Promise<void> {
   // Always save locally
   saveLocalMemory(memory);
 
-  if (!isDbConnected() && githubService.hasToken()) {
+  if (!isDbConnected() && (await githubService.hasToken())) {
     try {
       const user = await githubService.getUser();
       const repos = await githubService.listRepos();

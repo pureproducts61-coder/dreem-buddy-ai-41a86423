@@ -2,6 +2,8 @@
 import { supabase } from '@/integrations/supabase/client';
 import { logRecoveryEvent } from './recoveryService';
 
+import { configuredSecretNames } from './systemSettingsService';
+
 const STORAGE_KEY = 'dreem-settings';
 const LOCAL_SESSIONS_KEY = 'tivo-local-sessions';
 const LOCAL_MESSAGES_KEY = 'tivo-local-messages';
@@ -166,14 +168,17 @@ export function getLastSyncAt(): string | null {
 
 export function getConfiguredCredentials(): Record<string, boolean> {
   const settings = getSettings();
+  // Credential presence comes from the server-side settings snapshot — key
+  // values are never stored in the browser.
+  const present = configuredSecretNames();
   return {
-    gemini: !!(settings.geminiApiKey),
-    groq: !!(settings.groqApiKey),
-    deepseek: !!(settings.deepseekApiKey),
-    github: !!(settings.githubToken),
-    vercel: !!(settings.vercelToken),
-    tavily: !!(settings.tavilyApiKey),
-    huggingface: !!(settings.hfToken),
+    gemini: !!present.geminiApiKey,
+    groq: !!present.groqApiKey,
+    deepseek: !!present.deepseekApiKey,
+    github: !!present.githubToken,
+    vercel: !!present.vercelToken,
+    tavily: !!present.tavilyApiKey,
+    huggingface: !!present.hfToken,
     database: isDbConnected(),
     backend: !!(settings.backendUrl),
   };

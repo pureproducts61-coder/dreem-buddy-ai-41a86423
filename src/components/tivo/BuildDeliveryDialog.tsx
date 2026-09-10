@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Download, Globe, Monitor, Smartphone, Loader2, Package, Archive,
   CircleDot, CheckCircle2, AlertTriangle, ExternalLink,
@@ -83,7 +83,8 @@ export function BuildDeliveryDialog({ open, onClose, projectName, projectId, fil
   const [running, setRunning] = useState(false);
   const [steps, setSteps] = useState<PipelineStepState[]>([]);
   const [result, setResult] = useState<PipelineResult | null>(null);
-  const hasGithub = githubService.hasToken();
+  const [hasGithub, setHasGithub] = useState(false);
+  useEffect(() => { githubService.hasToken().then(setHasGithub, () => setHasGithub(false)); }, [open]);
 
   const needsGithub = selected !== 'zip';
   const canRun = useMemo(() => files.length > 0 && (!needsGithub || hasGithub), [files.length, needsGithub, hasGithub]);
