@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Download, Globe, Monitor, Smartphone, Loader2, Package, Archive,
   CircleDot, CheckCircle2, AlertTriangle, ExternalLink,
