@@ -1,21 +1,28 @@
 // GitHub Service - calls edge function for GitHub operations
 import { supabase } from '@/integrations/supabase/client';
+import { getSecretValue } from './systemSettingsService';
+import { getUserSecretValue } from './userSecretsService';
 
 const GITHUB_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/github`;
 
-function getGitHubToken(): string {
+/**
+ * The GitHub token is never kept in the browser. It is read on demand from the
+ * per-user secrets vault, falling back to the admin-managed server settings.
+ */
+async function getGitHubToken(): Promise<string> {
   try {
-    const stored = localStorage.getItem('dreem-settings');
-    if (stored) {
-      const settings = JSON.parse(stored);
-      return settings.githubToken || '';
-    }
-  } catch {}
-  return '';
+    const own = await getUserSecretValue('githubToken');
+    if (own) return own;
+  } catch { /* fall through */ }
+  try {
+    return await getSecretValue('githubToken');
+  } catch {
+    return '';
+  }
 }
 
 async function callGitHub(action: string, params: Record<string, unknown> = {}) {
-  const token = getGitHubToken();
+  const token = await getGitHubToken();
   if (!token) {
     throw new Error('GitHub token not configured. Add it in Settings → API Keys.');
   }

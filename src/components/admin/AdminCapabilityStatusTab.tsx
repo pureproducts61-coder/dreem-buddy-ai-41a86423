@@ -42,7 +42,7 @@ export function AdminCapabilityStatusTab() {
           can: has('vercelToken'), reason: 'VERCEL_TOKEN not configured',
           fix: 'Admin Panel → Keys → Vercel Token', category: 'integration' },
         { id: 'github', label: 'GitHub repo/branch/PR/file write',
-          can: !!localStorage.getItem('tivo-github-token') || has('githubToken'),
+          can: has('githubToken'),
           reason: 'GITHUB_TOKEN missing — build pipeline cannot dispatch CI',
           fix: 'Settings → Tools & Integrations → GitHub Token', category: 'integration' },
 

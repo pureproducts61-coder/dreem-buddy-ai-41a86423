@@ -85,14 +85,13 @@ const AdminPanel = () => {
   const [settings, setSettings] = useState<AdminSettings>(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
     const backendUrl = localStorage.getItem('tivo-hf-url') || '';
-    const masterSecret = localStorage.getItem('tivo-master-secret') || '';
     const credits = parseInt(localStorage.getItem('tivo-default-credits') || '50', 10);
     if (stored) {
       try {
-        return { ...defaultAdminSettings, ...JSON.parse(stored), backendUrl, masterSecret, defaultUserCredits: credits };
+        return { ...defaultAdminSettings, ...JSON.parse(stored), backendUrl, defaultUserCredits: credits };
       } catch { /* fallthrough */ }
     }
-    return { ...defaultAdminSettings, backendUrl, masterSecret, defaultUserCredits: credits };
+    return { ...defaultAdminSettings, backendUrl, defaultUserCredits: credits };
   });
 
   const [showKeys, setShowKeys] = useState<Record<string, boolean>>({});
