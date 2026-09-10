@@ -86,7 +86,7 @@ export const githubService = {
     return callGitHub('delete_repo', { owner, repo });
   },
 
-  hasToken(): boolean {
-    return !!getGitHubToken();
+  async hasToken(): Promise<boolean> {
+    return !!(await getGitHubToken());
   },
 };
