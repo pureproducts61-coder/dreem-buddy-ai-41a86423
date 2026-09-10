@@ -45,7 +45,7 @@ async function providerResources(): Promise<ResourceDescriptor[]> {
       ...(c.base_url ? { base_url: c.base_url } : {}),
       ...(c.max_tokens ? { max_tokens: c.max_tokens } : {}),
     },
-    source: 'ai_provider_configs',
+    source: 'ai_provider_configs' as const,
     priority: c.priority,
     enabled: c.enabled,
   }));
