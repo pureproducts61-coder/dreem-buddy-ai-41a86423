@@ -126,7 +126,7 @@ export function ProjectVault({ onOpenSession }: ProjectVaultProps) {
   }
 
   async function handleGitHubConnect(session: { id: string; title: string }) {
-    if (!githubService.hasToken()) {
+    if (!(await githubService.hasToken())) {
       toast({
         title: 'GitHub Token প্রয়োজন',
         description: 'Settings → Tools & Integrations → GitHub Token যোগ করুন।',

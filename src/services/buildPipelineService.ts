@@ -376,7 +376,7 @@ export async function runBuildPipeline(input: RunPipelineInput): Promise<Pipelin
 
   // 4. Sync — push to GitHub feature branch
   setStep('sync', { status: 'active', startedAt: Date.now() });
-  if (!githubService.hasToken()) {
+  if (!(await githubService.hasToken())) {
     setStep('sync', { status: 'error', detail: 'GitHub token not configured in Settings.', endedAt: Date.now() });
     input.onChat?.({ kind: 'error', title: 'GitHub token নেই', detail: 'Settings → Integrations-এ token যোগ করুন।' });
     return finalize({ ok: false, steps, error: 'no_github_token' });

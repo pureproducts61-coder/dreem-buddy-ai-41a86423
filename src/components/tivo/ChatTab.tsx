@@ -500,7 +500,7 @@ export function ChatTab({ initialSessionId, initialMode }: ChatTabProps) {
             } catch { /* ignore */ }
           },
           onConnectGithub: async () => {
-            if (!githubService.hasToken()) {
+            if (!(await githubService.hasToken())) {
               toast({ title: 'GitHub Token দরকার', description: 'Settings → Integrations', variant: 'destructive' });
               return;
             }
