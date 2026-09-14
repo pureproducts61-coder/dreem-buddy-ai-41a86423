@@ -27,28 +27,44 @@ function isCredentialKey(key: string): boolean {
   return /(ApiKey|Token|Secret)$/i.test(key);
 }
 
-async function providerResources(): Promise<ResourceDescriptor[]> {
+async function providerResources(presence: Record<string, boolean>, presenceKnown: boolean): Promise<ResourceDescriptor[]> {
   const configs = await loadProviderConfigs().catch(() => []);
-  return configs.map((c) => ({
-    id: c.id,
-    type: 'ai-provider',
-    name: c.display_name || `${c.provider}/${c.model}`,
-    capabilities: [AI_BASE_CAPABILITY, ...c.capabilities.map((x) => `ai.${x}`)],
-    taskTypes: c.task_types,
-    credentialRef: c.api_key_secret_name
-      ? ({ secretName: c.api_key_secret_name, source: 'ai_provider_configs', present: true } satisfies CredentialRef)
-      : undefined,
-    config: {
-      provider: c.provider,
-      model: c.model,
-      is_free: c.is_free,
-      ...(c.base_url ? { base_url: c.base_url } : {}),
-      ...(c.max_tokens ? { max_tokens: c.max_tokens } : {}),
-    },
-    source: 'ai_provider_configs' as const,
-    priority: c.priority,
-    enabled: c.enabled,
-  }));
+  return configs.map((c) => {
+    // A configured secret NAME never implies the secret exists. Presence is only
+    // claimed when the credential store actually reported a non-empty value.
+    const credentialRef: CredentialRef | undefined = c.api_key_secret_name
+      ? {
+          secretName: c.api_key_secret_name,
+          source: 'ai_provider_configs',
+          verified: presenceKnown,
+          present: presenceKnown ? presence[c.api_key_secret_name] === true : false,
+        }
+      : undefined;
+    return {
+      id: c.id,
+      type: 'ai-provider',
+      name: c.display_name || `${c.provider}/${c.model}`,
+      capabilities: [AI_BASE_CAPABILITY, ...c.capabilities.map((x) => `ai.${x}`)],
+      taskTypes: c.task_types,
+      credentialRef,
+      config: {
+        provider: c.provider,
+        model: c.model,
+        is_free: c.is_free,
+        ...(c.base_url ? { base_url: c.base_url } : {}),
+        ...(c.max_tokens ? { max_tokens: c.max_tokens } : {}),
+      },
+      source: 'ai_provider_configs' as const,
+      priority: c.priority,
+      enabled: c.enabled,
+      readiness: deriveReadiness({
+        enabled: c.enabled,
+        credentialRef,
+        // Free / local-style providers do not need a credential to be usable.
+        requiresCredential: Boolean(c.api_key_secret_name) && !c.is_free,
+      }),
+    };
+  });
 }
 
 async function settingsResources(): Promise<ResourceDescriptor[]> {
