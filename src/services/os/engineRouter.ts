@@ -79,6 +79,10 @@ export async function refreshEngineStatuses(): Promise<AiEngine[]> {
       mark(e.id, ready ? 'ready' : 'unavailable');
     } else if (e.kind === 'local-api') {
       mark(e.id, (await probeLocalApi(e.baseUrl)) ? 'ready' : 'unavailable');
+    } else if (e.kind === 'cloud-api') {
+      // Never claim ready from configuration alone — a credential must exist.
+      const credentialed = await isCapabilityCredentialAvailable('ai.chat', 'chat').catch(() => false);
+      mark(e.id, credentialed ? 'ready' : 'unavailable', credentialed ? undefined : 'No provider credential is available yet.');
     } else {
       mark(e.id, 'ready');
     }
