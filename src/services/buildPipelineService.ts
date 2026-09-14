@@ -59,6 +59,70 @@ export interface RunPipelineInput {
     detail?: string;
     url?: string;
   }) => void;
+  /** How long to wait for the Actions run to complete before returning `pending`. */
+  verifyTimeoutMs?: number;
+}
+
+/**
+ * Finds the real Actions run for a push and follows it to completion.
+ * Returns `pending` when the run is still going and `unverified` when no run
+ * could be observed — never a fabricated success.
+ */
+export async function verifyWorkflowRun(
+  owner: string,
+  repo: string,
+  opts: { since: number; timeoutMs?: number; branch?: string; onProgress?: (run: { id: number; status: string }) => void },
+): Promise<{
+  verification: BuildVerification;
+  run?: { id: number; status: string; conclusion: string | null; html_url: string };
+  artifacts?: Array<{ name: string; sizeBytes: number; expired: boolean }>;
+  error?: string;
+}> {
+  const timeoutMs = opts.timeoutMs ?? 300_000;
+  const deadline = Date.now() + timeoutMs;
+  let runId: number | null = null;
+  let last: { id: number; status: string; conclusion: string | null; html_url: string } | undefined;
+
+  try {
+    // 1. Discover the run created by this push (up to 60s of the budget).
+    const discoverUntil = Math.min(deadline, Date.now() + 60_000);
+    while (Date.now() < discoverUntil && runId === null) {
+      const { workflow_runs = [] } = await githubService.listWorkflowRuns(owner, repo, {
+        branch: opts.branch ?? 'main',
+        perPage: 10,
+      });
+      const match = workflow_runs.find((r) => new Date(r.created_at).getTime() >= opts.since - 60_000);
+      if (match) { runId = match.id; last = { id: match.id, status: match.status, conclusion: match.conclusion, html_url: match.html_url }; break; }
+      await new Promise((r) => setTimeout(r, 5_000));
+    }
+    if (runId === null) return { verification: 'unverified', error: 'No GitHub Actions run was observed for this push.' };
+
+    // 2. Follow it to completion.
+    while (Date.now() < deadline) {
+      const run = await githubService.getWorkflowRun(owner, repo, runId);
+      last = { id: run.id, status: run.status, conclusion: run.conclusion, html_url: run.html_url };
+      opts.onProgress?.({ id: run.id, status: run.status });
+      if (run.status === 'completed') {
+        if (run.conclusion !== 'success') {
+          return { verification: 'failure', run: last, error: `Actions run concluded "${run.conclusion}".` };
+        }
+        let artifacts: Array<{ name: string; sizeBytes: number; expired: boolean }> = [];
+        try {
+          const res = await githubService.listRunArtifacts(owner, repo, runId);
+          artifacts = (res.artifacts || []).map((a) => ({ name: a.name, sizeBytes: a.size_in_bytes, expired: a.expired }));
+        } catch { /* artifact listing is best-effort */ }
+        return { verification: 'success', run: last, artifacts };
+      }
+      await new Promise((r) => setTimeout(r, 10_000));
+    }
+    return { verification: 'pending', run: last, error: 'The Actions run had not finished before the wait timed out.' };
+  } catch (e) {
+    return {
+      verification: last ? 'pending' : 'unverified',
+      run: last,
+      error: e instanceof Error ? e.message : 'Could not read the Actions run status.',
+    };
+  }
 }
 
 function makeInitialSteps(): PipelineStepState[] {
