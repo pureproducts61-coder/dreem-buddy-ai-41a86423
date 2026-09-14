@@ -47,6 +47,35 @@ async function callGitHub(action: string, params: Record<string, unknown> = {}) 
   return data;
 }
 
+/** Minimal shapes of the GitHub Actions lifecycle data we rely on. */
+export interface WorkflowRun {
+  id: number;
+  name?: string;
+  head_sha?: string;
+  status: 'queued' | 'in_progress' | 'completed' | string;
+  conclusion: 'success' | 'failure' | 'cancelled' | 'skipped' | 'timed_out' | null;
+  html_url: string;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface WorkflowJob {
+  id: number;
+  name: string;
+  status: string;
+  conclusion: string | null;
+  html_url: string | null;
+  steps?: Array<{ name: string; status: string; conclusion: string | null }>;
+}
+
+export interface WorkflowArtifact {
+  id: number;
+  name: string;
+  size_in_bytes: number;
+  expired: boolean;
+  archive_download_url: string;
+}
+
 export const githubService = {
   async getUser() {
     return callGitHub('get_user');
