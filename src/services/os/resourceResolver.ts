@@ -169,3 +169,20 @@ export async function resolveCredentialRef(query: ResolveQuery): Promise<Credent
 export async function isCapabilityConfigured(capability: CapabilityId, taskType?: string): Promise<boolean> {
   return (await resolveResources({ capability, taskType })).length > 0;
 }
+
+/** Strongest readiness observed for a capability (never 'healthy' from config alone). */
+export async function capabilityReadiness(capability: CapabilityId, taskType?: string): Promise<ResourceReadiness> {
+  const matches = await resolveResources({ capability, taskType });
+  if (!matches.length) return 'unavailable';
+  const order: ResourceReadiness[] = ['unavailable', 'configured', 'credential-available', 'ready', 'healthy'];
+  return matches.reduce<ResourceReadiness>(
+    (best, r) => (order.indexOf(r.readiness) > order.indexOf(best) ? r.readiness : best),
+    'unavailable',
+  );
+}
+
+/** True only when a credential was actually observed for this capability. */
+export async function isCapabilityCredentialAvailable(capability: CapabilityId, taskType?: string): Promise<boolean> {
+  const matches = await resolveResources({ capability, taskType });
+  return matches.some((r) => r.credentialRef?.verified && r.credentialRef.present);
+}
