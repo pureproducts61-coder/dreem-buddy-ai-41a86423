@@ -86,6 +86,38 @@ export const githubService = {
     return callGitHub('delete_repo', { owner, repo });
   },
 
+  /* --------------- GitHub Actions lifecycle (read-only truth) --------------- */
+
+  async dispatchWorkflow(
+    owner: string,
+    repo: string,
+    workflowId: string,
+    ref = 'main',
+    inputs: Record<string, string> = {},
+  ): Promise<{ success: boolean }> {
+    return callGitHub('dispatch_workflow', { owner, repo, workflowId, ref, inputs });
+  },
+
+  async listWorkflowRuns(
+    owner: string,
+    repo: string,
+    opts: { branch?: string; perPage?: number } = {},
+  ): Promise<{ workflow_runs: WorkflowRun[] }> {
+    return callGitHub('list_workflow_runs', { owner, repo, branch: opts.branch, perPage: opts.perPage ?? 10 });
+  },
+
+  async getWorkflowRun(owner: string, repo: string, runId: number): Promise<WorkflowRun> {
+    return callGitHub('get_workflow_run', { owner, repo, runId });
+  },
+
+  async listRunJobs(owner: string, repo: string, runId: number): Promise<{ jobs: WorkflowJob[] }> {
+    return callGitHub('list_run_jobs', { owner, repo, runId });
+  },
+
+  async listRunArtifacts(owner: string, repo: string, runId: number): Promise<{ artifacts: WorkflowArtifact[] }> {
+    return callGitHub('list_run_artifacts', { owner, repo, runId });
+  },
+
   async hasToken(): Promise<boolean> {
     return !!(await getGitHubToken());
   },
