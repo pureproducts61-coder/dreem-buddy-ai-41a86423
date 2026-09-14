@@ -10,9 +10,9 @@
  * A descriptor means "configured", never "healthy" or "ready".
  */
 import { loadProviderConfigs, pickProviderForTask, type TaskType } from '@/services/aiRouter';
-import { loadLocalSystemSettings, loadSystemSettingsFromDb } from '@/services/systemSettingsService';
-import type { CapabilityId, CredentialRef, ExecutionResult, ResourceDescriptor } from './resourceContracts';
-import { unavailableResult } from './resourceContracts';
+import { configuredSecretNames, loadLocalSystemSettings, loadSystemSettingsFromDb } from '@/services/systemSettingsService';
+import type { CapabilityId, CredentialRef, ExecutionResult, ResourceDescriptor, ResourceReadiness } from './resourceContracts';
+import { deriveReadiness, unavailableResult } from './resourceContracts';
 
 /** Capability every AI provider config satisfies, plus its declared extras. */
 const AI_BASE_CAPABILITY = 'ai.chat';
@@ -27,54 +27,81 @@ function isCredentialKey(key: string): boolean {
   return /(ApiKey|Token|Secret)$/i.test(key);
 }
 
-async function providerResources(): Promise<ResourceDescriptor[]> {
+async function providerResources(presence: Record<string, boolean>, presenceKnown: boolean): Promise<ResourceDescriptor[]> {
   const configs = await loadProviderConfigs().catch(() => []);
-  return configs.map((c) => ({
-    id: c.id,
-    type: 'ai-provider',
-    name: c.display_name || `${c.provider}/${c.model}`,
-    capabilities: [AI_BASE_CAPABILITY, ...c.capabilities.map((x) => `ai.${x}`)],
-    taskTypes: c.task_types,
-    credentialRef: c.api_key_secret_name
-      ? ({ secretName: c.api_key_secret_name, source: 'ai_provider_configs', present: true } satisfies CredentialRef)
-      : undefined,
-    config: {
-      provider: c.provider,
-      model: c.model,
-      is_free: c.is_free,
-      ...(c.base_url ? { base_url: c.base_url } : {}),
-      ...(c.max_tokens ? { max_tokens: c.max_tokens } : {}),
-    },
-    source: 'ai_provider_configs' as const,
-    priority: c.priority,
-    enabled: c.enabled,
-  }));
+  return configs.map((c) => {
+    // A configured secret NAME never implies the secret exists. Presence is only
+    // claimed when the credential store actually reported a non-empty value.
+    const credentialRef: CredentialRef | undefined = c.api_key_secret_name
+      ? {
+          secretName: c.api_key_secret_name,
+          source: 'ai_provider_configs',
+          verified: presenceKnown,
+          present: presenceKnown ? presence[c.api_key_secret_name] === true : false,
+        }
+      : undefined;
+    return {
+      id: c.id,
+      type: 'ai-provider',
+      name: c.display_name || `${c.provider}/${c.model}`,
+      capabilities: [AI_BASE_CAPABILITY, ...c.capabilities.map((x) => `ai.${x}`)],
+      taskTypes: c.task_types,
+      credentialRef,
+      config: {
+        provider: c.provider,
+        model: c.model,
+        is_free: c.is_free,
+        ...(c.base_url ? { base_url: c.base_url } : {}),
+        ...(c.max_tokens ? { max_tokens: c.max_tokens } : {}),
+      },
+      source: 'ai_provider_configs' as const,
+      priority: c.priority,
+      enabled: c.enabled,
+      readiness: deriveReadiness({
+        enabled: c.enabled,
+        credentialRef,
+        // Free / local-style providers do not need a credential to be usable.
+        requiresCredential: Boolean(c.api_key_secret_name) && !c.is_free,
+      }),
+    };
+  });
 }
 
-async function settingsResources(): Promise<ResourceDescriptor[]> {
+async function settingsResources(): Promise<{ rows: ResourceDescriptor[]; presence: Record<string, boolean>; presenceKnown: boolean }> {
+  let presenceKnown = true;
   const [local, remote] = await Promise.all([
     Promise.resolve(loadLocalSystemSettings()).catch(() => ({})),
-    loadSystemSettingsFromDb().catch(() => ({})),
+    loadSystemSettingsFromDb().catch(() => { presenceKnown = false; return {}; }),
   ]);
   const merged = { ...local, ...remote } as Record<string, string | number | boolean>;
-  const out: ResourceDescriptor[] = [];
+  // Server-reported presence flags (booleans only, never values).
+  const presence: Record<string, boolean> = { ...configuredSecretNames() };
+  const rows: ResourceDescriptor[] = [];
   for (const [key, value] of Object.entries(merged)) {
     if (!isCredentialKey(key)) continue;
     const present = typeof value === 'string' ? value.trim().length > 0 : Boolean(value);
-    out.push({
+    if (presence[key] === undefined) presence[key] = present;
+    const credentialRef: CredentialRef = {
+      secretName: key,
+      source: 'system_settings',
+      verified: true,
+      present: presence[key] === true,
+    };
+    rows.push({
       id: `system_settings:${key}`,
       type: 'service',
       name: key,
       capabilities: [capabilityFromSecretKey(key)],
       taskTypes: [],
-      credentialRef: { secretName: key, source: 'system_settings', present },
+      credentialRef,
       config: {},
       source: 'system_settings',
       priority: 50,
-      enabled: present,
+      enabled: credentialRef.present,
+      readiness: deriveReadiness({ enabled: credentialRef.present, credentialRef, requiresCredential: true }),
     });
   }
-  return out;
+  return { rows, presence, presenceKnown };
 }
 
 let cache: { at: number; rows: ResourceDescriptor[] } | null = null;
@@ -83,7 +110,9 @@ const CACHE_MS = 30_000;
 /** All configured resources, normalized. Never includes secret values. */
 export async function listResources(force = false): Promise<ResourceDescriptor[]> {
   if (!force && cache && Date.now() - cache.at < CACHE_MS) return cache.rows;
-  const rows = [...(await providerResources()), ...(await settingsResources())];
+  const settings = await settingsResources();
+  const providers = await providerResources(settings.presence, settings.presenceKnown);
+  const rows = [...providers, ...settings.rows];
   cache = { at: Date.now(), rows };
   return rows;
 }
@@ -139,4 +168,21 @@ export async function resolveCredentialRef(query: ResolveQuery): Promise<Credent
 /** Configuration presence check. Explicitly NOT a readiness/health check. */
 export async function isCapabilityConfigured(capability: CapabilityId, taskType?: string): Promise<boolean> {
   return (await resolveResources({ capability, taskType })).length > 0;
+}
+
+/** Strongest readiness observed for a capability (never 'healthy' from config alone). */
+export async function capabilityReadiness(capability: CapabilityId, taskType?: string): Promise<ResourceReadiness> {
+  const matches = await resolveResources({ capability, taskType });
+  if (!matches.length) return 'unavailable';
+  const order: ResourceReadiness[] = ['unavailable', 'configured', 'credential-available', 'ready', 'healthy'];
+  return matches.reduce<ResourceReadiness>(
+    (best, r) => (order.indexOf(r.readiness) > order.indexOf(best) ? r.readiness : best),
+    'unavailable',
+  );
+}
+
+/** True only when a credential was actually observed for this capability. */
+export async function isCapabilityCredentialAvailable(capability: CapabilityId, taskType?: string): Promise<boolean> {
+  const matches = await resolveResources({ capability, taskType });
+  return matches.some((r) => r.credentialRef?.verified && r.credentialRef.present);
 }

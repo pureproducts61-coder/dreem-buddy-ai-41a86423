@@ -22,9 +22,30 @@ export interface CredentialRef {
   /** Name/key of the secret as stored by the existing Key/Value/Secrets UI. */
   secretName: string;
   source: ConfigSource;
-  /** True when a non-empty value is known to exist for this name (value itself is never read out). */
+  /**
+   * True ONLY when a non-empty value was actually observed for this name.
+   * A configured secret NAME alone never sets this to true.
+   * (The value itself is never read out.)
+   */
   present: boolean;
+  /** True when presence was checked against a credential store, false when unknown. */
+  verified: boolean;
 }
+
+/**
+ * Truthful readiness ladder. Each level is strictly stronger than the previous.
+ *  - configured          : an admin declared this resource, credential state unknown/missing
+ *  - credential-available: a non-empty credential was observed for its secret name
+ *  - ready               : credential available AND the resource is enabled for use
+ *  - healthy             : a runtime health check succeeded (never inferred from config)
+ *  - unavailable         : explicitly not usable
+ */
+export type ResourceReadiness =
+  | 'configured'
+  | 'credential-available'
+  | 'ready'
+  | 'healthy'
+  | 'unavailable';
 
 /** A configured resource (an AI provider, a repository host, a deploy target…). */
 export interface ResourceDescriptor {
@@ -42,6 +63,23 @@ export interface ResourceDescriptor {
   /** Lower runs first. */
   priority: number;
   enabled: boolean;
+  /** Truthful readiness. Never 'healthy' unless a real health check ran. */
+  readiness: ResourceReadiness;
+}
+
+/** Derives readiness from configuration + observed credential presence only. */
+export function deriveReadiness(input: {
+  enabled: boolean;
+  credentialRef?: CredentialRef;
+  /** true only when a credential is required for this resource to work */
+  requiresCredential: boolean;
+}): ResourceReadiness {
+  if (!input.enabled) return 'unavailable';
+  if (!input.requiresCredential) return 'ready';
+  if (!input.credentialRef) return 'configured';
+  if (!input.credentialRef.verified) return 'configured';
+  if (!input.credentialRef.present) return 'configured';
+  return 'credential-available';
 }
 
 /** Normalized status of any execution through a connector. */

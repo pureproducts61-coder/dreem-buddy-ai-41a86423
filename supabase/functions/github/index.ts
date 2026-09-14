@@ -157,6 +157,43 @@ serve(async (req) => {
         break;
       }
 
+      case "dispatch_workflow": {
+        const { owner, repo, workflowId, ref, inputs } = params;
+        await githubFetch(
+          `/repos/${owner}/${repo}/actions/workflows/${encodeURIComponent(workflowId)}/dispatches`,
+          token,
+          { method: "POST", body: JSON.stringify({ ref: ref || "main", inputs: inputs || {} }) },
+        );
+        result = { success: true };
+        break;
+      }
+
+      case "list_workflow_runs": {
+        const { owner, repo, branch, perPage } = params;
+        const qs = new URLSearchParams({ per_page: String(perPage || 10) });
+        if (branch) qs.set("branch", branch);
+        result = await githubFetch(`/repos/${owner}/${repo}/actions/runs?${qs}`, token);
+        break;
+      }
+
+      case "get_workflow_run": {
+        const { owner, repo, runId } = params;
+        result = await githubFetch(`/repos/${owner}/${repo}/actions/runs/${runId}`, token);
+        break;
+      }
+
+      case "list_run_jobs": {
+        const { owner, repo, runId } = params;
+        result = await githubFetch(`/repos/${owner}/${repo}/actions/runs/${runId}/jobs`, token);
+        break;
+      }
+
+      case "list_run_artifacts": {
+        const { owner, repo, runId } = params;
+        result = await githubFetch(`/repos/${owner}/${repo}/actions/runs/${runId}/artifacts`, token);
+        break;
+      }
+
       case "delete_repo": {
         const { owner, repo } = params;
         await githubFetch(`/repos/${owner}/${repo}`, token, { method: "DELETE" });

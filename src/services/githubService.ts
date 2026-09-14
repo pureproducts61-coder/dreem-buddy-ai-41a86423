@@ -47,6 +47,35 @@ async function callGitHub(action: string, params: Record<string, unknown> = {}) 
   return data;
 }
 
+/** Minimal shapes of the GitHub Actions lifecycle data we rely on. */
+export interface WorkflowRun {
+  id: number;
+  name?: string;
+  head_sha?: string;
+  status: 'queued' | 'in_progress' | 'completed' | string;
+  conclusion: 'success' | 'failure' | 'cancelled' | 'skipped' | 'timed_out' | null;
+  html_url: string;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface WorkflowJob {
+  id: number;
+  name: string;
+  status: string;
+  conclusion: string | null;
+  html_url: string | null;
+  steps?: Array<{ name: string; status: string; conclusion: string | null }>;
+}
+
+export interface WorkflowArtifact {
+  id: number;
+  name: string;
+  size_in_bytes: number;
+  expired: boolean;
+  archive_download_url: string;
+}
+
 export const githubService = {
   async getUser() {
     return callGitHub('get_user');
@@ -84,6 +113,38 @@ export const githubService = {
 
   async deleteRepo(owner: string, repo: string) {
     return callGitHub('delete_repo', { owner, repo });
+  },
+
+  /* --------------- GitHub Actions lifecycle (read-only truth) --------------- */
+
+  async dispatchWorkflow(
+    owner: string,
+    repo: string,
+    workflowId: string,
+    ref = 'main',
+    inputs: Record<string, string> = {},
+  ): Promise<{ success: boolean }> {
+    return callGitHub('dispatch_workflow', { owner, repo, workflowId, ref, inputs });
+  },
+
+  async listWorkflowRuns(
+    owner: string,
+    repo: string,
+    opts: { branch?: string; perPage?: number } = {},
+  ): Promise<{ workflow_runs: WorkflowRun[] }> {
+    return callGitHub('list_workflow_runs', { owner, repo, branch: opts.branch, perPage: opts.perPage ?? 10 });
+  },
+
+  async getWorkflowRun(owner: string, repo: string, runId: number): Promise<WorkflowRun> {
+    return callGitHub('get_workflow_run', { owner, repo, runId });
+  },
+
+  async listRunJobs(owner: string, repo: string, runId: number): Promise<{ jobs: WorkflowJob[] }> {
+    return callGitHub('list_run_jobs', { owner, repo, runId });
+  },
+
+  async listRunArtifacts(owner: string, repo: string, runId: number): Promise<{ artifacts: WorkflowArtifact[] }> {
+    return callGitHub('list_run_artifacts', { owner, repo, runId });
   },
 
   async hasToken(): Promise<boolean> {
