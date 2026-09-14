@@ -10,9 +10,9 @@
  * A descriptor means "configured", never "healthy" or "ready".
  */
 import { loadProviderConfigs, pickProviderForTask, type TaskType } from '@/services/aiRouter';
-import { loadLocalSystemSettings, loadSystemSettingsFromDb } from '@/services/systemSettingsService';
-import type { CapabilityId, CredentialRef, ExecutionResult, ResourceDescriptor } from './resourceContracts';
-import { unavailableResult } from './resourceContracts';
+import { configuredSecretNames, loadLocalSystemSettings, loadSystemSettingsFromDb } from '@/services/systemSettingsService';
+import type { CapabilityId, CredentialRef, ExecutionResult, ResourceDescriptor, ResourceReadiness } from './resourceContracts';
+import { deriveReadiness, unavailableResult } from './resourceContracts';
 
 /** Capability every AI provider config satisfies, plus its declared extras. */
 const AI_BASE_CAPABILITY = 'ai.chat';
