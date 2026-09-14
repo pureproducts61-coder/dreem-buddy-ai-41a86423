@@ -134,6 +134,38 @@ export function routeTool(toolId: string, opts: { preferDeviceId?: string } = {}
   return { ok: true, tool, device: pick, local: pick.device_id === me, reason: `Using ${pick.name} for "${tool.label}".` };
 }
 
+/* ------------------------------------------------------------------ */
+/* Resource/Capability seam — thin adapter, the router above is unchanged */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Adapter so callers can speak Resource → capability → connector semantics
+ * without replacing the device-oriented router. It resolves the tool through
+ * `routeTool` and normalizes the outcome into an ExecutionResult.
+ * It never claims success for the action itself — only for the routing.
+ */
+export function routeToolAsExecution(request: ExecutionRequest): ExecutionResult<RouteDecision> {
+  const toolId = request.action;
+  const decision = routeTool(toolId, { preferDeviceId: request.resourceId });
+  if (!decision.ok) {
+    const result = decision.failure === 'permission-required'
+      ? { status: 'requires-approval' as const, ok: false }
+      : { status: 'unavailable' as const, ok: false };
+    return { ...result, data: decision, error: decision.reason, resourceId: decision.device?.device_id, checkedAt: new Date().toISOString() };
+  }
+  if (decision.tool?.destructive) {
+    return {
+      status: 'requires-approval', ok: false, data: decision,
+      error: `"${decision.tool.label}" needs explicit approval before it runs.`,
+      resourceId: decision.device?.device_id, checkedAt: new Date().toISOString(),
+    };
+  }
+  return {
+    status: 'success', ok: true, data: decision,
+    resourceId: decision.device?.device_id, checkedAt: new Date().toISOString(),
+  };
+}
+
 /** Human-readable list injected into the system prompt so the AI never invents tools. */
 export function toolsPromptBlock(): string {
   const caps = new Map(getCapabilities().map((c) => [c.id, c.state]));
