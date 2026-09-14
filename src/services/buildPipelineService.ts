@@ -27,12 +27,23 @@ export interface PipelineStepState {
   endedAt?: number;
 }
 
+/** Truthful build lifecycle state — never "success" without a completed Actions run. */
+export type BuildVerification = 'unverified' | 'pending' | 'success' | 'failure';
+
 export interface PipelineResult {
   ok: boolean;
   steps: PipelineStepState[];
   runUrl?: string;
   repoUrl?: string;
   error?: string;
+  /** Real GitHub Actions run id, when one was found. */
+  runId?: number;
+  /** queued | in_progress | completed, straight from the Actions API. */
+  runStatus?: string;
+  /** Verified outcome of the run. `pending`/`unverified` means we do NOT claim success. */
+  verification?: BuildVerification;
+  /** Artifact metadata reported by the Actions API (no download tokens). */
+  artifacts?: Array<{ name: string; sizeBytes: number; expired: boolean }>;
 }
 
 export interface RunPipelineInput {
