@@ -67,30 +67,41 @@ async function providerResources(presence: Record<string, boolean>, presenceKnow
   });
 }
 
-async function settingsResources(): Promise<ResourceDescriptor[]> {
+async function settingsResources(): Promise<{ rows: ResourceDescriptor[]; presence: Record<string, boolean>; presenceKnown: boolean }> {
+  let presenceKnown = true;
   const [local, remote] = await Promise.all([
     Promise.resolve(loadLocalSystemSettings()).catch(() => ({})),
-    loadSystemSettingsFromDb().catch(() => ({})),
+    loadSystemSettingsFromDb().catch(() => { presenceKnown = false; return {}; }),
   ]);
   const merged = { ...local, ...remote } as Record<string, string | number | boolean>;
-  const out: ResourceDescriptor[] = [];
+  // Server-reported presence flags (booleans only, never values).
+  const presence: Record<string, boolean> = { ...configuredSecretNames() };
+  const rows: ResourceDescriptor[] = [];
   for (const [key, value] of Object.entries(merged)) {
     if (!isCredentialKey(key)) continue;
     const present = typeof value === 'string' ? value.trim().length > 0 : Boolean(value);
-    out.push({
+    if (presence[key] === undefined) presence[key] = present;
+    const credentialRef: CredentialRef = {
+      secretName: key,
+      source: 'system_settings',
+      verified: true,
+      present: presence[key] === true,
+    };
+    rows.push({
       id: `system_settings:${key}`,
       type: 'service',
       name: key,
       capabilities: [capabilityFromSecretKey(key)],
       taskTypes: [],
-      credentialRef: { secretName: key, source: 'system_settings', present },
+      credentialRef,
       config: {},
       source: 'system_settings',
       priority: 50,
-      enabled: present,
+      enabled: credentialRef.present,
+      readiness: deriveReadiness({ enabled: credentialRef.present, credentialRef, requiresCredential: true }),
     });
   }
-  return out;
+  return { rows, presence, presenceKnown };
 }
 
 let cache: { at: number; rows: ResourceDescriptor[] } | null = null;
@@ -99,7 +110,9 @@ const CACHE_MS = 30_000;
 /** All configured resources, normalized. Never includes secret values. */
 export async function listResources(force = false): Promise<ResourceDescriptor[]> {
   if (!force && cache && Date.now() - cache.at < CACHE_MS) return cache.rows;
-  const rows = [...(await providerResources()), ...(await settingsResources())];
+  const settings = await settingsResources();
+  const providers = await providerResources(settings.presence, settings.presenceKnown);
+  const rows = [...providers, ...settings.rows];
   cache = { at: Date.now(), rows };
   return rows;
 }
