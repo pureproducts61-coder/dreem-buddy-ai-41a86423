@@ -10,6 +10,8 @@
 import { LocalRegistry } from './registry';
 import { isLocalReady, probeRuntime, localChatStream } from './localRuntime';
 import { getDefaultModel } from './modelManager';
+import type { ExecutionResult, ResourceDescriptor } from './resourceContracts';
+import { resolveResource, isCapabilityCredentialAvailable } from './resourceResolver';
 
 export type EngineKind = 'local-gguf' | 'local-api' | 'cloud-api' | 'lovable-gateway';
 

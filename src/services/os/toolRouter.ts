@@ -7,6 +7,7 @@ import { getCapabilities, isCapabilityReady } from './capabilities';
 import { deviceId, getDevices, type DeviceRow } from './deviceRegistry';
 import { permissionStatus, type BridgeCapability } from './desktopBridge';
 import { getBridgeMonitorState } from './bridgeMonitor';
+import type { ExecutionRequest, ExecutionResult } from './resourceContracts';
 
 export interface ToolSpec {
   id: string;
