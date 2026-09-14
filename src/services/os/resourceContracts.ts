@@ -63,6 +63,23 @@ export interface ResourceDescriptor {
   /** Lower runs first. */
   priority: number;
   enabled: boolean;
+  /** Truthful readiness. Never 'healthy' unless a real health check ran. */
+  readiness: ResourceReadiness;
+}
+
+/** Derives readiness from configuration + observed credential presence only. */
+export function deriveReadiness(input: {
+  enabled: boolean;
+  credentialRef?: CredentialRef;
+  /** true only when a credential is required for this resource to work */
+  requiresCredential: boolean;
+}): ResourceReadiness {
+  if (!input.enabled) return 'unavailable';
+  if (!input.requiresCredential) return 'ready';
+  if (!input.credentialRef) return 'configured';
+  if (!input.credentialRef.verified) return 'configured';
+  if (!input.credentialRef.present) return 'configured';
+  return 'credential-available';
 }
 
 /** Normalized status of any execution through a connector. */
