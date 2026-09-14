@@ -95,6 +95,23 @@ export async function preferLocal(): Promise<boolean> {
   return Boolean(def && def.status === 'ready' && (await probeRuntime()));
 }
 
+/* ------------------------------------------------------------------ */
+/* Resource/Capability seam — adapter only, routing above is unchanged  */
+/* ------------------------------------------------------------------ */
+
+/** Which configured resource backs the cloud path for a task type. */
+export async function resolveEngineResource(taskType = 'chat'): Promise<ExecutionResult<ResourceDescriptor>> {
+  return resolveResource({ capability: 'ai.chat', taskType });
+}
+
+/**
+ * Truthful readiness for the cloud engine: a provider row existing is not
+ * enough — a credential must actually be available for it.
+ */
+export async function cloudEngineCredentialAvailable(taskType = 'chat'): Promise<boolean> {
+  return isCapabilityCredentialAvailable('ai.chat', taskType);
+}
+
 export interface RouterMessage { role: string; content: string }
 
 /**
