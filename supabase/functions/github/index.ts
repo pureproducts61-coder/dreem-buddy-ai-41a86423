@@ -108,7 +108,7 @@ serve(async (req) => {
       }
 
       case "push_project": {
-        // Push multiple files to a repo
+        // Push multiple files to a repo and return commit SHA(s)
         const { owner, repo, files } = params as {
           owner: string;
           repo: string;
@@ -116,6 +116,7 @@ serve(async (req) => {
         };
 
         const results = [];
+        let lastCommitSha: string | undefined;
         for (const file of files) {
           // Check if file exists (to get sha for update)
           let sha: string | undefined;
@@ -142,9 +143,13 @@ serve(async (req) => {
               }),
             }
           );
+          // Capture the commit SHA from the response
+          if (res.commit?.sha) {
+            lastCommitSha = res.commit.sha;
+          }
           results.push({ path: file.path, sha: res.content?.sha });
         }
-        result = { success: true, files: results };
+        result = { success: true, files: results, commitSha: lastCommitSha };
         break;
       }
 
@@ -169,9 +174,10 @@ serve(async (req) => {
       }
 
       case "list_workflow_runs": {
-        const { owner, repo, branch, perPage } = params;
+        const { owner, repo, branch, perPage, headSha } = params;
         const qs = new URLSearchParams({ per_page: String(perPage || 10) });
         if (branch) qs.set("branch", branch);
+        if (headSha) qs.set("head_sha", headSha);
         result = await githubFetch(`/repos/${owner}/${repo}/actions/runs?${qs}`, token);
         break;
       }
