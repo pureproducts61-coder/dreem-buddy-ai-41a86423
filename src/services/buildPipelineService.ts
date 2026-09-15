@@ -1,13 +1,12 @@
 /**
  * Build Pipeline Service
  *
- * Orchestrates the 4-step build flow defined in src/config/ai-workflows.ts.
+ * Orchestrates the 6-step build flow defined in src/config/ai-workflows.ts.
  * Emits live status events so the BuildDeliveryDialog can render a real-time
  * tracker (🟢 done, ⏳ active, ⚪ pending, ❌ error).
  *
- * No fake success: every step either completes with verifiable output or
- * surfaces a precise error. The Reviewer step is the only one allowed to
- * dispatch GitHub Actions.
+ * No fake success: NEVER reports ok:true just because the workflow was triggered.
+ * A build is only successful when the GitHub Actions run has completed with conclusion=success.
  */
 
 import { BUILD_PIPELINE_STEPS, type BuildPipelineStepId } from '@/config/ai-workflows';
@@ -67,11 +66,19 @@ export interface RunPipelineInput {
  * Finds the real Actions run for a push and follows it to completion.
  * Returns `pending` when the run is still going and `unverified` when no run
  * could be observed — never a fabricated success.
+ * 
+ * Prefers matching by commit SHA for accuracy.
  */
 export async function verifyWorkflowRun(
   owner: string,
   repo: string,
-  opts: { since: number; timeoutMs?: number; branch?: string; onProgress?: (run: { id: number; status: string }) => void },
+  opts: { 
+    since: number; 
+    timeoutMs?: number; 
+    branch?: string; 
+    headSha?: string;
+    onProgress?: (run: { id: number; status: string }) => void 
+  },
 ): Promise<{
   verification: BuildVerification;
   run?: { id: number; status: string; conclusion: string | null; html_url: string };
@@ -85,26 +92,52 @@ export async function verifyWorkflowRun(
 
   try {
     // 1. Discover the run created by this push (up to 60s of the budget).
+    // Prefer matching by headSha if available for better accuracy.
     const discoverUntil = Math.min(deadline, Date.now() + 60_000);
     while (Date.now() < discoverUntil && runId === null) {
       const { workflow_runs = [] } = await githubService.listWorkflowRuns(owner, repo, {
         branch: opts.branch ?? 'main',
         perPage: 10,
+        headSha: opts.headSha,
       });
-      const match = workflow_runs.find((r) => new Date(r.created_at).getTime() >= opts.since - 60_000);
-      if (match) { runId = match.id; last = { id: match.id, status: match.status, conclusion: match.conclusion, html_url: match.html_url }; break; }
+      
+      // If filtering by headSha, the API returns only matching runs
+      let match = workflow_runs[0];
+      
+      // If no headSha, fall back to timestamp-based matching
+      if (!match && !opts.headSha) {
+        match = workflow_runs.find((r) => new Date(r.created_at).getTime() >= opts.since - 60_000);
+      }
+      
+      if (match) { 
+        runId = match.id; 
+        last = { id: match.id, status: match.status, conclusion: match.conclusion, html_url: match.html_url }; 
+        break; 
+      }
       await new Promise((r) => setTimeout(r, 5_000));
     }
-    if (runId === null) return { verification: 'unverified', error: 'No GitHub Actions run was observed for this push.' };
+    if (runId === null) {
+      return { 
+        verification: 'unverified', 
+        error: opts.headSha 
+          ? `No GitHub Actions run was observed for commit ${opts.headSha}.` 
+          : 'No GitHub Actions run was observed for this push.' 
+      };
+    }
 
     // 2. Follow it to completion.
     while (Date.now() < deadline) {
       const run = await githubService.getWorkflowRun(owner, repo, runId);
       last = { id: run.id, status: run.status, conclusion: run.conclusion, html_url: run.html_url };
       opts.onProgress?.({ id: run.id, status: run.status });
+      
       if (run.status === 'completed') {
         if (run.conclusion !== 'success') {
-          return { verification: 'failure', run: last, error: `Actions run concluded "${run.conclusion}".` };
+          return { 
+            verification: 'failure', 
+            run: last, 
+            error: `Actions run concluded with status "${run.conclusion}".` 
+          };
         }
         let artifacts: Array<{ name: string; sizeBytes: number; expired: boolean }> = [];
         try {
@@ -115,7 +148,11 @@ export async function verifyWorkflowRun(
       }
       await new Promise((r) => setTimeout(r, 10_000));
     }
-    return { verification: 'pending', run: last, error: 'The Actions run had not finished before the wait timed out.' };
+    return { 
+      verification: 'pending', 
+      run: last, 
+      error: 'The Actions run had not finished before the wait timed out.' 
+    };
   } catch (e) {
     return {
       verification: last ? 'pending' : 'unverified',
@@ -450,7 +487,9 @@ export async function runBuildPipeline(input: RunPipelineInput): Promise<Pipelin
   });
 
   // 4. Sync — push to GitHub feature branch
-  setStep('sync', { status: 'active', startedAt: Date.now() });
+  // RECORD BUILD START TIME FOR WORKFLOW RUN DISCOVERY
+  const buildStartTime = Date.now();
+  setStep('sync', { status: 'active', startedAt: buildStartTime });
   if (!(await githubService.hasToken())) {
     setStep('sync', { status: 'error', detail: 'GitHub token not configured in Settings.', endedAt: Date.now() });
     input.onChat?.({ kind: 'error', title: 'GitHub token নেই', detail: 'Settings → Integrations-এ token যোগ করুন।' });
@@ -458,6 +497,7 @@ export async function runBuildPipeline(input: RunPipelineInput): Promise<Pipelin
   }
   let owner: string;
   let repoName: string;
+  let commitSha: string | undefined;
   try {
     const user = await githubService.getUser();
     owner = user.login;
@@ -467,10 +507,11 @@ export async function runBuildPipeline(input: RunPipelineInput): Promise<Pipelin
     } catch {
       /* repo may already exist */
     }
-    await pushProjectWithBuild(owner, repoName, validation.fixedFiles, input.buildTarget, input.projectName);
+    const pushResult = await pushProjectWithBuild(owner, repoName, validation.fixedFiles, input.buildTarget, input.projectName);
+    commitSha = pushResult.commitSha;
     setStep('sync', {
       status: 'done',
-      detail: `Pushed to ${owner}/${repoName} (main)`,
+      detail: `Pushed to ${owner}/${repoName} (main)${commitSha ? ` — commit ${commitSha.slice(0, 7)}` : ''}`,
       endedAt: Date.now(),
     });
   } catch (e) {
@@ -484,35 +525,136 @@ export async function runBuildPipeline(input: RunPipelineInput): Promise<Pipelin
   }
 
   // 5. Dispatch — push on main already triggers the workflow on:push.
+  // But we now WAIT for actual completion instead of just returning "triggered".
   setStep('dispatch', { status: 'active', startedAt: Date.now() });
   await wait(400);
   const runsUrl = `https://github.com/${owner}/${repoName}/actions`;
+  
+  input.onChat?.({
+    kind: 'step',
+    title: '⏳ GitHub Actions build is running...',
+    detail: `Waiting for workflow to complete. This may take a few minutes.`,
+  });
+  
   setStep('dispatch', {
     status: 'done',
-    detail: `Workflow triggered (build_type=${input.buildTarget}, project_id=${input.projectId.slice(0, 8)}…)`,
+    detail: `Workflow triggered (build_type=${input.buildTarget}, project_id=${input.projectId.slice(0, 8)}…) — waiting for completion...`,
     endedAt: Date.now(),
   });
 
-  // 6. Link
+  // 6. Link — NOW: Verify the actual workflow run completion
   setStep('link', { status: 'active', startedAt: Date.now() });
-  await wait(200);
-  setStep('link', {
-    status: 'done',
-    detail: `Track run at ${runsUrl}`,
-    endedAt: Date.now(),
+  
+  const verificationResult = await verifyWorkflowRun(owner, repoName, {
+    since: buildStartTime,
+    timeoutMs: input.verifyTimeoutMs ?? 600_000, // default 10 min wait
+    branch: 'main',
+    headSha: commitSha,
+    onProgress: (run) => {
+      // Report progress updates to UI
+      input.onChat?.({
+        kind: 'step',
+        title: `⏳ Build is ${run.status}...`,
+        detail: `Run ID: ${run.id}`,
+      });
+    },
   });
 
+  const { verification, run, artifacts, error: verifyError } = verificationResult;
+
+  // Determine final result based on actual verification
+  if (verification === 'success') {
+    setStep('link', {
+      status: 'done',
+      detail: `✅ Build completed successfully — Run: ${run?.id}`,
+      endedAt: Date.now(),
+    });
+    input.onChat?.({
+      kind: 'complete',
+      title: `✅ ${String(input.buildTarget).toUpperCase()} বিল্ড সফলভাবে সম্পন্ন`,
+      detail: artifacts && artifacts.length > 0
+        ? `${artifacts.length} artifact(s) ready for download`
+        : 'Build completed with no artifacts',
+      url: run?.html_url,
+    });
+    return finalize({
+      ok: true,
+      steps,
+      runUrl: run?.html_url ?? runsUrl,
+      repoUrl: `https://github.com/${owner}/${repoName}`,
+      runId: run?.id,
+      runStatus: run?.status,
+      verification: 'success',
+      artifacts,
+    });
+  }
+
+  if (verification === 'pending') {
+    setStep('link', {
+      status: 'done',
+      detail: `⏳ Build is still running (timed out waiting). Run: ${run?.id}`,
+      endedAt: Date.now(),
+    });
+    input.onChat?.({
+      kind: 'complete',
+      title: `⏳ বিল্ড এখনও চলছে`,
+      detail: verifyError || 'GitHub Actions run has not completed yet. Check the run page for status.',
+      url: run?.html_url ?? runsUrl,
+    });
+    return finalize({
+      ok: false,
+      steps,
+      error: verifyError ?? 'Build verification timed out',
+      runUrl: run?.html_url ?? runsUrl,
+      repoUrl: `https://github.com/${owner}/${repoName}`,
+      runId: run?.id,
+      runStatus: run?.status,
+      verification: 'pending',
+    });
+  }
+
+  if (verification === 'failure') {
+    setStep('link', {
+      status: 'error',
+      detail: `❌ Build failed — Run: ${run?.id}. Conclusion: ${run?.conclusion}`,
+      endedAt: Date.now(),
+    });
+    input.onChat?.({
+      kind: 'error',
+      title: `❌ বিল্ড ব্যর্থ`,
+      detail: verifyError || `GitHub Actions run concluded with: ${run?.conclusion}`,
+      url: run?.html_url ?? runsUrl,
+    });
+    return finalize({
+      ok: false,
+      steps,
+      error: verifyError ?? `Build failed with conclusion: ${run?.conclusion}`,
+      runUrl: run?.html_url ?? runsUrl,
+      repoUrl: `https://github.com/${owner}/${repoName}`,
+      runId: run?.id,
+      runStatus: run?.status,
+      verification: 'failure',
+    });
+  }
+
+  // verification === 'unverified'
+  setStep('link', {
+    status: 'error',
+    detail: `❌ Could not verify build status — unable to find or access workflow run`,
+    endedAt: Date.now(),
+  });
   input.onChat?.({
-    kind: 'complete',
-    title: `🚀 ${String(input.buildTarget).toUpperCase()} বিল্ড পাইপলাইন সফলভাবে trigger হয়েছে`,
-    detail: `Repo: ${owner}/${repoName} — GitHub Actions সম্পন্ন হলে artifact ডাউনলোড লিংক নিচে আসবে।`,
+    kind: 'error',
+    title: `❌ বিল্ড যাচাই করা যায়নি`,
+    detail: verifyError || 'The GitHub Actions run could not be found or accessed.',
     url: runsUrl,
   });
-
   return finalize({
-    ok: true,
+    ok: false,
     steps,
+    error: verifyError ?? 'Build could not be verified',
     runUrl: runsUrl,
     repoUrl: `https://github.com/${owner}/${repoName}`,
+    verification: 'unverified',
   });
 }
