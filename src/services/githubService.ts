@@ -130,9 +130,15 @@ export const githubService = {
   async listWorkflowRuns(
     owner: string,
     repo: string,
-    opts: { branch?: string; perPage?: number } = {},
+    opts: { branch?: string; perPage?: number; headSha?: string } = {},
   ): Promise<{ workflow_runs: WorkflowRun[] }> {
-    return callGitHub('list_workflow_runs', { owner, repo, branch: opts.branch, perPage: opts.perPage ?? 10 });
+    return callGitHub('list_workflow_runs', { 
+      owner, 
+      repo, 
+      branch: opts.branch, 
+      perPage: opts.perPage ?? 10,
+      headSha: opts.headSha,
+    });
   },
 
   async getWorkflowRun(owner: string, repo: string, runId: number): Promise<WorkflowRun> {
