@@ -89,13 +89,14 @@ jobs:
 }
 
 // Push project to GitHub with optional build workflow
+// Returns the commit SHA if available
 export async function pushProjectWithBuild(
   owner: string,
   repo: string,
   files: ProjectFile[],
   buildTarget: BuildTarget,
   appName: string
-): Promise<void> {
+): Promise<{ commitSha?: string }> {
   const allFiles = [...files];
 
   if (buildTarget === 'exe') {
@@ -110,7 +111,10 @@ export async function pushProjectWithBuild(
     });
   }
 
-  await githubService.pushProject(owner, repo, allFiles);
+  const result = await githubService.pushProject(owner, repo, allFiles);
+  return {
+    commitSha: (result as any)?.commitSha,
+  };
 }
 
 // Save project files to localStorage for later push
