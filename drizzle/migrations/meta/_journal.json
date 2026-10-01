@@ -1,0 +1,13 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1790898705515,
+      "tag": "0000_restrict_ai_task_routing_to_admins",
+      "breakpoints": true
+    }
+  ]
+}
