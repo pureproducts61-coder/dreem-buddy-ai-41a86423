@@ -142,6 +142,12 @@ export const githubService = {
   },
 
   async hasToken(): Promise<boolean> {
-    return !!(await getGitHubToken());
+    // Presence check only — selects the row id, never the token value.
+    try {
+      const { data } = await (supabase as unknown as { from: (t: string) => any })
+        .from('user_secrets').select('id').eq('name', 'githubToken').maybeSingle();
+      if (data) return true;
+    } catch { /* fall through */ }
+    return !!(await getFallbackToken());
   },
 };
