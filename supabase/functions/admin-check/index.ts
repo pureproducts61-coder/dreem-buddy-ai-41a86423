@@ -64,6 +64,13 @@ Deno.serve(async (req) => {
         email: user.email,
         role: isAdminEmail ? "admin" : "user",
       });
+    } else if (!isAdminEmail && existing.role === "admin") {
+      // Source of truth: a verified email in ADMIN_EMAIL or admin_email_allowlist.
+      // A persisted role alone never keeps admin authority after revocation.
+      await adminClient
+        .from("user_profiles")
+        .update({ role: "user", last_active: new Date().toISOString() })
+        .eq("user_id", user.id);
     } else if (isAdminEmail && existing.role !== "admin") {
       await adminClient
         .from("user_profiles")
@@ -76,7 +83,7 @@ Deno.serve(async (req) => {
         .eq("user_id", user.id);
     }
 
-    const effectiveRole = isAdminEmail ? "admin" : (existing?.role || "user");
+    const effectiveRole = isAdminEmail ? "admin" : (existing?.role === "admin" ? "user" : (existing?.role || "user"));
 
     return new Response(
       JSON.stringify({

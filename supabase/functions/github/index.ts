@@ -8,6 +8,29 @@ const corsHeaders = {
 
 const GITHUB_API = "https://api.github.com";
 
+const ALLOWED_ACTIONS = new Set([
+  "get_user", "list_repos", "create_repo", "create_or_update_file", "push_project",
+  "get_repo_contents", "dispatch_workflow", "list_workflow_runs", "get_workflow_run",
+  "list_run_jobs", "list_run_artifacts", "delete_repo",
+]);
+const DESTRUCTIVE_ACTIONS = new Set(["delete_repo"]);
+const NAME_RE = /^[A-Za-z0-9_.-]{1,100}$/;
+
+/** Rejects path traversal / URL injection in values interpolated into GitHub API paths. */
+function validateParams(p: Record<string, unknown>): string | null {
+  for (const k of ["owner", "repo", "name"]) {
+    if (p[k] !== undefined && (typeof p[k] !== "string" || !NAME_RE.test(p[k] as string))) return k;
+  }
+  for (const k of ["runId"]) {
+    if (p[k] !== undefined && !/^\d{1,20}$/.test(String(p[k]))) return k;
+  }
+  const badPath = (v: unknown) => typeof v !== "string" || v.length > 500 || v.split("/").includes("..") || /[?#]/.test(v);
+  if (p.path !== undefined && p.path !== "" && badPath(p.path)) return "path";
+  if (p.workflowId !== undefined && (typeof p.workflowId !== "string" || !/^[A-Za-z0-9_.-]{1,100}$/.test(p.workflowId))) return "workflowId";
+  if (Array.isArray(p.files) && p.files.some((f: any) => badPath(f?.path))) return "files";
+  return null;
+}
+
 async function githubFetch(path: string, token: string, options: RequestInit = {}) {
   const res = await fetch(`${GITHUB_API}${path}`, {
     ...options,
@@ -38,8 +61,11 @@ serve(async (req) => {
         status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    let userId = "";
+    let isAdmin = false;
+    let { action, token, ...params } = await req.json().catch(() => ({} as any));
+    const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2.45.0");
     try {
-      const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2.45.0");
       const userClient = createClient(SUPABASE_URL, ANON_KEY, {
         global: { headers: { Authorization: authHeader } },
       });
@@ -49,17 +75,53 @@ serve(async (req) => {
           status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+      userId = user.id;
+      const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+      if (SERVICE_ROLE) {
+        const svc = createClient(SUPABASE_URL, SERVICE_ROLE);
+        const { data: prof } = await svc.from("user_profiles").select("role").eq("user_id", userId).maybeSingle();
+        isAdmin = prof?.role === "admin";
+        // Resolve the caller's own GitHub token server-side so it need not transit the browser.
+        if (!token) {
+          const { data: sec } = await svc.from("user_secrets").select("value")
+            .eq("user_id", userId).eq("name", "githubToken").maybeSingle();
+          token = (sec as any)?.value || "";
+        }
+      }
     } catch {
       return new Response(JSON.stringify({ error: "unauthorized" }), {
         status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const { action, token, ...params } = await req.json();
+    if (typeof action !== "string" || !ALLOWED_ACTIONS.has(action)) {
+      return new Response(JSON.stringify({ error: "unknown_action" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const invalid = validateParams(params);
+    if (invalid) {
+      return new Response(JSON.stringify({ error: "invalid_params", field: invalid }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    // Destructive actions are admin-only and require an explicit server-checked confirmation.
+    if (DESTRUCTIVE_ACTIONS.has(action)) {
+      if (!isAdmin) {
+        return new Response(JSON.stringify({ error: "forbidden" }), {
+          status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (params.confirm !== `${params.owner}/${params.repo}`) {
+        return new Response(JSON.stringify({ error: "confirmation_required" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
 
     if (!token) {
       return new Response(
-        JSON.stringify({ error: "GitHub token required. Add it in Settings." }),
+        JSON.stringify({ error: "no_token", message: "GitHub token required. Add it in Settings." }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
