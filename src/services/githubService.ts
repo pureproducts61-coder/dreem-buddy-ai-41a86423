@@ -1,39 +1,28 @@
 // GitHub Service - calls edge function for GitHub operations
 import { supabase } from '@/integrations/supabase/client';
-import { getSecretValue } from './systemSettingsService';
 
 const GITHUB_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/github`;
 
-/**
- * The caller's own GitHub token is resolved server-side by the github function,
- * so it is not read into the browser. Only if the user has no own token do we
- * fall back to the admin-managed settings token.
- */
-async function getFallbackToken(): Promise<string> {
-  try { return await getSecretValue('githubToken'); } catch { return ''; }
-}
+/** The caller's own GitHub token is resolved server-side; the browser never reads or sends it. */
 
 async function callGitHub(action: string, params: Record<string, unknown> = {}) {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) throw new Error('You must be signed in to use GitHub features.');
 
-  const send = (token?: string) => fetch(GITHUB_URL, {
+  const send = () => fetch(GITHUB_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${session.access_token}`,
       apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
     },
-    body: JSON.stringify({ action, ...(token ? { token } : {}), ...params }),
+    body: JSON.stringify({ action, ...params }),
   });
 
-  let resp = await send();
-  let data = await resp.json().catch(() => ({}));
+  const resp = await send();
+  const data = await resp.json().catch(() => ({}));
   if (resp.status === 400 && data?.error === 'no_token') {
-    const token = await getFallbackToken();
-    if (!token) throw new Error('GitHub token not configured. Add it in Settings → API Keys.');
-    resp = await send(token);
-    data = await resp.json().catch(() => ({}));
+    throw new Error('GitHub token not configured. Add your own githubToken in Settings → API Keys.');
   }
   if (!resp.ok) {
     throw new Error(data.error || `GitHub error ${resp.status}`);
@@ -146,8 +135,7 @@ export const githubService = {
     try {
       const { data } = await (supabase as unknown as { from: (t: string) => any })
         .from('user_secrets').select('id').eq('name', 'githubToken').maybeSingle();
-      if (data) return true;
-    } catch { /* fall through */ }
-    return !!(await getFallbackToken());
+      return !!data;
+    } catch { return false; }
   },
 };
