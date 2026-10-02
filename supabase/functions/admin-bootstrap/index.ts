@@ -33,6 +33,14 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Disabled by default. Bootstrap is a one-time first-admin creation path and must be
+    // explicitly enabled by the owner (ADMIN_BOOTSTRAP_ENABLED=true) for that window only.
+    if ((Deno.env.get("ADMIN_BOOTSTRAP_ENABLED") || "").trim().toLowerCase() !== "true") {
+      return new Response(JSON.stringify({ error: "bootstrap_disabled" }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
     const adminEmail = (Deno.env.get("ADMIN_EMAIL") || "").trim().toLowerCase();
     const adminPassword = Deno.env.get("ADMIN_PASSWORD") || "";
     if (!adminEmail || !adminPassword) {
@@ -46,12 +54,8 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const admin = createClient(supabaseUrl, serviceKey);
-    const { data: allowlisted } = await admin
-      .from("admin_email_allowlist")
-      .select("id")
-      .eq("email", incomingEmail)
-      .maybeSingle();
-    const emailOk = safeEqual(incomingEmail, adminEmail) || !!allowlisted;
+    // Only the single configured ADMIN_EMAIL may be bootstrapped (allowlisted users sign up normally).
+    const emailOk = safeEqual(incomingEmail, adminEmail);
     const passOk = safeEqual(password, adminPassword);
     if (!emailOk || !passOk) {
       // Don't leak which one mismatched
@@ -78,11 +82,11 @@ Deno.serve(async (req) => {
     const existing = list.users.find((u) => (u.email || "").toLowerCase() === targetEmail);
 
     if (existing) {
-      userId = existing.id;
-      // Reset password to current secret (in case it changed) and ensure email confirmed
-      await admin.auth.admin.updateUserById(existing.id, {
-        password: adminPassword,
-        email_confirm: true,
+      // Never reset an existing account's password from a public endpoint.
+      // Existing admins use normal sign-in or the standard password-recovery email.
+      return new Response(JSON.stringify({ error: "already_bootstrapped" }), {
+        status: 409,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     } else {
       const { data: created, error: createErr } = await admin.auth.admin.createUser({
