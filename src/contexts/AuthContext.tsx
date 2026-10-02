@@ -27,21 +27,23 @@ function withTimeout<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
   ]);
 }
 
-function cachedAuth(): { user: User | null; isAdmin: boolean } {
-  try { return JSON.parse(localStorage.getItem(CACHE_KEY) || 'null') || { user: null, isAdmin: false }; }
-  catch { return { user: null, isAdmin: false }; }
+function cachedAuth(): { user: User | null } {
+  try { return { user: JSON.parse(localStorage.getItem(CACHE_KEY) || 'null')?.user ?? null }; }
+  catch { return { user: null }; }
 }
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const cached = cachedAuth();
   const [user, setUser] = useState<User | null>(cached.user);
-  const [isAdmin, setIsAdmin] = useState(cached.isAdmin);
+  // Admin status is never restored from cache: it starts false and is only set by a
+  // live server check (admin-check). Server/RLS checks remain authoritative regardless.
+  const [isAdmin, setIsAdmin] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   // Keep the last known identity so the shell renders instantly and offline.
   useEffect(() => {
-    try { localStorage.setItem(CACHE_KEY, JSON.stringify({ user, isAdmin })); } catch { /* quota */ }
-  }, [user, isAdmin]);
+    try { localStorage.setItem(CACHE_KEY, JSON.stringify({ user })); } catch { /* quota */ }
+  }, [user]);
 
   // Check admin role via edge function (which reads ADMIN_EMAIL secret server-side)
   const syncRole = async () => {
@@ -49,11 +51,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const { data: { session } } = await withTimeout(
         supabase.auth.getSession(), 4000, { data: { session: null } } as never,
       );
-      if (!session) {
-        // Offline: keep the cached role instead of downgrading the UI.
-        if (navigator.onLine) setIsAdmin(false);
-        return;
-      }
+      if (!session) { setIsAdmin(false); return; } // fail closed
 
       const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-check`;
       const res = await withTimeout(
@@ -88,10 +86,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           if (user) startUserPushListener(user.id).catch(() => {});
         }
       } else {
-        if (navigator.onLine && res.status !== 503) setIsAdmin(false);
+        setIsAdmin(false); // fail closed (including offline/timeout)
       }
     } catch {
-      /* offline — keep the cached role */
+      setIsAdmin(false); // offline — admin UI fails closed
     }
   };
 

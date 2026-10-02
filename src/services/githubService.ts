@@ -1,46 +1,40 @@
 // GitHub Service - calls edge function for GitHub operations
 import { supabase } from '@/integrations/supabase/client';
 import { getSecretValue } from './systemSettingsService';
-import { getUserSecretValue } from './userSecretsService';
 
 const GITHUB_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/github`;
 
 /**
- * The GitHub token is never kept in the browser. It is read on demand from the
- * per-user secrets vault, falling back to the admin-managed server settings.
+ * The caller's own GitHub token is resolved server-side by the github function,
+ * so it is not read into the browser. Only if the user has no own token do we
+ * fall back to the admin-managed settings token.
  */
-async function getGitHubToken(): Promise<string> {
-  try {
-    const own = await getUserSecretValue('githubToken');
-    if (own) return own;
-  } catch { /* fall through */ }
-  try {
-    return await getSecretValue('githubToken');
-  } catch {
-    return '';
-  }
+async function getFallbackToken(): Promise<string> {
+  try { return await getSecretValue('githubToken'); } catch { return ''; }
 }
 
 async function callGitHub(action: string, params: Record<string, unknown> = {}) {
-  const token = await getGitHubToken();
-  if (!token) {
-    throw new Error('GitHub token not configured. Add it in Settings → API Keys.');
-  }
-
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) throw new Error('You must be signed in to use GitHub features.');
 
-  const resp = await fetch(GITHUB_URL, {
+  const send = (token?: string) => fetch(GITHUB_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${session.access_token}`,
       apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
     },
-    body: JSON.stringify({ action, token, ...params }),
+    body: JSON.stringify({ action, ...(token ? { token } : {}), ...params }),
   });
 
-  const data = await resp.json();
+  let resp = await send();
+  let data = await resp.json().catch(() => ({}));
+  if (resp.status === 400 && data?.error === 'no_token') {
+    const token = await getFallbackToken();
+    if (!token) throw new Error('GitHub token not configured. Add it in Settings → API Keys.');
+    resp = await send(token);
+    data = await resp.json().catch(() => ({}));
+  }
   if (!resp.ok) {
     throw new Error(data.error || `GitHub error ${resp.status}`);
   }
@@ -112,7 +106,7 @@ export const githubService = {
   },
 
   async deleteRepo(owner: string, repo: string) {
-    return callGitHub('delete_repo', { owner, repo });
+    return callGitHub('delete_repo', { owner, repo, confirm: `${owner}/${repo}` });
   },
 
   /* --------------- GitHub Actions lifecycle (read-only truth) --------------- */
