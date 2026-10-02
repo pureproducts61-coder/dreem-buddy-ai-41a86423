@@ -79,13 +79,28 @@ serve(async (req) => {
       const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
       if (SERVICE_ROLE) {
         const svc = createClient(SUPABASE_URL, SERVICE_ROLE);
-        const { data: prof } = await svc.from("user_profiles").select("role").eq("user_id", userId).maybeSingle();
-        isAdmin = prof?.role === "admin";
+        // Authoritative admin check: verified email in ADMIN_EMAIL or admin_email_allowlist.
+        // The persisted user_profiles.role is NOT trusted. Any lookup failure fails closed.
+        try {
+          const email = (user.email || "").trim().toLowerCase();
+          const verified = !!(user.email_confirmed_at || (user as any).confirmed_at);
+          const adminEmail = (Deno.env.get("ADMIN_EMAIL") || "").trim().toLowerCase();
+          if (verified && email) {
+            if (adminEmail && email === adminEmail) isAdmin = true;
+            else {
+              const { data: al, error: alErr } = await svc.from("admin_email_allowlist")
+                .select("id").eq("email", email).maybeSingle();
+              isAdmin = !alErr && !!al;
+            }
+          }
+        } catch { isAdmin = false; }
         // Resolve the caller's own GitHub token server-side so it need not transit the browser.
         if (!token) {
           const { data: sec } = await svc.from("user_secrets").select("value")
             .eq("user_id", userId).eq("name", "githubToken").maybeSingle();
           token = (sec as any)?.value || "";
+          // No shared/admin token fallback: shared-token intent is not established, so
+          // users without their own token get no_token.
         }
       }
     } catch {

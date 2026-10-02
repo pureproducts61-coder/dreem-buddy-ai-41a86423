@@ -59,3 +59,21 @@ describe('AuthContext admin cache is UI-only and fails closed', () => {
     expect(src).not.toMatch(/keep the cached role/);
   });
 });
+
+describe('github follow-up hardening', () => {
+  const src = read('supabase/functions/github/index.ts');
+  const client = read('src/services/githubService.ts');
+  it('destructive auth uses verified email + ADMIN_EMAIL/allowlist, not profile role', () => {
+    expect(src).not.toMatch(/prof\?\.role === "admin"/);
+    expect(src).toMatch(/email_confirmed_at/);
+    expect(src).toMatch(/ADMIN_EMAIL/);
+    expect(src).toMatch(/from\("admin_email_allowlist"\)/);
+    expect(src).toMatch(/catch \{ isAdmin = false; \}/);
+  });
+  it('no shared token fallback; client never reads or sends a token', () => {
+    expect(client).not.toMatch(/getSecretValue/);
+    expect(client).not.toMatch(/systemSettingsService/);
+    expect(client).not.toMatch(/\btoken\b\s*[,}]/);
+    expect(src).not.toMatch(/system_settings/);
+  });
+});
