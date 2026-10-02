@@ -164,6 +164,11 @@ Deno.serve(async (req) => {
     const { query, url, mode = 'search', limit = 5 } = body as { query?: string; url?: string; mode?: 'search' | 'scrape'; limit?: number };
 
     if (mode === 'scrape' && url) {
+      // Arbitrary-URL fetching is restricted to administrators.
+      const { data: prof } = await userClient.from('user_profiles').select('role').eq('user_id', user.id).maybeSingle();
+      if ((prof as any)?.role !== 'admin') {
+        return new Response(JSON.stringify({ error: 'forbidden' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
       if (typeof url !== 'string' || url.length > 2000 || !validatePublicUrl(url)) {
         return new Response(JSON.stringify({ error: 'invalid_url' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }

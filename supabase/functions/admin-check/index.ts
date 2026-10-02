@@ -48,7 +48,8 @@ Deno.serve(async (req) => {
       .select("id")
       .eq("email", userEmail)
       .maybeSingle();
-    const isAdminEmail = (!!adminEmail && userEmail === adminEmail) || !!allowlisted;
+    const emailVerified = !!(user.email_confirmed_at || (user as any).confirmed_at);
+    const isAdminEmail = emailVerified && ((!!adminEmail && userEmail === adminEmail) || !!allowlisted);
 
     // Ensure profile exists
     const { data: existing } = await adminClient
