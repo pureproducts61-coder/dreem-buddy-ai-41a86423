@@ -37,7 +37,7 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: "unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
     const adminEmail = (Deno.env.get("ADMIN_EMAIL") || "").toLowerCase().trim();
-    let isAdmin = !!user.email && user.email.toLowerCase() === adminEmail;
+    let isAdmin = !!user.email && !!user.email_confirmed_at && !!adminEmail && user.email.toLowerCase() === adminEmail;
     if (!isAdmin) {
       const { data: profile } = await admin.from("user_profiles").select("role").eq("user_id", user.id).maybeSingle();
       isAdmin = profile?.role === "admin";

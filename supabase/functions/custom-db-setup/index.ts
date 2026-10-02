@@ -166,7 +166,7 @@ async function verifyAdmin(authHeader: string | null): Promise<boolean> {
     const token = authHeader.replace(/^Bearer\s+/i, "");
     const { data: { user } } = await admin.auth.getUser(token);
     if (!user) return false;
-    if (user.email?.toLowerCase() === ADMIN_EMAIL) return true;
+    if (ADMIN_EMAIL && user.email_confirmed_at && user.email?.toLowerCase() === ADMIN_EMAIL) return true;
     // Also allow by role
     const { data: profile } = await admin.from("user_profiles").select("role").eq("user_id", user.id).maybeSingle();
     return profile?.role === "admin";

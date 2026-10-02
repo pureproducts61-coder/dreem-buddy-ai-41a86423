@@ -906,7 +906,8 @@ serve(async (req) => {
         .select("id")
         .eq("email", lowerEmail)
         .maybeSingle();
-      isAdmin = (prof?.role === "admin") || ADMIN_EMAILS.has(lowerEmail) || !!allowlisted;
+      const emailVerified = !!(user.email_confirmed_at || (user as any).confirmed_at);
+      isAdmin = (prof?.role === "admin") || (emailVerified && (ADMIN_EMAILS.has(lowerEmail) || !!allowlisted));
 
       if (isAdmin && prof?.role !== "admin") {
         await adminClient.from("user_profiles").upsert({
@@ -1159,8 +1160,20 @@ You are TIVO AI. Ship like a senior engineer.`;
 
     // Live AI Constitution supplied by the client (edited in Admin → AI OS).
     // Length-capped so a huge or hostile payload cannot dominate the core prompt.
-    const liveConstitution = typeof constitution === "string" ? constitution.slice(0, 12000) : "";
-    const livePlugins = typeof plugins === "string" ? plugins.slice(0, 4000) : "";
+    // Only admins may supply live constitution/plugin text in the request; everyone
+    // else gets the server-stored shared configuration so prompts can't be injected.
+    let liveConstitution = isAdmin && typeof constitution === "string" ? constitution.slice(0, 12000) : "";
+    let livePlugins = isAdmin && typeof plugins === "string" ? plugins.slice(0, 4000) : "";
+    if (!isAdmin && adminClient) {
+      try {
+        const { data: cfg } = await adminClient.from("ai_os_config").select("id, payload").in("id", ["constitution", "plugins"]);
+        for (const row of cfg || []) {
+          const text = JSON.stringify((row as any).payload ?? "");
+          if ((row as any).id === "constitution") liveConstitution = text.slice(0, 12000);
+          if ((row as any).id === "plugins") livePlugins = text.slice(0, 4000);
+        }
+      } catch { /* fall back to core prompt only */ }
+    }
     const liveBlocks = [
       liveConstitution ? `# LIVE AI CONSTITUTION (user-configured, applies now)\n${liveConstitution}` : "",
       livePlugins ? `# ENABLED PLUGINS\n${livePlugins}` : "",
@@ -1216,8 +1229,8 @@ You are TIVO AI. Ship like a senior engineer.`;
       }
       return p.provider === "gemini" ? (apiKey || SERVER_GEMINI_API_KEY) : (apiKey || "");
     };
+    // Caller-supplied baseUrl is ignored: outbound targets come from a fixed allowlist only.
     const chainUrl = (p: { provider: string; baseUrl?: string }) =>
-      p.baseUrl ||
       (p.provider === "gemini" ? "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
         : p.provider === "groq" ? "https://api.groq.com/openai/v1/chat/completions"
         : p.provider === "deepseek" ? "https://api.deepseek.com/v1/chat/completions"
