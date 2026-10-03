@@ -11,10 +11,11 @@
  */
 
 import { BUILD_PIPELINE_STEPS, type BuildPipelineStepId } from '@/config/ai-workflows';
-import { githubService } from './githubService';
-import { pushProjectWithBuild, downloadProjectAsZip, type BuildTarget } from './projectExportService';
+import { githubService, type WorkflowRun } from './githubService';
+import { pushProjectWithBuild, downloadProjectAsZip, type BuildTarget, type PushWithBuildResult } from './projectExportService';
 import { supabase } from '@/integrations/supabase/client';
 import { createBuildReport, updateBuildReport } from './buildReportsService';
+import { lifecycleFromActionsRun, type ExecutionLifecycle } from './os/resourceContracts';
 
 export type StepStatus = 'pending' | 'active' | 'done' | 'error';
 
@@ -27,12 +28,17 @@ export interface PipelineStepState {
   endedAt?: number;
 }
 
-/** Truthful build lifecycle state — never "success" without a completed Actions run. */
+/** Truthful build lifecycle state — never "success" without a completed Actions run + artifact. */
 export type BuildVerification = 'unverified' | 'pending' | 'success' | 'failure';
 
+export interface ArtifactInfo { name: string; sizeBytes: number; expired: boolean }
+
 export interface PipelineResult {
+  /** True only for a verified outcome: ZIP export done, or Actions success with the expected artifact. */
   ok: boolean;
   steps: PipelineStepState[];
+  /** What kind of delivery this result describes. A ZIP export is never a verified GitHub build. */
+  delivery?: 'zip-export' | 'github-actions';
   runUrl?: string;
   repoUrl?: string;
   error?: string;
@@ -40,10 +46,15 @@ export interface PipelineResult {
   runId?: number;
   /** queued | in_progress | completed, straight from the Actions API. */
   runStatus?: string;
+  runConclusion?: string | null;
+  /** Shared lifecycle state of the run (see resourceContracts). */
+  lifecycle?: ExecutionLifecycle;
   /** Verified outcome of the run. `pending`/`unverified` means we do NOT claim success. */
   verification?: BuildVerification;
   /** Artifact metadata reported by the Actions API (no download tokens). */
-  artifacts?: Array<{ name: string; sizeBytes: number; expired: boolean }>;
+  artifacts?: ArtifactInfo[];
+  commitSha?: string;
+  workflowFile?: string;
 }
 
 export interface RunPipelineInput {
@@ -54,71 +65,141 @@ export interface RunPipelineInput {
   onUpdate: (steps: PipelineStepState[]) => void;
   /** Live monitoring hook — fired for every step change and final artifact link. */
   onChat?: (event: {
-    kind: 'step' | 'complete' | 'error';
+    kind: 'step' | 'complete' | 'pending' | 'error';
     title: string;
     detail?: string;
     url?: string;
   }) => void;
   /** How long to wait for the Actions run to complete before returning `pending`. */
   verifyTimeoutMs?: number;
+  /** Poll interval overrides (tests). */
+  pollMs?: number;
+}
+
+/* ------------------------------------------------------------------ */
+/* Run identity + artifact checks (pure, unit-tested)                  */
+/* ------------------------------------------------------------------ */
+
+export interface RunMatchCriteria {
+  workflowFile?: string;
+  branch?: string;
+  headSha?: string;
+  event?: string;
+  /** Epoch ms when the trigger was sent; runs created well before are ignored. */
+  since: number;
+  /** Clock skew tolerance in ms. */
+  skewMs?: number;
+}
+
+/** Picks the run that belongs to THIS trigger, not just any recent run. */
+export function matchWorkflowRun(runs: WorkflowRun[], c: RunMatchCriteria): WorkflowRun | null {
+  const skew = c.skewMs ?? 30_000;
+  const candidates = runs.filter((r) => {
+    if (c.workflowFile && r.path && !r.path.endsWith(`/${c.workflowFile}`)) return false;
+    if (c.branch && r.head_branch && r.head_branch !== c.branch) return false;
+    if (c.event && r.event && r.event !== c.event) return false;
+    if (c.headSha && r.head_sha && r.head_sha !== c.headSha) return false;
+    return new Date(r.created_at).getTime() >= c.since - skew;
+  });
+  // Oldest qualifying run = the one our trigger created first.
+  candidates.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+  return candidates[0] ?? null;
+}
+
+/** A successful run only counts when the expected, non-expired, non-empty artifact exists. */
+export function checkExpectedArtifact(
+  artifacts: ArtifactInfo[],
+  expectedName: string | undefined,
+): { ok: boolean; reason?: string } {
+  if (!expectedName) return { ok: artifacts.some((a) => !a.expired && a.sizeBytes > 0), reason: artifacts.length ? undefined : 'No artifact was uploaded.' };
+  const a = artifacts.find((x) => x.name === expectedName);
+  if (!a) return { ok: false, reason: `Expected artifact "${expectedName}" was not uploaded (found: ${artifacts.map((x) => x.name).join(', ') || 'none'}).` };
+  if (a.expired) return { ok: false, reason: `Artifact "${expectedName}" has expired.` };
+  if (a.sizeBytes <= 0) return { ok: false, reason: `Artifact "${expectedName}" is empty.` };
+  return { ok: true };
+}
+
+export interface VerifyResult {
+  verification: BuildVerification;
+  lifecycle: ExecutionLifecycle;
+  run?: { id: number; status: string; conclusion: string | null; html_url: string };
+  artifacts?: ArtifactInfo[];
+  error?: string;
 }
 
 /**
- * Finds the real Actions run for a push and follows it to completion.
- * Returns `pending` when the run is still going and `unverified` when no run
- * could be observed — never a fabricated success.
+ * Finds the exact Actions run for a trigger and follows it to completion.
+ * queued/in_progress at timeout → `pending`; no run observed → `unverified`;
+ * completed non-success → `failure`; success without expected artifact → `failure`.
  */
 export async function verifyWorkflowRun(
   owner: string,
   repo: string,
-  opts: { since: number; timeoutMs?: number; branch?: string; onProgress?: (run: { id: number; status: string }) => void },
-): Promise<{
-  verification: BuildVerification;
-  run?: { id: number; status: string; conclusion: string | null; html_url: string };
-  artifacts?: Array<{ name: string; sizeBytes: number; expired: boolean }>;
-  error?: string;
-}> {
+  opts: {
+    since: number;
+    timeoutMs?: number;
+    branch?: string;
+    workflowFile?: string;
+    headSha?: string;
+    event?: string;
+    expectedArtifact?: string;
+    discoverMs?: number;
+    pollMs?: number;
+    onProgress?: (run: { id: number; status: string }) => void;
+  },
+): Promise<VerifyResult> {
   const timeoutMs = opts.timeoutMs ?? 300_000;
+  const pollMs = opts.pollMs ?? 10_000;
   const deadline = Date.now() + timeoutMs;
+  const branch = opts.branch ?? 'main';
   let runId: number | null = null;
-  let last: { id: number; status: string; conclusion: string | null; html_url: string } | undefined;
+  let last: VerifyResult['run'];
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
   try {
-    // 1. Discover the run created by this push (up to 60s of the budget).
-    const discoverUntil = Math.min(deadline, Date.now() + 60_000);
-    while (Date.now() < discoverUntil && runId === null) {
+    const discoverUntil = Math.min(deadline, Date.now() + (opts.discoverMs ?? 60_000));
+    do {
       const { workflow_runs = [] } = await githubService.listWorkflowRuns(owner, repo, {
-        branch: opts.branch ?? 'main',
-        perPage: 10,
+        branch, perPage: 20, workflowId: opts.workflowFile, event: opts.event, headSha: opts.headSha,
       });
-      const match = workflow_runs.find((r) => new Date(r.created_at).getTime() >= opts.since - 60_000);
+      const match = matchWorkflowRun(workflow_runs, {
+        workflowFile: opts.workflowFile, branch, headSha: opts.headSha, event: opts.event, since: opts.since,
+      });
       if (match) { runId = match.id; last = { id: match.id, status: match.status, conclusion: match.conclusion, html_url: match.html_url }; break; }
-      await new Promise((r) => setTimeout(r, 5_000));
-    }
-    if (runId === null) return { verification: 'unverified', error: 'No GitHub Actions run was observed for this push.' };
+      if (Date.now() >= discoverUntil) break;
+      await sleep(Math.min(5_000, pollMs));
+    } while (Date.now() < discoverUntil);
+    if (runId === null) return { verification: 'unverified', lifecycle: 'unverified', error: 'No matching GitHub Actions run was observed for this trigger.' };
 
-    // 2. Follow it to completion.
-    while (Date.now() < deadline) {
+    for (;;) {
       const run = await githubService.getWorkflowRun(owner, repo, runId);
       last = { id: run.id, status: run.status, conclusion: run.conclusion, html_url: run.html_url };
       opts.onProgress?.({ id: run.id, status: run.status });
+      const lifecycle = lifecycleFromActionsRun(run.status, run.conclusion);
       if (run.status === 'completed') {
-        if (run.conclusion !== 'success') {
-          return { verification: 'failure', run: last, error: `Actions run concluded "${run.conclusion}".` };
+        if (lifecycle !== 'success') {
+          return { verification: 'failure', lifecycle, run: last, error: `Actions run concluded "${run.conclusion}".` };
         }
-        let artifacts: Array<{ name: string; sizeBytes: number; expired: boolean }> = [];
+        let artifacts: ArtifactInfo[] = [];
         try {
           const res = await githubService.listRunArtifacts(owner, repo, runId);
           artifacts = (res.artifacts || []).map((a) => ({ name: a.name, sizeBytes: a.size_in_bytes, expired: a.expired }));
-        } catch { /* artifact listing is best-effort */ }
-        return { verification: 'success', run: last, artifacts };
+        } catch (e) {
+          return { verification: 'unverified', lifecycle: 'unverified', run: last, error: `Run succeeded but artifacts could not be read: ${e instanceof Error ? e.message : String(e)}` };
+        }
+        const check = checkExpectedArtifact(artifacts, opts.expectedArtifact);
+        if (!check.ok) return { verification: 'failure', lifecycle: 'failure', run: last, artifacts, error: check.reason };
+        return { verification: 'success', lifecycle: 'success', run: last, artifacts };
       }
-      await new Promise((r) => setTimeout(r, 10_000));
+      if (Date.now() >= deadline) {
+        return { verification: 'pending', lifecycle, run: last, error: 'The Actions run had not finished before the wait timed out.' };
+      }
+      await sleep(pollMs);
     }
-    return { verification: 'pending', run: last, error: 'The Actions run had not finished before the wait timed out.' };
   } catch (e) {
     return {
       verification: last ? 'pending' : 'unverified',
+      lifecycle: last ? 'pending' : 'unverified',
       run: last,
       error: e instanceof Error ? e.message : 'Could not read the Actions run status.',
     };
