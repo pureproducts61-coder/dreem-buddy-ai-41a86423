@@ -29,12 +29,32 @@ export async function downloadProjectAsZip(
   URL.revokeObjectURL(url);
 }
 
-// GitHub Actions workflow for EXE (Electron)
-function getElectronWorkflow(appName: string): string {
-  return `name: Build Windows EXE
+/**
+ * Build workflow contract. Each target gets ONE workflow file with a known
+ * name and a known artifact name, triggered ONLY by workflow_dispatch so the
+ * pipeline can dispatch it explicitly and identify the exact run.
+ * (A push never starts these workflows — that avoids duplicate/ambiguous runs.)
+ */
+export interface BuildWorkflowSpec {
+  target: BuildTarget;
+  /** File name under .github/workflows — also the workflow id for the Actions API. */
+  workflowFile: string;
+  /** Artifact the run must upload for the build to count as deliverable. */
+  artifactName: string;
+  content: string;
+}
+
+export function artifactSlug(appName: string): string {
+  return appName.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').slice(0, 60) || 'tivo-app';
+}
+
+export function getBuildWorkflowSpec(target: BuildTarget, appName: string): BuildWorkflowSpec {
+  const slug = artifactSlug(appName);
+  const workflowFile = `tivo-build-${target}.yml`;
+  if (target === 'exe') {
+    const artifactName = `${slug}-windows`;
+    return { target, workflowFile, artifactName, content: `name: TIVO Build EXE
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 jobs:
@@ -45,22 +65,20 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: npm ci
+      - run: npm install
       - run: npm run build
-      - run: npx @electron/packager . "${appName}" --platform=win32 --arch=x64 --out=release --overwrite
+      - run: npx @electron/packager . "${slug}" --platform=win32 --arch=x64 --out=release --overwrite
       - uses: actions/upload-artifact@v4
         with:
-          name: ${appName}-windows
+          name: ${artifactName}
           path: release/
-`;
-}
-
-// GitHub Actions workflow for APK (Capacitor)
-function getCapacitorWorkflow(appName: string): string {
-  return `name: Build Android APK
+          if-no-files-found: error
+` };
+  }
+  if (target === 'apk') {
+    const artifactName = `${slug}-android`;
+    return { target, workflowFile, artifactName, content: `name: TIVO Build APK
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 jobs:
@@ -74,43 +92,73 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 17
-      - run: npm ci
+          java-version: 21
+      - uses: android-actions/setup-android@v3
+      - run: npm install
       - run: npm run build
+      - run: npm install @capacitor/core @capacitor/cli @capacitor/android
+      - run: if [ ! -d android ]; then npx cap add android; fi
       - run: npx cap sync android
       - name: Build APK
         working-directory: android
-        run: ./gradlew assembleDebug
+        run: chmod +x gradlew && ./gradlew assembleDebug --no-daemon
       - uses: actions/upload-artifact@v4
         with:
-          name: ${appName}-android
+          name: ${artifactName}
           path: android/app/build/outputs/apk/debug/*.apk
-`;
+          if-no-files-found: error
+` };
+  }
+  const artifactName = `${slug}-web-dist`;
+  return { target, workflowFile, artifactName, content: `name: TIVO Build Web
+on:
+  workflow_dispatch:
+
+jobs:
+  build-web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install
+      - run: npm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${artifactName}
+          path: dist/
+          if-no-files-found: error
+` };
 }
 
-// Push project to GitHub with optional build workflow
+export interface PushWithBuildResult {
+  workflowFile: string;
+  artifactName: string;
+  /** Commit SHA of the last pushed file, when the server reports it. */
+  headSha?: string;
+}
+
+// Push project to GitHub together with the target's dispatch-only build workflow
 export async function pushProjectWithBuild(
   owner: string,
   repo: string,
   files: ProjectFile[],
   buildTarget: BuildTarget,
   appName: string
-): Promise<void> {
-  const allFiles = [...files];
+): Promise<PushWithBuildResult> {
+  const spec = getBuildWorkflowSpec(buildTarget, appName);
+  // Workflow file goes last so the final commit (headSha) contains everything.
+  const allFiles = [
+    ...files.filter((f) => f.path !== `.github/workflows/${spec.workflowFile}`),
+    { path: `.github/workflows/${spec.workflowFile}`, content: spec.content },
+  ];
 
-  if (buildTarget === 'exe') {
-    allFiles.push({
-      path: '.github/workflows/build-exe.yml',
-      content: getElectronWorkflow(appName),
-    });
-  } else if (buildTarget === 'apk') {
-    allFiles.push({
-      path: '.github/workflows/build-apk.yml',
-      content: getCapacitorWorkflow(appName),
-    });
-  }
-
-  await githubService.pushProject(owner, repo, allFiles);
+  const res = await githubService.pushProject(owner, repo, allFiles) as {
+    headSha?: string; files?: Array<{ commitSha?: string }>;
+  } | undefined;
+  const headSha = res?.headSha || res?.files?.at(-1)?.commitSha || undefined;
+  return { workflowFile: spec.workflowFile, artifactName: spec.artifactName, headSha };
 }
 
 // Save project files to localStorage for later push
