@@ -35,6 +35,10 @@ export interface WorkflowRun {
   id: number;
   name?: string;
   head_sha?: string;
+  head_branch?: string;
+  /** e.g. ".github/workflows/tivo-build-web.yml" */
+  path?: string;
+  event?: string;
   status: 'queued' | 'in_progress' | 'completed' | string;
   conclusion: 'success' | 'failure' | 'cancelled' | 'skipped' | 'timed_out' | null;
   html_url: string;
@@ -113,9 +117,12 @@ export const githubService = {
   async listWorkflowRuns(
     owner: string,
     repo: string,
-    opts: { branch?: string; perPage?: number } = {},
+    opts: { branch?: string; perPage?: number; workflowId?: string; event?: string; headSha?: string } = {},
   ): Promise<{ workflow_runs: WorkflowRun[] }> {
-    return callGitHub('list_workflow_runs', { owner, repo, branch: opts.branch, perPage: opts.perPage ?? 10 });
+    return callGitHub('list_workflow_runs', {
+      owner, repo, branch: opts.branch, perPage: opts.perPage ?? 10,
+      workflowId: opts.workflowId, event: opts.event, headSha: opts.headSha,
+    });
   },
 
   async getWorkflowRun(owner: string, repo: string, runId: number): Promise<WorkflowRun> {

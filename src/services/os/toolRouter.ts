@@ -161,8 +161,9 @@ export function routeToolAsExecution(request: ExecutionRequest): ExecutionResult
       resourceId: decision.device?.device_id, checkedAt: new Date().toISOString(),
     };
   }
+  // Routing is not execution: report 'routed' and never ok=true here.
   return {
-    status: 'success', ok: true, data: decision,
+    status: 'routed', ok: false, data: decision,
     resourceId: decision.device?.device_id, checkedAt: new Date().toISOString(),
   };
 }

@@ -82,8 +82,40 @@ export function deriveReadiness(input: {
   return 'credential-available';
 }
 
+/**
+ * ONE execution lifecycle shared by routing, tools, tasks and builds.
+ *  - routed            : a handler/resource was chosen; nothing has run yet
+ *  - requires-approval : blocked until a human explicitly approves
+ *  - queued / running  : accepted and observed in progress
+ *  - pending           : started but outcome not yet observed (e.g. wait timed out)
+ *  - unverified        : could not observe the operation at all — NOT success
+ *  - success           : outcome verified by evidence
+ *  - failure / cancelled / timed-out : verified negative outcomes
+ *  - unavailable       : no capable resource exists right now
+ */
+export type ExecutionLifecycle =
+  | 'routed' | 'requires-approval' | 'queued' | 'running' | 'pending' | 'unverified'
+  | 'success' | 'failure' | 'cancelled' | 'timed-out' | 'unavailable';
+
 /** Normalized status of any execution through a connector. */
-export type ExecutionStatus = 'success' | 'failure' | 'unavailable' | 'requires-approval';
+export type ExecutionStatus = ExecutionLifecycle;
+
+export const TERMINAL_LIFECYCLE: ReadonlySet<ExecutionLifecycle> = new Set(['success', 'failure', 'cancelled', 'timed-out', 'unavailable']);
+export const isVerifiedSuccess = (s: ExecutionLifecycle) => s === 'success';
+
+/** Maps a GitHub Actions run (status, conclusion) onto the shared lifecycle. */
+export function lifecycleFromActionsRun(status: string | undefined, conclusion: string | null | undefined): ExecutionLifecycle {
+  if (!status) return 'unverified';
+  if (status === 'queued' || status === 'waiting' || status === 'requested' || status === 'pending') return 'queued';
+  if (status !== 'completed') return 'running';
+  switch (conclusion) {
+    case 'success': return 'success';
+    case 'cancelled': return 'cancelled';
+    case 'timed_out': return 'timed-out';
+    case 'action_required': return 'requires-approval';
+    default: return 'failure';
+  }
+}
 
 export interface ExecutionRequest {
   capability: CapabilityId;

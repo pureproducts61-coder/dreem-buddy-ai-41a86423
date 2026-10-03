@@ -28,6 +28,9 @@ function validateParams(p: Record<string, unknown>): string | null {
   if (p.path !== undefined && p.path !== "" && badPath(p.path)) return "path";
   if (p.workflowId !== undefined && (typeof p.workflowId !== "string" || !/^[A-Za-z0-9_.-]{1,100}$/.test(p.workflowId))) return "workflowId";
   if (Array.isArray(p.files) && p.files.some((f: any) => badPath(f?.path))) return "files";
+  if (p.headSha !== undefined && (typeof p.headSha !== "string" || !/^[0-9a-f]{7,40}$/i.test(p.headSha))) return "headSha";
+  if (p.event !== undefined && (typeof p.event !== "string" || !/^[a-z_]{1,40}$/.test(p.event))) return "event";
+  if (p.branch !== undefined && (typeof p.branch !== "string" || !/^[A-Za-z0-9_.\/-]{1,100}$/.test(p.branch) || p.branch.includes(".."))) return "branch";
   return null;
 }
 
@@ -219,9 +222,9 @@ serve(async (req) => {
               }),
             }
           );
-          results.push({ path: file.path, sha: res.content?.sha });
+          results.push({ path: file.path, sha: res.content?.sha, commitSha: res.commit?.sha });
         }
-        result = { success: true, files: results };
+        result = { success: true, files: results, headSha: results.at(-1)?.commitSha ?? null };
         break;
       }
 
@@ -246,10 +249,15 @@ serve(async (req) => {
       }
 
       case "list_workflow_runs": {
-        const { owner, repo, branch, perPage } = params;
+        const { owner, repo, branch, perPage, workflowId, event, headSha } = params;
         const qs = new URLSearchParams({ per_page: String(perPage || 10) });
         if (branch) qs.set("branch", branch);
-        result = await githubFetch(`/repos/${owner}/${repo}/actions/runs?${qs}`, token);
+        if (event) qs.set("event", event);
+        if (headSha) qs.set("head_sha", headSha);
+        const base = workflowId
+          ? `/repos/${owner}/${repo}/actions/workflows/${encodeURIComponent(workflowId)}/runs`
+          : `/repos/${owner}/${repo}/actions/runs`;
+        result = await githubFetch(`${base}?${qs}`, token);
         break;
       }
 

@@ -513,8 +513,11 @@ export type Database = {
       }
       build_reports: {
         Row: {
+          artifacts: Json | null
           build_target: string
+          commit_sha: string | null
           created_at: string
+          delivery: string | null
           duration_ms: number | null
           error: string | null
           findings: Json
@@ -522,15 +525,23 @@ export type Database = {
           project_id: string | null
           project_name: string
           repo_url: string | null
+          run_conclusion: string | null
+          run_id: number | null
+          run_status: string | null
           run_url: string | null
           status: string
           steps: Json
           updated_at: string
           user_id: string
+          verification: string | null
+          workflow_file: string | null
         }
         Insert: {
+          artifacts?: Json | null
           build_target: string
+          commit_sha?: string | null
           created_at?: string
+          delivery?: string | null
           duration_ms?: number | null
           error?: string | null
           findings?: Json
@@ -538,15 +549,23 @@ export type Database = {
           project_id?: string | null
           project_name: string
           repo_url?: string | null
+          run_conclusion?: string | null
+          run_id?: number | null
+          run_status?: string | null
           run_url?: string | null
           status?: string
           steps?: Json
           updated_at?: string
           user_id: string
+          verification?: string | null
+          workflow_file?: string | null
         }
         Update: {
+          artifacts?: Json | null
           build_target?: string
+          commit_sha?: string | null
           created_at?: string
+          delivery?: string | null
           duration_ms?: number | null
           error?: string | null
           findings?: Json
@@ -554,11 +573,16 @@ export type Database = {
           project_id?: string | null
           project_name?: string
           repo_url?: string | null
+          run_conclusion?: string | null
+          run_id?: number | null
+          run_status?: string | null
           run_url?: string | null
           status?: string
           steps?: Json
           updated_at?: string
           user_id?: string
+          verification?: string | null
+          workflow_file?: string | null
         }
         Relationships: []
       }
