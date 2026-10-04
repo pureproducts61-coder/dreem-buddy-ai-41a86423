@@ -58,6 +58,8 @@ export async function createBuildReport(input: {
   }
 }
 
+const VERIFICATION_KEYS = ['delivery', 'verification', 'run_id', 'run_status', 'run_conclusion', 'commit_sha', 'workflow_file', 'artifacts'] as const;
+
 export async function updateBuildReport(id: string, patch: {
   status?: 'running' | 'succeeded' | 'failed';
   steps?: PipelineStepState[];
@@ -66,9 +68,23 @@ export async function updateBuildReport(id: string, patch: {
   repo_url?: string | null;
   error?: string | null;
   duration_ms?: number | null;
+  delivery?: string | null;
+  verification?: string | null;
+  run_id?: number | null;
+  run_status?: string | null;
+  run_conclusion?: string | null;
+  commit_sha?: string | null;
+  workflow_file?: string | null;
+  artifacts?: unknown;
 }): Promise<void> {
   try {
-    await anyDb.from('build_reports').update(patch).eq('id', id);
+    const { error } = await anyDb.from('build_reports').update(patch).eq('id', id);
+    // Backward compatible: if verification columns are missing, retry with the legacy fields only.
+    if (error && /column/i.test(error.message || '')) {
+      const legacy: Record<string, unknown> = { ...patch };
+      for (const k of VERIFICATION_KEYS) delete legacy[k];
+      await anyDb.from('build_reports').update(legacy).eq('id', id);
+    }
   } catch { /* ignore */ }
 }
 

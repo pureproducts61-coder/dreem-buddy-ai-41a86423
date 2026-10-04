@@ -427,18 +427,27 @@ export async function runBuildPipeline(input: RunPipelineInput): Promise<Pipelin
   const finalize = (result: PipelineResult) => {
     if (reportId) {
       updateBuildReport(reportId, {
-        status: result.ok ? 'succeeded' : 'failed',
+        status: result.ok ? 'succeeded' : result.verification === 'pending' || result.verification === 'unverified' ? 'running' : 'failed',
         steps: result.steps,
         findings: currentFindings,
         run_url: result.runUrl ?? null,
         repo_url: result.repoUrl ?? null,
         error: result.error ?? null,
         duration_ms: Date.now() - pipelineStartedAt,
+        delivery: result.delivery ?? null,
+        verification: result.verification ?? null,
+        run_id: result.runId ?? null,
+        run_status: result.runStatus ?? null,
+        run_conclusion: result.runConclusion ?? null,
+        commit_sha: result.commitSha ?? null,
+        workflow_file: result.workflowFile ?? null,
+        artifacts: result.artifacts ?? null,
       });
     }
     return result;
   };
 
+  try {
   // ZIP shortcut — does not need GitHub
   if (input.buildTarget === ('zip' as BuildTarget)) {
     setStep('validate', { status: 'active', startedAt: Date.now() });
@@ -446,11 +455,10 @@ export async function runBuildPipeline(input: RunPipelineInput): Promise<Pipelin
     if (!ok) {
       setStep('validate', { status: 'error', detail: issues.map((i) => i.message).join('; '), endedAt: Date.now() });
       input.onChat?.({ kind: 'error', title: 'ZIP তৈরি ব্যর্থ', detail: issues.map((i) => i.message).join('; ') });
-      return { ok: false, steps, error: 'validation_failed' };
+      return finalize({ ok: false, steps, delivery: 'zip-export', verification: 'failure', error: 'validation_failed' });
     }
     setStep('validate', { status: 'done', detail: issues.length ? `${issues.length} auto-fixes applied` : 'OK', endedAt: Date.now() });
     setStep('context', { status: 'done', detail: 'Skipped for local ZIP' });
-    // Still scan — the ZIP will be shipped to users
     setStep('test', { status: 'active', startedAt: Date.now() });
     const zipFindings = scanFilesForIssues(fixedFiles);
     currentFindings = zipFindings;
@@ -458,51 +466,42 @@ export async function runBuildPipeline(input: RunPipelineInput): Promise<Pipelin
     if (zipHigh.length > 0) {
       setStep('test', { status: 'error', detail: zipHigh.map((f) => `${f.file}: ${f.message}`).join('; '), endedAt: Date.now() });
       input.onChat?.({ kind: 'error', title: 'Security scan ব্যর্থ — hardcoded secret পাওয়া গেছে', detail: zipHigh[0].message });
-      return finalize({ ok: false, steps, error: 'security_scan_failed' });
+      return finalize({ ok: false, steps, delivery: 'zip-export', verification: 'failure', error: 'security_scan_failed' });
     }
     setStep('test', { status: 'done', detail: zipFindings.length ? `${zipFindings.length} low/medium notes` : 'Clean', endedAt: Date.now() });
     setStep('sync', { status: 'active', startedAt: Date.now() });
     await downloadProjectAsZip(input.projectName, fixedFiles);
     setStep('sync', { status: 'done', detail: 'ZIP ready', endedAt: Date.now() });
-    setStep('dispatch', { status: 'done', detail: 'Skipped (local ZIP)' });
+    setStep('dispatch', { status: 'done', detail: 'Skipped (local ZIP — not a GitHub build)' });
     setStep('link', { status: 'done', detail: 'Download triggered in browser' });
     input.onChat?.({
       kind: 'complete',
       title: '📦 ZIP ডাউনলোড শুরু হয়েছে',
-      detail: `${fixedFiles.length} ফাইল প্যাক করা হয়েছে — ব্রাউজারের Downloads দেখুন।`,
+      detail: `${fixedFiles.length} ফাইল প্যাক করা হয়েছে — এটি ZIP export, GitHub build নয়।`,
     });
-    return finalize({ ok: true, steps });
+    // ZIP export success is NOT a verified Actions build: verification stays undefined.
+    return finalize({ ok: true, steps, delivery: 'zip-export' });
   }
 
   // 1. Validate
   setStep('validate', { status: 'active', startedAt: Date.now() });
-  await wait(150); // let UI paint
+  await wait(150);
   const validation = validateProject(input.files, input.buildTarget, input.projectName);
   if (!validation.ok) {
-    setStep('validate', {
-      status: 'error',
-      detail: validation.issues.map((i) => i.message).join('; ') || 'Validation failed',
-      endedAt: Date.now(),
-    });
+    setStep('validate', { status: 'error', detail: validation.issues.map((i) => i.message).join('; ') || 'Validation failed', endedAt: Date.now() });
     input.onChat?.({ kind: 'error', title: 'Validation ব্যর্থ', detail: validation.issues.map((i) => i.message).join('; ') });
-    return finalize({ ok: false, steps, error: 'validation_failed' });
+    return finalize({ ok: false, steps, delivery: 'github-actions', verification: 'failure', error: 'validation_failed' });
   }
   setStep('validate', {
     status: 'done',
-    detail: validation.issues.length
-      ? `OK — ${validation.issues.length} auto-fix(es) applied`
-      : 'OK — no issues',
+    detail: validation.issues.length ? `OK — ${validation.issues.length} auto-fix(es) applied` : 'OK — no issues',
     endedAt: Date.now(),
   });
 
   // 2. Context — pgvector memory lookup
   setStep('context', { status: 'active', startedAt: Date.now() });
   const memories = await fetchMemoryContext(input.projectName);
-  setStep('context', {
-    status: 'done',
-    detail: memories.length ? `${memories.length} related memories loaded` : 'No prior context found',
-    endedAt: Date.now(),
-  });
+  setStep('context', { status: 'done', detail: memories.length ? `${memories.length} related memories loaded` : 'No prior context found', endedAt: Date.now() });
 
   // 3. Test — bug & security scan
   setStep('test', { status: 'active', startedAt: Date.now() });
@@ -510,90 +509,101 @@ export async function runBuildPipeline(input: RunPipelineInput): Promise<Pipelin
   currentFindings = findings;
   const high = findings.filter((f) => f.severity === 'high');
   if (high.length > 0) {
-    setStep('test', {
-      status: 'error',
-      detail: high.slice(0, 3).map((f) => `${f.file}: ${f.message}`).join('; '),
-      endedAt: Date.now(),
-    });
-    input.onChat?.({
-      kind: 'error',
-      title: '❌ Security scan ব্যর্থ — বিল্ড বন্ধ',
-      detail: `${high.length}টি high-severity ইস্যু পাওয়া গেছে। প্রথমটি: ${high[0].file} — ${high[0].message}`,
-    });
-    return finalize({ ok: false, steps, error: 'security_scan_failed' });
+    setStep('test', { status: 'error', detail: high.slice(0, 3).map((f) => `${f.file}: ${f.message}`).join('; '), endedAt: Date.now() });
+    input.onChat?.({ kind: 'error', title: '❌ Security scan ব্যর্থ — বিল্ড বন্ধ', detail: `${high.length}টি high-severity ইস্যু। প্রথমটি: ${high[0].file} — ${high[0].message}` });
+    return finalize({ ok: false, steps, delivery: 'github-actions', verification: 'failure', error: 'security_scan_failed' });
   }
-  setStep('test', {
-    status: 'done',
-    detail: findings.length
-      ? `Clean of critical issues (${findings.length} low/medium notes)`
-      : 'Clean — no issues found',
-    endedAt: Date.now(),
-  });
+  setStep('test', { status: 'done', detail: findings.length ? `Clean of critical issues (${findings.length} low/medium notes)` : 'Clean — no issues found', endedAt: Date.now() });
 
-  // 4. Sync — push to GitHub feature branch
+  // 4. Sync — push to GitHub
   setStep('sync', { status: 'active', startedAt: Date.now() });
   if (!(await githubService.hasToken())) {
     setStep('sync', { status: 'error', detail: 'GitHub token not configured in Settings.', endedAt: Date.now() });
-    input.onChat?.({ kind: 'error', title: 'GitHub token নেই', detail: 'Settings → Integrations-এ token যোগ করুন।' });
-    return finalize({ ok: false, steps, error: 'no_github_token' });
+    input.onChat?.({ kind: 'error', title: 'GitHub token নেই', detail: 'Settings → API Keys-এ token যোগ করুন।' });
+    return finalize({ ok: false, steps, delivery: 'github-actions', verification: 'failure', error: 'no_github_token' });
   }
   let owner: string;
   let repoName: string;
+  let pushed: PushWithBuildResult;
   try {
     const user = await githubService.getUser();
     owner = user.login;
-    repoName = input.projectName.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').slice(0, 60) || `tivo-${input.projectId.slice(0, 8)}`;
-    try {
-      await githubService.createRepo(repoName, `${input.projectName} — TIVO AI build`, true);
-    } catch {
-      /* repo may already exist */
-    }
-    await pushProjectWithBuild(owner, repoName, validation.fixedFiles, input.buildTarget, input.projectName);
-    setStep('sync', {
-      status: 'done',
-      detail: `Pushed to ${owner}/${repoName} (main)`,
-      endedAt: Date.now(),
-    });
+    repoName = input.projectName.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').slice(0, 60) || `tivo-${input.projectId.slice(0, 8)}`;
+    try { await githubService.createRepo(repoName, `${input.projectName} — TIVO AI build`, true); } catch { /* repo may already exist */ }
+    pushed = await pushProjectWithBuild(owner, repoName, validation.fixedFiles, input.buildTarget, input.projectName);
+    setStep('sync', { status: 'done', detail: `Pushed to ${owner}/${repoName} (main${pushed.headSha ? ` @ ${pushed.headSha.slice(0, 7)}` : ''})`, endedAt: Date.now() });
   } catch (e) {
-    setStep('sync', {
-      status: 'error',
-      detail: e instanceof Error ? e.message : 'Push failed',
-      endedAt: Date.now(),
-    });
-    input.onChat?.({ kind: 'error', title: 'GitHub push ব্যর্থ', detail: e instanceof Error ? e.message : 'Push failed' });
-    return finalize({ ok: false, steps, error: 'sync_failed' });
+    const msg = e instanceof Error ? e.message : 'Push failed';
+    setStep('sync', { status: 'error', detail: msg, endedAt: Date.now() });
+    input.onChat?.({ kind: 'error', title: 'GitHub push ব্যর্থ', detail: msg });
+    return finalize({ ok: false, steps, delivery: 'github-actions', verification: 'failure', error: msg });
   }
+  const repoUrl = `https://github.com/${owner}/${repoName}`;
+  const runsUrl = `${repoUrl}/actions/workflows/${pushed.workflowFile}`;
+  const base = { steps, delivery: 'github-actions' as const, repoUrl, commitSha: pushed.headSha, workflowFile: pushed.workflowFile };
 
-  // 5. Dispatch — push on main already triggers the workflow on:push.
+  // 5. Dispatch — workflows are workflow_dispatch-only, so start one explicitly.
   setStep('dispatch', { status: 'active', startedAt: Date.now() });
-  await wait(400);
-  const runsUrl = `https://github.com/${owner}/${repoName}/actions`;
-  setStep('dispatch', {
-    status: 'done',
-    detail: `Workflow triggered (build_type=${input.buildTarget}, project_id=${input.projectId.slice(0, 8)}…)`,
-    endedAt: Date.now(),
-  });
+  const dispatchedAt = Date.now();
+  let dispatched = false;
+  let dispatchErr = '';
+  // GitHub needs a moment to index a freshly pushed workflow file.
+  for (let attempt = 0; attempt < 4 && !dispatched; attempt++) {
+    try {
+      await githubService.dispatchWorkflow(owner, repoName, pushed.workflowFile, 'main', {});
+      dispatched = true;
+    } catch (e) {
+      dispatchErr = e instanceof Error ? e.message : String(e);
+      await wait(input.pollMs ? 10 : 3000);
+    }
+  }
+  if (!dispatched) {
+    setStep('dispatch', { status: 'error', detail: `Dispatch failed: ${dispatchErr}`, endedAt: Date.now() });
+    input.onChat?.({ kind: 'error', title: 'Workflow শুরু করা যায়নি', detail: dispatchErr, url: runsUrl });
+    return finalize({ ...base, ok: false, runUrl: runsUrl, verification: 'failure', lifecycle: 'failure', error: `dispatch_failed: ${dispatchErr}` });
+  }
+  setStep('dispatch', { status: 'done', detail: `Dispatched ${pushed.workflowFile} on main`, endedAt: Date.now() });
 
-  // 6. Link
-  setStep('link', { status: 'active', startedAt: Date.now() });
-  await wait(200);
-  setStep('link', {
-    status: 'done',
-    detail: `Track run at ${runsUrl}`,
-    endedAt: Date.now(),
+  // 6. Link — follow the exact run to completion and verify its artifact.
+  setStep('link', { status: 'active', startedAt: Date.now(), detail: 'Waiting for GitHub Actions run…' });
+  const v = await verifyWorkflowRun(owner, repoName, {
+    since: dispatchedAt,
+    branch: 'main',
+    event: 'workflow_dispatch',
+    workflowFile: pushed.workflowFile,
+    headSha: pushed.headSha,
+    expectedArtifact: pushed.artifactName,
+    timeoutMs: input.verifyTimeoutMs,
+    pollMs: input.pollMs,
+    discoverMs: input.pollMs ? input.pollMs * 3 : undefined,
+    onProgress: (r) => setStep('link', { status: 'active', detail: `Run #${r.id}: ${r.status}` }),
   });
-
-  input.onChat?.({
-    kind: 'complete',
-    title: `🚀 ${String(input.buildTarget).toUpperCase()} বিল্ড পাইপলাইন সফলভাবে trigger হয়েছে`,
-    detail: `Repo: ${owner}/${repoName} — GitHub Actions সম্পন্ন হলে artifact ডাউনলোড লিংক নিচে আসবে।`,
-    url: runsUrl,
-  });
-
-  return finalize({
-    ok: true,
-    steps,
-    runUrl: runsUrl,
-    repoUrl: `https://github.com/${owner}/${repoName}`,
-  });
+  const res: PipelineResult = {
+    ...base,
+    ok: v.verification === 'success',
+    runUrl: v.run?.html_url ?? runsUrl,
+    runId: v.run?.id,
+    runStatus: v.run?.status,
+    runConclusion: v.run?.conclusion ?? null,
+    lifecycle: v.lifecycle,
+    verification: v.verification,
+    artifacts: v.artifacts,
+    error: v.error,
+  };
+  if (v.verification === 'success') {
+    setStep('link', { status: 'done', detail: `Run #${v.run?.id} succeeded — artifact ${pushed.artifactName} verified`, endedAt: Date.now() });
+    input.onChat?.({ kind: 'complete', title: `✅ ${String(input.buildTarget).toUpperCase()} বিল্ড সফল (verified)`, detail: `Artifact: ${pushed.artifactName}`, url: res.runUrl });
+  } else if (v.verification === 'failure') {
+    setStep('link', { status: 'error', detail: v.error, endedAt: Date.now() });
+    input.onChat?.({ kind: 'error', title: '❌ GitHub Actions বিল্ড ব্যর্থ', detail: v.error, url: res.runUrl });
+  } else {
+    setStep('link', { status: 'pending', detail: `${v.verification}: ${v.error ?? ''}`.trim(), endedAt: Date.now() });
+    input.onChat?.({ kind: 'pending', title: v.verification === 'pending' ? '⏳ বিল্ড এখনও চলছে' : '❔ রান যাচাই করা যায়নি', detail: v.error, url: res.runUrl });
+  }
+  return finalize(res);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    input.onChat?.({ kind: 'error', title: 'Pipeline error', detail: msg });
+    return finalize({ ok: false, steps, verification: 'failure', error: msg });
+  }
 }
