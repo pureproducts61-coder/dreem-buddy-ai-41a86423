@@ -1301,9 +1301,20 @@ You are TIVO AI. Ship like a senior engineer.`;
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       async start(controller) {
+        // SECURITY: caller-supplied messages may only use "user"/"assistant"
+        // roles with string content. System/developer/tool roles and any
+        // instruction text from the caller are dropped so the model's
+        // instructions always come from the server.
+        const safeCallerMessages = (Array.isArray(messages) ? messages : [])
+          .filter((m: unknown): m is { role: string; content: string } =>
+            !!m && typeof m === "object" &&
+            ((m as { role?: unknown }).role === "user" || (m as { role?: unknown }).role === "assistant") &&
+            typeof (m as { content?: unknown }).content === "string")
+          .slice(-50)
+          .map((m) => ({ role: m.role, content: m.content.slice(0, 20000) }));
         const conversationMessages = [
           { role: "system", content: finalSystemPrompt },
-          ...messages,
+          ...safeCallerMessages,
         ];
 
         const MAX_ITERATIONS = 25;

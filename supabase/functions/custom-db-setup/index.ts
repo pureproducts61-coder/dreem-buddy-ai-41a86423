@@ -175,6 +175,22 @@ async function verifyAdmin(authHeader: string | null): Promise<boolean> {
   }
 }
 
+/**
+ * SSRF guard: the target must be a genuine Supabase project URL
+ * (https://<ref>.supabase.co). Arbitrary caller-chosen destinations are
+ * rejected so this admin endpoint cannot be used as an open proxy.
+ */
+function isAllowedTargetUrl(raw: string): boolean {
+  try {
+    const u = new URL(raw);
+    if (u.protocol !== "https:") return false;
+    if (u.username || u.password) return false;
+    return /^[a-z0-9]{20}\.supabase\.co$/i.test(u.hostname);
+  } catch {
+    return false;
+  }
+}
+
 async function executeSqlOnTarget(
   targetUrl: string,
   serviceKey: string,
