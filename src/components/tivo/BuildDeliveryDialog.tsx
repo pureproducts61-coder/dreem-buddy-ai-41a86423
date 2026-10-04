@@ -119,10 +119,16 @@ export function BuildDeliveryDialog({ open, onClose, projectName, projectId, fil
         onChat: (evt) => onChatUpdate?.(evt),
       });
       setResult(res);
-      if (res.ok) {
-        toast({ title: '✅ Build pipeline সফল', description: res.runUrl || 'Done' });
+      if (res.delivery === 'zip-export' && res.ok) {
+        toast({ title: '📦 ZIP export সম্পন্ন', description: 'এটি local ZIP — GitHub build নয়।' });
+      } else if (res.verification === 'success') {
+        toast({ title: '✅ বিল্ড সফল (verified)', description: `Run #${res.runId} — artifact যাচাই হয়েছে` });
+      } else if (res.verification === 'pending') {
+        toast({ title: '⏳ বিল্ড এখনও চলছে', description: res.error || 'GitHub Actions-এ রান চলছে — পরে দেখুন।' });
+      } else if (res.verification === 'unverified') {
+        toast({ title: '❔ রান যাচাই করা যায়নি', description: res.error || 'কোনো মিলে যাওয়া রান পাওয়া যায়নি।' });
       } else {
-        toast({ title: 'Pipeline থামল', description: res.error || 'failed', variant: 'destructive' });
+        toast({ title: 'Pipeline ব্যর্থ', description: res.error || 'failed', variant: 'destructive' });
       }
     } catch (e) {
       toast({ title: 'Error', description: e instanceof Error ? e.message : String(e), variant: 'destructive' });
@@ -191,6 +197,12 @@ export function BuildDeliveryDialog({ open, onClose, projectName, projectId, fil
             <div className="divide-y divide-border/30">
               {steps.map((s) => <StepRow key={s.id} step={s} />)}
             </div>
+            {result?.verification && (
+              <p className="mt-2 text-[11px] font-mono text-muted-foreground">
+                Verification: <span className={cn(result.verification === 'success' ? 'text-primary' : result.verification === 'failure' ? 'text-destructive' : 'text-foreground')}>{result.verification}</span>
+                {result.runId ? ` · run #${result.runId}` : ''}{result.runConclusion ? ` · ${result.runConclusion}` : ''}
+              </p>
+            )}
             {result?.runUrl && (
               <a
                 href={result.runUrl}
