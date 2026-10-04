@@ -138,7 +138,9 @@ export async function refreshEngineStatuses(): Promise<AiEngine[]> {
       const ready = isLocalReady() || (await probeRuntime());
       mark(e.id, ready ? 'ready' : 'unavailable');
     } else if (e.kind === 'local-api') {
-      mark(e.id, (await probeLocalApi(e.baseUrl)) ? 'ready' : 'unavailable');
+      // Cheap check (no inference): ready only when the server answers AND the model exists.
+      const st = await probeLocalEngineStages(e, { runInference: false });
+      mark(e.id, st.serverAnswered && st.modelFound ? 'ready' : 'unavailable', st.error);
     } else if (e.kind === 'cloud-api') {
       // Never claim ready from configuration alone — a credential must exist.
       const credentialed = await isCapabilityCredentialAvailable('ai.chat', 'chat').catch(() => false);
