@@ -175,6 +175,22 @@ async function verifyAdmin(authHeader: string | null): Promise<boolean> {
   }
 }
 
+/**
+ * SSRF guard: the target must be a genuine Supabase project URL
+ * (https://<ref>.supabase.co). Arbitrary caller-chosen destinations are
+ * rejected so this admin endpoint cannot be used as an open proxy.
+ */
+function isAllowedTargetUrl(raw: string): boolean {
+  try {
+    const u = new URL(raw);
+    if (u.protocol !== "https:") return false;
+    if (u.username || u.password) return false;
+    return /^[a-z0-9]{20}\.supabase\.co$/i.test(u.hostname);
+  } catch {
+    return false;
+  }
+}
+
 async function executeSqlOnTarget(
   targetUrl: string,
   serviceKey: string,
@@ -256,6 +272,16 @@ Deno.serve(async (req: Request) => {
     const { action, target_url, target_service_role_key } = await req.json();
     if (!target_url || !target_service_role_key) {
       return new Response(JSON.stringify({ error: "target_url and target_service_role_key required" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (typeof target_url !== "string" || typeof target_service_role_key !== "string" ||
+        !isAllowedTargetUrl(target_url)) {
+      return new Response(JSON.stringify({
+        error: "invalid_target",
+        message: "target_url must be a valid Supabase project URL (https://<project-ref>.supabase.co).",
+      }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }

@@ -25,7 +25,7 @@ interface BuildDeliveryDialogProps {
   files: Array<{ path: string; content: string }>;
   /** Called for every pipeline event so the parent chat can render live status. */
   onChatUpdate?: (event: {
-    kind: 'step' | 'complete' | 'error';
+    kind: 'step' | 'complete' | 'error' | 'pending';
     title: string;
     detail?: string;
     url?: string;
