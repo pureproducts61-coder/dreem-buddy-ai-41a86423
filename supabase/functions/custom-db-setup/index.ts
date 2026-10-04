@@ -276,6 +276,16 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    if (typeof target_url !== "string" || typeof target_service_role_key !== "string" ||
+        !isAllowedTargetUrl(target_url)) {
+      return new Response(JSON.stringify({
+        error: "invalid_target",
+        message: "target_url must be a valid Supabase project URL (https://<project-ref>.supabase.co).",
+      }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     if (action === "setup") {
       try {
         await executeSqlOnTarget(target_url, target_service_role_key, SETUP_SQL);
