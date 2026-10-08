@@ -857,6 +857,75 @@ export type Database = {
         }
         Relationships: []
       }
+      interaction_requests: {
+        Row: {
+          affordance_id: string
+          authority_context: Json
+          constraints: Json
+          control_decision: Json
+          correlation_id: string
+          created_at: string
+          expected_effect: string
+          id: string
+          idempotency_key: string
+          input: Json
+          resource_id: string
+          status: string
+          task_id: string | null
+          user_id: string
+          verification_hint: string | null
+        }
+        Insert: {
+          affordance_id: string
+          authority_context?: Json
+          constraints?: Json
+          control_decision: Json
+          correlation_id: string
+          created_at?: string
+          expected_effect: string
+          id?: string
+          idempotency_key: string
+          input?: Json
+          resource_id: string
+          status: string
+          task_id?: string | null
+          user_id: string
+          verification_hint?: string | null
+        }
+        Update: {
+          affordance_id?: string
+          authority_context?: Json
+          constraints?: Json
+          control_decision?: Json
+          correlation_id?: string
+          created_at?: string
+          expected_effect?: string
+          id?: string
+          idempotency_key?: string
+          input?: Json
+          resource_id?: string
+          status?: string
+          task_id?: string | null
+          user_id?: string
+          verification_hint?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "interaction_requests_affordance_id_fkey"
+            columns: ["affordance_id"]
+            isOneToOne: false
+            referencedRelation: "world_affordances"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "interaction_requests_resource_id_fkey"
+            columns: ["resource_id"]
+            isOneToOne: false
+            referencedRelation: "world_resources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       permission_audit: {
         Row: {
           action: string
@@ -1157,6 +1226,113 @@ export type Database = {
           updated_at?: string
           user_id?: string
           value?: string
+        }
+        Relationships: []
+      }
+      world_affordances: {
+        Row: {
+          action: string
+          authority_required: string
+          constraints: Json
+          created_at: string
+          expected_effect: string
+          id: string
+          input_schema: Json
+          observed_at: string
+          preconditions: Json
+          resource_id: string
+          reversibility: string
+          risk: string
+          user_id: string
+          verification_hint: string | null
+        }
+        Insert: {
+          action: string
+          authority_required: string
+          constraints?: Json
+          created_at?: string
+          expected_effect: string
+          id?: string
+          input_schema?: Json
+          observed_at?: string
+          preconditions?: Json
+          resource_id: string
+          reversibility: string
+          risk: string
+          user_id: string
+          verification_hint?: string | null
+        }
+        Update: {
+          action?: string
+          authority_required?: string
+          constraints?: Json
+          created_at?: string
+          expected_effect?: string
+          id?: string
+          input_schema?: Json
+          observed_at?: string
+          preconditions?: Json
+          resource_id?: string
+          reversibility?: string
+          risk?: string
+          user_id?: string
+          verification_hint?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "world_affordances_resource_id_fkey"
+            columns: ["resource_id"]
+            isOneToOne: false
+            referencedRelation: "world_resources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      world_resources: {
+        Row: {
+          created_at: string
+          id: string
+          locator: string
+          metadata: Json
+          observed_at: string
+          provenance: Json
+          ref_key: string
+          scope: string
+          source: string
+          status: string
+          type: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          locator: string
+          metadata?: Json
+          observed_at?: string
+          provenance?: Json
+          ref_key: string
+          scope?: string
+          source: string
+          status?: string
+          type: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          locator?: string
+          metadata?: Json
+          observed_at?: string
+          provenance?: Json
+          ref_key?: string
+          scope?: string
+          source?: string
+          status?: string
+          type?: string
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }

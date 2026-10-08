@@ -15,6 +15,13 @@
       "when": 1791055394948,
       "tag": "0001_build_reports_verification_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791469777567,
+      "tag": "0002_world_foundation",
+      "breakpoints": true
     }
   ]
 }
