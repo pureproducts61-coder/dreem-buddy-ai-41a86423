@@ -1,2 +1,2 @@
 
-- World Foundation lives in src/services/world (contracts, control, world): provider knowledge only via registered Discoverer/Inspector plugins, Control decides before any InteractionRequest, and requests are recorded but never executed until the TDEF step — keeps Brain/Control/TDEF separated per the master blueprint.
+- World Foundation lives in src/services/world (contracts, control, world): provider knowledge only via registered Discoverer/Inspector plugins, Control decides before any InteractionRequest, and execution happens only in the tdef-execute function, which re-checks Control server-side and dispatches to registered RuntimeProviders (deny-by-default, idempotent per request) — keeps Brain/Control/TDEF separated per the master blueprint.
