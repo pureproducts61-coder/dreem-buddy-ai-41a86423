@@ -22,6 +22,13 @@
       "when": 1791469777567,
       "tag": "0002_world_foundation",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1791619963929,
+      "tag": "0003_interaction_executions",
+      "breakpoints": true
     }
   ]
 }

@@ -857,6 +857,53 @@ export type Database = {
         }
         Relationships: []
       }
+      interaction_executions: {
+        Row: {
+          duration_ms: number | null
+          error: string | null
+          finished_at: string | null
+          id: string
+          observations: Json
+          request_id: string
+          runtime_id: string | null
+          started_at: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          duration_ms?: number | null
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          observations?: Json
+          request_id: string
+          runtime_id?: string | null
+          started_at?: string
+          status: string
+          user_id: string
+        }
+        Update: {
+          duration_ms?: number | null
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          observations?: Json
+          request_id?: string
+          runtime_id?: string | null
+          started_at?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "interaction_executions_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: true
+            referencedRelation: "interaction_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       interaction_requests: {
         Row: {
           affordance_id: string
