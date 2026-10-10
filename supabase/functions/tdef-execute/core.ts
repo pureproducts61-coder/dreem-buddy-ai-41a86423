@@ -68,7 +68,7 @@ export interface DispatchResult { status: ExecStatus; runtimeId: string | null; 
 export async function dispatch(g: GateInput, registry: RuntimeProvider[], now = () => new Date().toISOString()): Promise<DispatchResult> {
   const t0 = Date.now();
   const verdict = gate(g);
-  if (!verdict.ok) return { status: 'refused', runtimeId: null, observations: [], error: verdict.reason, durationMs: 0 };
+  if (verdict.ok === false) return { status: 'refused', runtimeId: null, observations: [], error: verdict.reason, durationMs: 0 };
   const rt = resolveRuntime(registry, g.affordance!.action);
   if (!rt) return { status: 'runtime_unavailable', runtimeId: null, observations: [], error: 'no runtime supports this action', durationMs: 0 };
   const ac = new AbortController();
