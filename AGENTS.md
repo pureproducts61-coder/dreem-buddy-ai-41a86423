@@ -1,2 +1,4 @@
 
 - World Foundation lives in src/services/world (contracts, control, world): provider knowledge only via registered Discoverer/Inspector plugins, Control decides before any InteractionRequest, and execution happens only in the tdef-execute function, which re-checks Control server-side and dispatches to registered RuntimeProviders (deny-by-default, idempotent per request) — keeps Brain/Control/TDEF separated per the master blueprint.
+- Brain-generated UI is declarative only: src/services/world/dynamicUi.ts validates `tivo-ui` schemas (whitelisted block types, fail closed) and DynamicUiRenderer renders them; UI actions emit intents only and must go through Control/TDEF — prevents AI-injected code and hardcoded per-task cards.
+- Task success is decided by src/services/world/evidence.ts verify() over trusted Evidence, never by chat completion — keeps reporting truthful (accepted ≠ executed ≠ verified).
